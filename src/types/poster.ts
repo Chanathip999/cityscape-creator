@@ -31,6 +31,7 @@ export interface PosterConfig {
   fontSize: FontSize;
   orientation: PosterOrientation;
   customTextColor?: string; // Optional custom text color override
+  coloredStreets?: boolean; // Optional: enable colored vector streets overlay (default: false)
 }
 
 export const POSTER_THEMES: PosterTheme[] = [
@@ -215,4 +216,5 @@ export const DEFAULT_CONFIG: PosterConfig = {
   fontFamily: 'mono',
   fontSize: 'medium',
   orientation: 'vertical',
+  coloredStreets: false, // Default: use standard map tiles
 };

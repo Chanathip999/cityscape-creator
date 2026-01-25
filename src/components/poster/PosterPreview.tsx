@@ -39,7 +39,7 @@ const getTileUrl = (themeId: string): string => {
 };
 
 export const PosterPreview = ({ config, onLocationChange, interactive = false }: PosterPreviewProps) => {
-  const { city, country, countryLabel, latitude, longitude, distance, theme, fontFamily, fontSize, orientation, customTextColor } = config;
+  const { city, country, countryLabel, latitude, longitude, distance, theme, fontFamily, fontSize, orientation, customTextColor, coloredStreets } = config;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -47,12 +47,12 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
   const [mapKey, setMapKey] = useState(0);
   const [mapReady, setMapReady] = useState(false);
 
-  // Fetch street vector data from OSM
+  // Only fetch street vector data when coloredStreets is enabled
   const { streets, isLoading: streetsLoading } = useStreetData({
     latitude,
     longitude,
     distance,
-    enabled: true,
+    enabled: coloredStreets === true,
   });
 
   // When the user interacts with the map (pan/zoom), Leaflet fires `moveend`.
@@ -153,10 +153,12 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
           attributionControl: false,
         });
 
+        // Use full opacity for standard mode, reduced opacity when colored streets are enabled
+        const tileOpacity = coloredStreets ? 0.25 : 1;
         const tileLayer = L.tileLayer(getTileUrl(theme.id), {
           attribution: '',
           maxZoom: 19,
-          opacity: 0.35,
+          opacity: tileOpacity,
         }).addTo(map);
 
         if (interactive && onLocationChange) {
@@ -287,8 +289,8 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
         }}
       />
       
-      {/* Vector street layer */}
-      {mapReady && mapInstanceRef.current && (
+      {/* Vector street layer - only when coloredStreets is enabled */}
+      {coloredStreets && mapReady && mapInstanceRef.current && (
         <StreetLayer 
           streets={streets} 
           theme={theme} 
@@ -297,7 +299,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
       )}
       
       {/* Loading indicator for streets */}
-      {streetsLoading && (
+      {coloredStreets && streetsLoading && (
         <div className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm px-2 py-1 rounded text-xs text-muted-foreground z-30">
           Lade Straßen...
         </div>

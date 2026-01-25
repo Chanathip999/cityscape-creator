@@ -12,7 +12,8 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Map, Download } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Map, Download, Palette } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 export const PosterEditor = () => {
@@ -64,6 +65,10 @@ export const PosterEditor = () => {
 
   const handleOrientationChange = (orientation: PosterOrientation) => {
     setConfig((prev) => ({ ...prev, orientation }));
+  };
+
+  const handleColoredStreetsChange = (coloredStreets: boolean) => {
+    setConfig((prev) => ({ ...prev, coloredStreets }));
   };
 
   const handleConfigUpdate = (updates: Partial<PosterConfig>) => {
@@ -188,6 +193,24 @@ export const PosterEditor = () => {
                 distance={config.distance}
                 onDistanceChange={handleDistanceChange}
               />
+
+              <Separator />
+
+              {/* Colored Streets Toggle */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <Label htmlFor="colored-streets" className="cursor-pointer">Farbige Straßen</Label>
+                    <p className="text-xs text-muted-foreground">Vektor-Straßen in Theme-Farben</p>
+                  </div>
+                </div>
+                <Switch
+                  id="colored-streets"
+                  checked={config.coloredStreets || false}
+                  onCheckedChange={handleColoredStreetsChange}
+                />
+              </div>
 
               <p className="text-xs text-muted-foreground">
                 💡 Tipp: Du kannst die Karte direkt auf dem Poster ziehen, um sie zu positionieren.
