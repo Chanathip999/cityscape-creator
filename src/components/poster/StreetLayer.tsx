@@ -8,13 +8,11 @@ interface StreetLayerProps {
   mapInstance: any; // Leaflet map instance
 }
 
-// Line widths for each street type (in pixels at zoom 14)
+// Line widths for each street type (thicker lines for cleaner look)
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 3,
-  primary: 2.5,
-  secondary: 2,
-  tertiary: 1.5,
-  residential: 1,
+  motorway: 4,
+  primary: 3,
+  secondary: 2.5,
 };
 
 export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) => {
