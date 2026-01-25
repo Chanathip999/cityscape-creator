@@ -108,11 +108,6 @@ export const PosterEditor = () => {
               animate={{ opacity: 1, y: 0 }}
               className="space-y-6"
             >
-              {/* AI Prompt Input */}
-              <AIPromptInput config={config} onConfigUpdate={handleConfigUpdate} />
-              
-              <Separator />
-              
               {/* City Search */}
               <CitySearch onCitySelect={handleCitySelect} />
               
@@ -191,7 +186,7 @@ export const PosterEditor = () => {
           </div>
 
           {/* Right: Interactive Poster Preview */}
-          <div className="lg:sticky lg:top-24 h-fit">
+          <div className="lg:sticky lg:top-24 h-fit space-y-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -204,6 +199,11 @@ export const PosterEditor = () => {
                 interactive={true}
               />
             </motion.div>
+            
+            {/* AI Prompt Input - Below the poster */}
+            <div className="max-w-lg mx-auto">
+              <AIPromptInput config={config} onConfigUpdate={handleConfigUpdate} />
+            </div>
           </div>
         </div>
       </div>
