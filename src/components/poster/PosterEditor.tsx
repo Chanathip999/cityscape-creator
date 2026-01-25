@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import html2canvas from 'html2canvas';
 import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, FontFamily, FontSize, PosterOrientation } from '@/types/poster';
 import { PosterPreview } from './PosterPreview';
 import { ThemeSelector } from './ThemeSelector';
@@ -13,11 +14,53 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Map, Download, Palette } from 'lucide-react';
+import { Map, Download, Palette, Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { toast } from '@/hooks/use-toast';
 
 export const PosterEditor = () => {
   const [config, setConfig] = useState<PosterConfig>(DEFAULT_CONFIG);
+  const [isExporting, setIsExporting] = useState(false);
+  const posterRef = useRef<HTMLDivElement>(null);
+
+  const handleExport = useCallback(async () => {
+    if (!posterRef.current || isExporting) return;
+    
+    setIsExporting(true);
+    
+    try {
+      // Wait a moment to ensure all tiles and streets are rendered
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const canvas = await html2canvas(posterRef.current, {
+        scale: 3, // 3x for high resolution (~3000px)
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: config.theme.bg,
+        logging: false,
+      });
+      
+      // Create download link
+      const link = document.createElement('a');
+      link.download = `${config.city.toLowerCase().replace(/\s+/g, '-')}-poster.png`;
+      link.href = canvas.toDataURL('image/png', 1.0);
+      link.click();
+      
+      toast({
+        title: 'Export erfolgreich',
+        description: `${config.city} Poster wurde als PNG gespeichert.`,
+      });
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast({
+        title: 'Export fehlgeschlagen',
+        description: 'Bitte versuche es erneut.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  }, [config, isExporting]);
 
   const handleCitySelect = (city: string, country: string, lat: number, lon: number) => {
     setConfig((prev) => ({
@@ -103,9 +146,18 @@ export const PosterEditor = () => {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="default" className="gap-2">
-              <Download className="w-4 h-4" />
-              Export Poster
+            <Button 
+              variant="default" 
+              className="gap-2"
+              onClick={handleExport}
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              {isExporting ? 'Exportiere...' : 'Export Poster'}
             </Button>
           </div>
         </div>
@@ -226,11 +278,13 @@ export const PosterEditor = () => {
               transition={{ delay: 0.2 }}
               className="max-w-lg mx-auto"
             >
-              <PosterPreview 
-                config={config} 
-                onLocationChange={handleLocationChange}
-                interactive={true}
-              />
+              <div ref={posterRef}>
+                <PosterPreview 
+                  config={config} 
+                  onLocationChange={handleLocationChange}
+                  interactive={true}
+                />
+              </div>
             </motion.div>
             
             {/* AI Prompt Input - Below the poster */}
