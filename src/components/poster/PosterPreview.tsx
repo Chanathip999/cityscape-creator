@@ -28,7 +28,9 @@ const getZoomFromDistance = (distance: number): number => {
 };
 
 const getTileUrl = (themeId: string): string => {
-  if (themeId === 'noir' || themeId === 'midnight') {
+  // Dark themes use dark map tiles
+  const darkThemes = ['noir', 'midnight', 'neon'];
+  if (darkThemes.includes(themeId)) {
     return 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
   }
   return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
