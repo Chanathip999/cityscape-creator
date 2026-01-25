@@ -7,155 +7,236 @@ interface CanvasPosterPreviewProps {
   onExportReady?: (canvas: HTMLCanvasElement) => void;
 }
 
-// Street widths - increased for better visibility
+// Exact street widths from Python script
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 2.5,
-  primary: 2.0,
-  secondary: 1.5,
-  tertiary: 1.0,
-  residential: 0.7,
+  motorway: 1.2,
+  motorway_link: 1.2,
+  trunk: 1.0,
+  trunk_link: 1.0,
+  primary: 1.0,
+  primary_link: 1.0,
+  secondary: 0.8,
+  secondary_link: 0.8,
+  tertiary: 0.6,
+  tertiary_link: 0.6,
+  residential: 0.4,
+  living_street: 0.4,
+  unclassified: 0.4,
+  service: 0.3,
 };
+
+// Default poster dimensions (inches) from Python script
+const DEFAULT_WIDTH = 12;
+const DEFAULT_HEIGHT = 16;
+
+// Canvas resolution for high quality output
+const DPI = 72; // Base DPI for preview
+const CANVAS_WIDTH = DEFAULT_WIDTH * DPI;
+const CANVAS_HEIGHT = DEFAULT_HEIGHT * DPI;
 
 const formatCoordinates = (lat: number, lon: number): string => {
-  const latDir = lat >= 0 ? 'N' : 'S';
-  const lonDir = lon >= 0 ? 'E' : 'W';
-  return `${Math.abs(lat).toFixed(4)}° ${latDir} / ${Math.abs(lon).toFixed(4)}° ${lonDir}`;
+  const latStr = `${Math.abs(lat).toFixed(4)}° ${lat >= 0 ? 'N' : 'S'}`;
+  const lonStr = `${Math.abs(lon).toFixed(4)}° ${lon >= 0 ? 'E' : 'W'}`;
+  return `${latStr} / ${lonStr}`;
 };
 
+// Python: spaced_city = "  ".join(list(city.upper()))
 const spacedText = (text: string): string => {
   return text.toUpperCase().split('').join('  ');
 };
 
-// Fixed canvas size for high quality rendering
-const CANVAS_BASE_WIDTH = 800;
+// Create gradient fade effect (matching Python create_gradient_fade)
+const createGradientFade = (
+  ctx: CanvasRenderingContext2D,
+  color: string,
+  location: 'top' | 'bottom',
+  width: number,
+  height: number
+) => {
+  let gradient: CanvasGradient;
+  let yStart: number;
+  let yEnd: number;
+  let fadeHeight: number;
+
+  if (location === 'bottom') {
+    yStart = height * 0.75;
+    yEnd = height;
+    fadeHeight = height * 0.25;
+    gradient = ctx.createLinearGradient(0, yStart, 0, yEnd);
+    gradient.addColorStop(0, 'transparent');
+    gradient.addColorStop(1, color);
+  } else {
+    yStart = 0;
+    yEnd = height * 0.25;
+    fadeHeight = height * 0.25;
+    gradient = ctx.createLinearGradient(0, yStart, 0, yEnd);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(1, 'transparent');
+  }
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, location === 'top' ? 0 : height * 0.75, width, fadeHeight);
+};
 
 export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPreviewProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  
-  const { city, country, countryLabel, latitude, longitude, distance, theme, fontFamily, fontSize, orientation } = config;
-  
-  // Fetch street data with compensated distance for aspect ratio
-  const aspectRatio = orientation === 'horizontal' ? 4/3 : 3/4;
-  const compensatedDistance = Math.ceil(distance * Math.max(1, 1 / aspectRatio) * 1.2);
-  
+
+  const {
+    city,
+    country,
+    countryLabel,
+    latitude,
+    longitude,
+    distance,
+    theme,
+    fontFamily,
+    fontSize,
+    orientation,
+  } = config;
+
+  // Calculate poster dimensions based on orientation
+  const posterWidth = orientation === 'horizontal' ? DEFAULT_HEIGHT : DEFAULT_WIDTH;
+  const posterHeight = orientation === 'horizontal' ? DEFAULT_WIDTH : DEFAULT_HEIGHT;
+  const aspectRatio = posterWidth / posterHeight;
+
+  // Python: compensated_dist = dist * (max(height, width) / min(height, width))/4
+  const compensatedDistance = Math.ceil(
+    distance * (Math.max(posterHeight, posterWidth) / Math.min(posterHeight, posterWidth)) / 4
+  );
+
+  // Increase fetch radius to ensure full coverage
+  const fetchDistance = Math.max(distance, compensatedDistance) * 1.5;
+
   const { streets, isLoading, error } = useStreetData({
     latitude,
     longitude,
-    distance: compensatedDistance,
+    distance: fetchDistance,
     enabled: true,
   });
 
-  // Calculate bounds that match the poster aspect ratio
-  const getBounds = useCallback(() => {
-    // Convert distance (meters) to degrees (approximate)
-    const metersPerDegreeLat = 111320;
-    const metersPerDegreeLng = 111320 * Math.cos(latitude * Math.PI / 180);
-    
-    // Base radius in degrees
-    const latRadius = distance / metersPerDegreeLat;
-    const lngRadius = distance / metersPerDegreeLng;
-    
-    // Adjust for aspect ratio - expand in the appropriate direction
-    let finalLatRadius = latRadius;
-    let finalLngRadius = lngRadius;
-    
-    if (aspectRatio > 1) {
-      // Landscape: expand longitude (width)
-      finalLngRadius = latRadius * aspectRatio;
-    } else {
-      // Portrait: expand latitude (height)
-      finalLatRadius = lngRadius / aspectRatio;
-    }
-    
-    return {
-      minLat: latitude - finalLatRadius,
-      maxLat: latitude + finalLatRadius,
-      minLng: longitude - finalLngRadius,
-      maxLng: longitude + finalLngRadius,
-    };
-  }, [latitude, longitude, distance, aspectRatio]);
-
-  // Convert lat/lng to canvas coordinates
-  const toCanvasCoords = useCallback((lat: number, lng: number, width: number, height: number, bounds: ReturnType<typeof getBounds>) => {
-    const x = ((lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * width;
-    const y = height - ((lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * height;
-    return { x, y };
-  }, []);
-
-  // Get street color based on type and theme
-  const getStreetColor = useCallback((type: string): string => {
-    switch (type) {
-      case 'motorway':
+  // Get street color based on highway type (matching Python get_edge_colors_by_type)
+  const getStreetColor = useCallback(
+    (type: string): string => {
+      if (['motorway', 'motorway_link'].includes(type)) {
         return theme.roadMotorway;
-      case 'primary':
+      } else if (['trunk', 'trunk_link', 'primary', 'primary_link'].includes(type)) {
         return theme.roadPrimary;
-      case 'secondary':
+      } else if (['secondary', 'secondary_link'].includes(type)) {
         return theme.roadSecondary;
-      case 'tertiary':
+      } else if (['tertiary', 'tertiary_link'].includes(type)) {
         return theme.roadTertiary;
-      case 'residential':
+      } else if (['residential', 'living_street', 'unclassified'].includes(type)) {
         return theme.roadResidential;
-      default:
-        return theme.roadResidential;
-    }
-  }, [theme]);
+      } else {
+        return theme.roadService || theme.roadResidential;
+      }
+    },
+    [theme]
+  );
+
+  // Get street width based on highway type (matching Python get_edge_widths_by_type)
+  const getStreetWidth = useCallback((type: string): number => {
+    return STREET_WIDTHS[type] || 0.4;
+  }, []);
 
   // Get font family CSS
   const getFontFamily = useCallback(() => {
     switch (fontFamily) {
       case 'serif':
-        return 'Georgia, serif';
+        return 'Georgia, "Times New Roman", serif';
       case 'sans':
-        return 'Inter, system-ui, sans-serif';
+        return 'Inter, -apple-system, sans-serif';
       case 'display':
-        return 'Playfair Display, Georgia, serif';
+        return '"Playfair Display", Georgia, serif';
       case 'elegant':
-        return 'Cormorant Garamond, Georgia, serif';
+        return '"Cormorant Garamond", Georgia, serif';
       case 'condensed':
-        return 'Oswald, sans-serif';
+        return 'Oswald, "Arial Narrow", sans-serif';
       default:
-        return 'Roboto Mono, monospace';
+        return '"Roboto Mono", "Courier New", monospace';
     }
   }, [fontFamily]);
 
-  // Draw the poster
+  // Calculate crop limits to maintain aspect ratio (matching Python get_crop_limits)
+  const getCropLimits = useCallback(() => {
+    // Convert distance to degrees (approximate mercator projection)
+    const metersPerDegreeLat = 111320;
+    const metersPerDegreeLng = 111320 * Math.cos((latitude * Math.PI) / 180);
+
+    // Start from the requested radius
+    let halfX = distance / metersPerDegreeLng;
+    let halfY = distance / metersPerDegreeLat;
+
+    // Cut inward to match aspect ratio
+    if (aspectRatio > 1) {
+      // Landscape: reduce height
+      halfY = halfX / aspectRatio;
+    } else {
+      // Portrait: reduce width
+      halfX = halfY * aspectRatio;
+    }
+
+    return {
+      minLng: longitude - halfX,
+      maxLng: longitude + halfX,
+      minLat: latitude - halfY,
+      maxLat: latitude + halfY,
+    };
+  }, [latitude, longitude, distance, aspectRatio]);
+
+  // Convert lat/lng to canvas coordinates
+  const toCanvasCoords = useCallback(
+    (
+      lat: number,
+      lng: number,
+      canvasWidth: number,
+      canvasHeight: number,
+      bounds: ReturnType<typeof getCropLimits>
+    ) => {
+      const x = ((lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * canvasWidth;
+      const y = canvasHeight - ((lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * canvasHeight;
+      return { x, y };
+    },
+    []
+  );
+
+  // Main drawing function
   const drawPoster = useCallback(() => {
     const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
+    if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Use fixed high-resolution canvas
-    const width = CANVAS_BASE_WIDTH;
-    const height = width / aspectRatio;
-    
-    // Set canvas size at 2x for retina displays
+    // Set canvas size based on orientation with 2x scale for retina
     const scale = 2;
+    const width = orientation === 'horizontal' ? CANVAS_HEIGHT : CANVAS_WIDTH;
+    const height = orientation === 'horizontal' ? CANVAS_WIDTH : CANVAS_HEIGHT;
+
     canvas.width = width * scale;
     canvas.height = height * scale;
-    
-    // Scale context to match
     ctx.scale(scale, scale);
-    
-    const bounds = getBounds();
 
-    // 1. Background
+    const bounds = getCropLimits();
+
+    // 1. Background (matching Python: ax.set_facecolor(THEME['bg']))
     ctx.fillStyle = theme.bg;
     ctx.fillRect(0, 0, width, height);
 
-    // 2. Draw streets (from less important to most important)
+    // 2. Draw streets layer by layer (matching Python road hierarchy)
+    // Draw in order: residential -> tertiary -> secondary -> primary -> motorway
     const streetOrder = ['residential', 'tertiary', 'secondary', 'primary', 'motorway'];
-    
+
     for (const streetType of streetOrder) {
-      const segment = streets.find(s => s.type === streetType);
+      const segment = streets.find((s) => s.type === streetType);
       if (!segment) continue;
 
       const color = getStreetColor(streetType);
-      const lineWidth = STREET_WIDTHS[streetType] || 0.7;
-      
+      const baseWidth = getStreetWidth(streetType);
+      // Scale line width with canvas size
+      const lineWidth = baseWidth * (width / 400);
+
       ctx.strokeStyle = color;
       ctx.lineWidth = lineWidth;
       ctx.lineCap = 'round';
@@ -176,82 +257,101 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
       }
     }
 
-    // 3. Top gradient fade
-    const topGradient = ctx.createLinearGradient(0, 0, 0, height * 0.2);
-    topGradient.addColorStop(0, theme.gradientColor);
-    topGradient.addColorStop(1, 'transparent');
-    ctx.fillStyle = topGradient;
-    ctx.fillRect(0, 0, width, height * 0.2);
+    // 3. Gradients (matching Python create_gradient_fade)
+    createGradientFade(ctx, theme.gradientColor, 'top', width, height);
+    createGradientFade(ctx, theme.gradientColor, 'bottom', width, height);
 
-    // 4. Bottom gradient fade (stronger for text legibility)
-    const bottomGradient = ctx.createLinearGradient(0, height * 0.7, 0, height);
-    bottomGradient.addColorStop(0, 'transparent');
-    bottomGradient.addColorStop(1, theme.gradientColor);
-    ctx.fillStyle = bottomGradient;
-    ctx.fillRect(0, height * 0.7, width, height * 0.3);
-
-    // 5. Typography
+    // 4. Typography (matching Python font sizing and positioning)
     const textColor = config.customTextColor || theme.text;
-    
-    // Font sizes based on canvas size
-    const fontSizeMultiplier = fontSize === 'small' ? 0.85 : fontSize === 'large' ? 1.15 : 1;
-    const mainFontSize = 48 * fontSizeMultiplier;
-    const subFontSize = 18 * fontSizeMultiplier;
-    const coordFontSize = 14 * fontSizeMultiplier;
-    
+    const scaleFactor = width / (DEFAULT_WIDTH * DPI);
+
+    // Python base font sizes at 12 inches width
+    const BASE_MAIN = 60;
+    const BASE_SUB = 22;
+    const BASE_COORDS = 14;
+    const BASE_ATTR = 8;
+
+    const fontSizeMultiplier = fontSize === 'small' ? 0.8 : fontSize === 'large' ? 1.2 : 1;
     const fontFamilyCSS = getFontFamily();
 
-    // City name (spaced)
+    // --- Bottom text (matching Python positioning) ---
     ctx.fillStyle = textColor;
-    ctx.font = `bold ${mainFontSize}px ${fontFamilyCSS}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+
+    // City name with letter spacing
+    const mainFontSize = BASE_MAIN * scaleFactor * fontSizeMultiplier;
     
+    // Adjust font size for long city names (matching Python logic)
+    const cityCharCount = city.length;
+    let adjustedMainFontSize = mainFontSize;
+    if (cityCharCount > 10) {
+      const lengthFactor = 10 / cityCharCount;
+      adjustedMainFontSize = Math.max(mainFontSize * lengthFactor, 10 * scaleFactor);
+    }
+
+    ctx.font = `bold ${adjustedMainFontSize}px ${fontFamilyCSS}`;
     const cityText = spacedText(city);
     ctx.fillText(cityText, width / 2, height * 0.86);
 
-    // Decorative line
-    ctx.strokeStyle = textColor;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(width * 0.35, height * 0.895);
-    ctx.lineTo(width * 0.65, height * 0.895);
-    ctx.stroke();
-
-    // Country
+    // Country (matching Python: 0.10 from bottom = 0.90 from top)
+    const subFontSize = BASE_SUB * scaleFactor * fontSizeMultiplier;
     ctx.font = `300 ${subFontSize}px ${fontFamilyCSS}`;
-    ctx.fillText((countryLabel || country).toUpperCase(), width / 2, height * 0.925);
+    ctx.fillText((countryLabel || country).toUpperCase(), width / 2, height * 0.90);
 
-    // Coordinates
+    // Coordinates (matching Python: 0.07 from bottom = 0.93 from top)
+    const coordFontSize = BASE_COORDS * scaleFactor * fontSizeMultiplier;
     ctx.globalAlpha = 0.7;
     ctx.font = `${coordFontSize}px ${fontFamilyCSS}`;
-    ctx.fillText(formatCoordinates(latitude, longitude), width / 2, height * 0.955);
+    ctx.fillText(formatCoordinates(latitude, longitude), width / 2, height * 0.93);
     ctx.globalAlpha = 1;
 
-    // Attribution
+    // Decorative line (matching Python: between 0.4 and 0.6 at y=0.875)
+    ctx.strokeStyle = textColor;
+    ctx.lineWidth = 1 * scaleFactor;
+    ctx.beginPath();
+    ctx.moveTo(width * 0.4, height * 0.875);
+    ctx.lineTo(width * 0.6, height * 0.875);
+    ctx.stroke();
+
+    // Attribution (matching Python: bottom right)
+    const attrFontSize = BASE_ATTR * scaleFactor;
     ctx.globalAlpha = 0.5;
-    ctx.font = `10px ${fontFamilyCSS}`;
+    ctx.font = `${attrFontSize}px ${fontFamilyCSS}`;
     ctx.textAlign = 'right';
-    ctx.fillText('© OpenStreetMap contributors', width - 12, height - 10);
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('© OpenStreetMap contributors', width - 10, height - 10);
     ctx.globalAlpha = 1;
 
-    // Notify parent that canvas is ready for export
+    // Notify parent that canvas is ready
     if (onExportReady) {
       onExportReady(canvas);
     }
-  }, [streets, theme, city, country, countryLabel, latitude, longitude, fontFamily, fontSize, aspectRatio, config.customTextColor, getBounds, toCanvasCoords, getStreetColor, getFontFamily, onExportReady]);
+  }, [
+    streets,
+    theme,
+    city,
+    country,
+    countryLabel,
+    latitude,
+    longitude,
+    orientation,
+    fontSize,
+    config.customTextColor,
+    getCropLimits,
+    toCanvasCoords,
+    getStreetColor,
+    getStreetWidth,
+    getFontFamily,
+    onExportReady,
+  ]);
 
-  // Redraw when dependencies change
   useEffect(() => {
     drawPoster();
   }, [drawPoster]);
 
-  // Handle resize
   useEffect(() => {
-    const handleResize = () => {
-      drawPoster();
-    };
-
+    const handleResize = () => drawPoster();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [drawPoster]);
@@ -259,17 +359,13 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
   const aspectClass = orientation === 'horizontal' ? 'aspect-[4/3]' : 'aspect-[3/4]';
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className={`relative w-full ${aspectClass} rounded-lg shadow-2xl overflow-hidden`}
       style={{ backgroundColor: theme.bg }}
     >
-      <canvas 
-        ref={canvasRef}
-        className="w-full h-full object-contain"
-      />
-      
-      {/* Loading indicator */}
+      <canvas ref={canvasRef} className="w-full h-full object-contain" />
+
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-2">
@@ -279,17 +375,9 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
         </div>
       )}
 
-      {/* Error indicator */}
       {error && !isLoading && (
         <div className="absolute top-2 right-2 bg-destructive/10 border border-destructive/30 backdrop-blur-sm px-2 py-1 rounded text-xs text-destructive z-30">
           Fehler beim Laden der Straßen
-        </div>
-      )}
-
-      {/* Street count indicator (for debugging) - hidden in production */}
-      {!isLoading && !error && streets.length > 0 && (
-        <div className="absolute top-2 left-2 bg-background/80 backdrop-blur-sm px-2 py-1 rounded text-xs text-muted-foreground z-30 hidden">
-          {streets.reduce((acc, s) => acc + s.coordinates.length, 0)} Straßensegmente
         </div>
       )}
     </div>
