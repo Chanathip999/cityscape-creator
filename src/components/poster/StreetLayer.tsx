@@ -8,22 +8,14 @@ interface StreetLayerProps {
   mapInstance: any; // Leaflet map instance
 }
 
-// Line widths for each street type - ultra-fine like osmnx/matplotlib vector output
+// IMPORTANT: widths below ~1px tend to look like “bright edges + dark center” on dark backgrounds
+// due to antialiasing. Keep a 1px minimum to get a solid, filled look.
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 2.0,
-  primary: 1.4,
-  secondary: 1.0,
-  tertiary: 0.7,
-  residential: 0.4,
-};
-
-// Opacity per street type (all fully opaque for solid filled look)
-const STREET_OPACITY: Record<string, number> = {
-  motorway: 1,
-  primary: 1,
-  secondary: 0.9,
-  tertiary: 0.85,
-  residential: 0.8,
+  motorway: 3.0,
+  primary: 2.0,
+  secondary: 1.4,
+  tertiary: 1.1,
+  residential: 1.0,
 };
 
 // For hybrid mode: only motorway/primary get theme colors, rest gets subtle gray
@@ -39,9 +31,10 @@ export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) =
     const drawStreets = async () => {
       const L = await import('leaflet');
 
-      // Use canvas renderer for much better pan performance with many segments
+      // SVG strokes render more uniformly (no “hollow” antialias look on thin lines).
+      // Performance is fine for poster preview; final export is server-side anyway.
       if (!rendererRef.current) {
-        rendererRef.current = L.canvas({ padding: 0.5 });
+        rendererRef.current = L.svg({ padding: 0.5 });
       }
 
       // Remove existing layer group
@@ -58,8 +51,7 @@ export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) =
 
       for (const streetType of orderedStreets) {
         const color = getStreetColor(streetType.type, theme);
-        const weight = STREET_WIDTHS[streetType.type] || 0.3;
-        const opacity = STREET_OPACITY[streetType.type] || 0.6;
+        const weight = Math.max(1, STREET_WIDTHS[streetType.type] || 1);
 
         for (const polyline of streetType.coordinates) {
           if (polyline.length < 2) continue;
@@ -67,7 +59,7 @@ export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) =
           const line = L.polyline(polyline, {
             color,
             weight,
-            opacity,
+            opacity: 1,
             lineCap: 'round',
             lineJoin: 'round',
             renderer: rendererRef.current,
