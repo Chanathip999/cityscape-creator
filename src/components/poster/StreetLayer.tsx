@@ -10,23 +10,24 @@ interface StreetLayerProps {
 
 // Line widths for each street type - ultra-fine like osmnx/matplotlib vector output
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 1.8,
-  primary: 1.2,
-  secondary: 0.8,
-  tertiary: 0.5,
-  residential: 0.3,
-  service: 0.2,
+  motorway: 2.0,
+  primary: 1.4,
+  secondary: 1.0,
+  tertiary: 0.7,
+  residential: 0.4,
 };
 
-// Opacity per street type for depth effect (smaller streets more subtle)
+// Opacity per street type (all fully opaque for solid filled look)
 const STREET_OPACITY: Record<string, number> = {
   motorway: 1,
-  primary: 0.95,
-  secondary: 0.85,
-  tertiary: 0.75,
-  residential: 0.65,
-  service: 0.5,
+  primary: 1,
+  secondary: 0.9,
+  tertiary: 0.85,
+  residential: 0.8,
 };
+
+// For hybrid mode: only motorway/primary get theme colors, rest gets subtle gray
+const HYBRID_STREET_TYPES = ['motorway', 'primary'];
 
 export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) => {
   const layerGroupRef = useRef<any>(null);
@@ -96,22 +97,46 @@ export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) =
   return null;
 };
 
-// Get street color from theme
+// Get street color from theme - HYBRID mode: only major roads get color, rest is subtle gray
 function getStreetColor(type: string, theme: PosterTheme): string {
-  switch (type) {
-    case 'motorway':
-      return theme.roadMotorway;
-    case 'primary':
-      return theme.roadPrimary;
-    case 'secondary':
-      return theme.roadSecondary;
-    case 'tertiary':
-      return theme.roadTertiary;
-    case 'residential':
-      return theme.roadResidential;
-    case 'service':
-      return theme.roadService;
-    default:
-      return theme.roadService;
+  // Major roads get theme colors (magenta/cyan for neon)
+  if (HYBRID_STREET_TYPES.includes(type)) {
+    switch (type) {
+      case 'motorway':
+        return theme.roadMotorway;
+      case 'primary':
+        return theme.roadPrimary;
+      default:
+        return theme.roadPrimary;
+    }
+  }
+  
+  // All other roads get a subtle monochrome color based on theme
+  // For dark themes: light gray/white; for light themes: dark gray
+  const isDarkTheme = ['neon', 'noir', 'midnight'].includes(theme.id);
+  if (isDarkTheme) {
+    // Subtle cyan-ish gray for dark themes (like Thames water effect)
+    switch (type) {
+      case 'secondary':
+        return '#3A5A6A'; // darker cyan-gray
+      case 'tertiary':
+        return '#2A4A5A'; // even darker
+      case 'residential':
+        return '#1A3A4A'; // very subtle
+      default:
+        return '#1A3A4A';
+    }
+  } else {
+    // For light themes: subtle dark grays
+    switch (type) {
+      case 'secondary':
+        return '#8A9AA0';
+      case 'tertiary':
+        return '#A0B0B5';
+      case 'residential':
+        return '#B5C5CA';
+      default:
+        return '#B5C5CA';
+    }
   }
 }
