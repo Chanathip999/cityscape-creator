@@ -9,7 +9,6 @@ const corsHeaders = {
 const STREET_TYPES = [
   { type: 'motorway', tags: ['motorway'] },
   { type: 'primary', tags: ['trunk', 'primary'] },
-  { type: 'secondary', tags: ['secondary'] },
 ];
 
 // Simple in-memory cache for recent queries (TTL: 60 seconds)
