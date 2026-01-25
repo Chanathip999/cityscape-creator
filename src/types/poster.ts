@@ -15,6 +15,7 @@ export interface PosterTheme {
 
 export type FontFamily = 'mono' | 'sans' | 'serif';
 export type FontSize = 'small' | 'medium' | 'large';
+export type PosterOrientation = 'vertical' | 'horizontal';
 
 export interface PosterConfig {
   city: string;
@@ -28,6 +29,7 @@ export interface PosterConfig {
   height: number;
   fontFamily: FontFamily;
   fontSize: FontSize;
+  orientation: PosterOrientation;
 }
 
 export const POSTER_THEMES: PosterTheme[] = [
@@ -126,4 +128,5 @@ export const DEFAULT_CONFIG: PosterConfig = {
   height: 16,
   fontFamily: 'mono',
   fontSize: 'medium',
+  orientation: 'vertical',
 };

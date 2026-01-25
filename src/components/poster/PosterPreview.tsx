@@ -3,6 +3,8 @@ import { PosterConfig } from '@/types/poster';
 
 interface PosterPreviewProps {
   config: PosterConfig;
+  onLocationChange?: (lat: number, lng: number) => void;
+  interactive?: boolean;
 }
 
 const formatCoordinates = (lat: number, lon: number): string => {
@@ -31,8 +33,8 @@ const getTileUrl = (themeId: string): string => {
   return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
 };
 
-export const PosterPreview = ({ config }: PosterPreviewProps) => {
-  const { city, country, countryLabel, latitude, longitude, distance, theme, fontFamily, fontSize } = config;
+export const PosterPreview = ({ config, onLocationChange, interactive = false }: PosterPreviewProps) => {
+  const { city, country, countryLabel, latitude, longitude, distance, theme, fontFamily, fontSize, orientation } = config;
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
@@ -63,6 +65,9 @@ export const PosterPreview = ({ config }: PosterPreviewProps) => {
   };
 
   const fontSizes = getFontSize();
+  
+  // Aspect ratio based on orientation
+  const aspectRatio = orientation === 'horizontal' ? 'aspect-[4/3]' : 'aspect-[3/4]';
 
   // Initialize map
   useEffect(() => {
@@ -81,15 +86,23 @@ export const PosterPreview = ({ config }: PosterPreviewProps) => {
         center: [latitude, longitude],
         zoom: getZoomFromDistance(distance),
         zoomControl: false,
-        scrollWheelZoom: false,
-        dragging: false,
-        doubleClickZoom: false,
+        scrollWheelZoom: interactive,
+        dragging: interactive,
+        doubleClickZoom: interactive,
         attributionControl: false,
       });
 
       tileLayerRef.current = L.tileLayer(getTileUrl(theme.id), {
         attribution: '',
       }).addTo(map);
+
+      // Add move listener if interactive
+      if (interactive && onLocationChange) {
+        map.on('moveend', () => {
+          const center = map.getCenter();
+          onLocationChange(center.lat, center.lng);
+        });
+      }
 
       leafletMapRef.current = map;
       setIsMapReady(true);
@@ -103,7 +116,7 @@ export const PosterPreview = ({ config }: PosterPreviewProps) => {
         leafletMapRef.current = null;
       }
     };
-  }, []);
+  }, [interactive]);
 
   // Update map when config changes
   useEffect(() => {
@@ -127,10 +140,19 @@ export const PosterPreview = ({ config }: PosterPreviewProps) => {
       attribution: '',
     }).addTo(leafletMapRef.current);
   }, [theme.id, isMapReady]);
+
+  // Invalidate size when orientation changes
+  useEffect(() => {
+    if (!leafletMapRef.current || !isMapReady) return;
+    
+    setTimeout(() => {
+      leafletMapRef.current.invalidateSize();
+    }, 100);
+  }, [orientation, isMapReady]);
   
   return (
     <div 
-      className="relative w-full aspect-[3/4] rounded-lg shadow-2xl overflow-hidden transition-all duration-500"
+      className={`relative w-full ${aspectRatio} rounded-lg shadow-2xl overflow-hidden transition-all duration-500 ${interactive ? 'cursor-grab active:cursor-grabbing' : ''}`}
       style={{ backgroundColor: theme.bg }}
     >
       {/* Map layer */}
@@ -139,6 +161,13 @@ export const PosterPreview = ({ config }: PosterPreviewProps) => {
         className="absolute inset-0"
         style={{ backgroundColor: theme.bg }}
       />
+      
+      {/* Interactive hint */}
+      {interactive && (
+        <div className="absolute top-2 left-2 bg-background/80 backdrop-blur-sm px-2 py-1 rounded text-xs text-muted-foreground z-30">
+          Karte ziehen zum Positionieren
+        </div>
+      )}
       
       {/* Top gradient fade */}
       <div 
@@ -157,7 +186,7 @@ export const PosterPreview = ({ config }: PosterPreviewProps) => {
       />
       
       {/* Typography section */}
-      <div className="absolute bottom-0 left-0 right-0 p-6 text-center z-20">
+      <div className="absolute bottom-0 left-0 right-0 p-6 text-center z-20 pointer-events-none">
         {/* City name */}
         <h1 
           className={`${getFontClass()} ${fontSizes.title} mb-2 tracking-[0.3em] font-bold`}
@@ -191,7 +220,7 @@ export const PosterPreview = ({ config }: PosterPreviewProps) => {
       
       {/* Attribution */}
       <p 
-        className="absolute bottom-2 right-2 text-[8px] opacity-50 font-mono z-20"
+        className="absolute bottom-2 right-2 text-[8px] opacity-50 font-mono z-20 pointer-events-none"
         style={{ color: theme.text }}
       >
         © OpenStreetMap contributors
