@@ -52,8 +52,8 @@ Deno.serve(async (req) => {
 
     console.log(`Fetching streets for lat=${lat}, lng=${lng}, distance=${distance}m`);
 
-    // Use distance/4 as radius for much faster queries (covers visible area only)
-    const radius = Math.max(2000, Number(distance) / 4);
+    // Use distance as radius to cover the full visible map area
+    const radius = Math.max(3000, Number(distance));
 
     const latDelta = radius / 111320;
     const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));
