@@ -10,9 +10,9 @@ interface StreetLayerProps {
 
 // Line widths for each street type (thicker lines for cleaner look)
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 4,
-  primary: 3,
-  secondary: 2.5,
+  motorway: 2.5,
+  primary: 1.8,
+  secondary: 1.4,
 };
 
 export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) => {
@@ -52,7 +52,7 @@ export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) =
           const line = L.polyline(polyline, {
             color,
             weight,
-            opacity: 0.9,
+            opacity: 0.75,
             lineCap: 'round',
             lineJoin: 'round',
             renderer: rendererRef.current,
