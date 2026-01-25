@@ -147,3 +147,13 @@
     text-wrap: balance;
   }
 }
+
+/* Leaflet z-index override for poster overlay */
+.leaflet-pane {
+  z-index: 1 !important;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 5 !important;
+}
