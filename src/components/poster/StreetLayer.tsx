@@ -8,11 +8,13 @@ interface StreetLayerProps {
   mapInstance: any; // Leaflet map instance
 }
 
-// Line widths for each street type - motorways (biggest) are thickest
+// Line widths for each street type - finer lines like osmnx/matplotlib style
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 3,   // Biggest streets - pink, thickest line
-  primary: 1.5,  // Smaller streets - cyan, thinner line
-  secondary: 1,
+  motorway: 2.5,
+  primary: 1.8,
+  secondary: 1.2,
+  tertiary: 0.8,
+  residential: 0.4,
 };
 
 export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) => {
@@ -52,7 +54,7 @@ export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) =
           const line = L.polyline(polyline, {
             color,
             weight,
-            opacity: 0.55,
+            opacity: 0.9,
             lineCap: 'round',
             lineJoin: 'round',
             renderer: rendererRef.current,

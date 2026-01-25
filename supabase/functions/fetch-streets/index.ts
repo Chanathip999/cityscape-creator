@@ -5,11 +5,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Street types - only major roads for fast loading
+// Street types - ALL levels for high-quality poster look (like osmnx)
 const STREET_TYPES = [
-  // include *_link tags to avoid broken-looking discontinuities at junctions/ramps
   { type: 'motorway', tags: ['motorway', 'motorway_link'] },
   { type: 'primary', tags: ['trunk', 'trunk_link', 'primary', 'primary_link'] },
+  { type: 'secondary', tags: ['secondary', 'secondary_link'] },
+  { type: 'tertiary', tags: ['tertiary', 'tertiary_link'] },
+  { type: 'residential', tags: ['residential', 'living_street', 'unclassified'] },
 ];
 
 // Simple in-memory cache for recent queries (TTL: 60 seconds)
