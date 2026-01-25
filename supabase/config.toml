@@ -1,0 +1,4 @@
+project_id = "wfuctevpojkhcbbegzvh"
+
+[functions.poster-ai]
+verify_jwt = false
