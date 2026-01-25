@@ -162,18 +162,39 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
     setTimeout(() => {
       leafletMapRef.current.invalidateSize();
     }, 100);
+    
+    setTimeout(() => {
+      leafletMapRef.current.invalidateSize();
+    }, 300);
   }, [orientation, isMapReady]);
+  
+  // ResizeObserver to handle container resizing
+  useEffect(() => {
+    if (!mapRef.current || !leafletMapRef.current) return;
+    
+    const resizeObserver = new ResizeObserver(() => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.invalidateSize();
+      }
+    });
+    
+    resizeObserver.observe(mapRef.current);
+    
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [isMapReady]);
   
   return (
     <div 
       className={`relative w-full ${aspectRatio} rounded-lg shadow-2xl overflow-hidden transition-all duration-500 ${interactive ? 'cursor-grab active:cursor-grabbing' : ''}`}
       style={{ backgroundColor: theme.bg }}
     >
-      {/* Map layer */}
+      {/* Map layer - explicit min-height to ensure Leaflet renders properly */}
       <div 
         ref={mapRef}
-        className="absolute inset-0"
-        style={{ backgroundColor: theme.bg }}
+        className="absolute inset-0 w-full h-full"
+        style={{ backgroundColor: theme.bg, minHeight: '300px' }}
       />
       
       {/* Interactive hint */}
