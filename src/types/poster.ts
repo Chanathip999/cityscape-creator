@@ -13,7 +13,7 @@ export interface PosterTheme {
   gradientColor: string;
 }
 
-export type FontFamily = 'mono' | 'sans' | 'serif';
+export type FontFamily = 'mono' | 'sans' | 'serif' | 'display' | 'elegant' | 'condensed';
 export type FontSize = 'small' | 'medium' | 'large';
 export type PosterOrientation = 'vertical' | 'horizontal';
 
@@ -30,6 +30,7 @@ export interface PosterConfig {
   fontFamily: FontFamily;
   fontSize: FontSize;
   orientation: PosterOrientation;
+  customTextColor?: string; // Optional custom text color override
 }
 
 export const POSTER_THEMES: PosterTheme[] = [
@@ -175,10 +176,25 @@ export const POSTER_THEMES: PosterTheme[] = [
   },
 ];
 
-export const FONT_FAMILIES: { id: FontFamily; name: string }[] = [
-  { id: 'mono', name: 'Monospace' },
-  { id: 'sans', name: 'Sans-Serif' },
-  { id: 'serif', name: 'Serif' },
+export const FONT_FAMILIES: { id: FontFamily; name: string; className: string }[] = [
+  { id: 'mono', name: 'Monospace', className: 'font-mono' },
+  { id: 'sans', name: 'Sans-Serif', className: 'font-sans' },
+  { id: 'serif', name: 'Serif', className: 'font-serif' },
+  { id: 'display', name: 'Display', className: 'font-display' },
+  { id: 'elegant', name: 'Elegant', className: 'font-elegant' },
+  { id: 'condensed', name: 'Condensed', className: 'font-condensed' },
+];
+
+export const TEXT_COLORS: { id: string; name: string; color: string }[] = [
+  { id: 'theme', name: 'Theme-Farbe', color: '' },
+  { id: 'white', name: 'Weiß', color: '#FFFFFF' },
+  { id: 'black', name: 'Schwarz', color: '#1A1A1A' },
+  { id: 'gold', name: 'Gold', color: '#D4A853' },
+  { id: 'cyan', name: 'Cyan', color: '#00D4FF' },
+  { id: 'coral', name: 'Koralle', color: '#FF6B6B' },
+  { id: 'sage', name: 'Salbei', color: '#87AE73' },
+  { id: 'navy', name: 'Navy', color: '#1B4965' },
+  { id: 'terracotta', name: 'Terrakotta', color: '#C04000' },
 ];
 
 export const FONT_SIZES: { id: FontSize; name: string }[] = [

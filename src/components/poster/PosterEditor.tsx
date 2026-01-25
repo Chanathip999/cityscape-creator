@@ -58,6 +58,10 @@ export const PosterEditor = () => {
     setConfig((prev) => ({ ...prev, fontSize }));
   };
 
+  const handleTextColorChange = (customTextColor: string | undefined) => {
+    setConfig((prev) => ({ ...prev, customTextColor }));
+  };
+
   const handleOrientationChange = (orientation: PosterOrientation) => {
     setConfig((prev) => ({ ...prev, orientation }));
   };
@@ -165,8 +169,10 @@ export const PosterEditor = () => {
               <FontSelector
                 fontFamily={config.fontFamily}
                 fontSize={config.fontSize}
+                customTextColor={config.customTextColor}
                 onFontFamilyChange={handleFontFamilyChange}
                 onFontSizeChange={handleFontSizeChange}
+                onTextColorChange={handleTextColorChange}
               />
 
               <Separator />
