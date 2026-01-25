@@ -1,19 +1,19 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { PosterConfig } from '@/types/poster';
-import { useStreetData, StreetSegment } from '@/hooks/useStreetData';
+import { useStreetData } from '@/hooks/useStreetData';
 
 interface CanvasPosterPreviewProps {
   config: PosterConfig;
   onExportReady?: (canvas: HTMLCanvasElement) => void;
 }
 
-// Street widths matching the Python script hierarchy
+// Street widths - increased for better visibility
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 1.2,
-  primary: 1.0,
-  secondary: 0.8,
-  tertiary: 0.6,
-  residential: 0.4,
+  motorway: 2.5,
+  primary: 2.0,
+  secondary: 1.5,
+  tertiary: 1.0,
+  residential: 0.7,
 };
 
 const formatCoordinates = (lat: number, lon: number): string => {
@@ -26,38 +26,60 @@ const spacedText = (text: string): string => {
   return text.toUpperCase().split('').join('  ');
 };
 
+// Fixed canvas size for high quality rendering
+const CANVAS_BASE_WIDTH = 800;
+
 export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPreviewProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
   const { city, country, countryLabel, latitude, longitude, distance, theme, fontFamily, fontSize, orientation } = config;
   
-  // Fetch street data
+  // Fetch street data with compensated distance for aspect ratio
+  const aspectRatio = orientation === 'horizontal' ? 4/3 : 3/4;
+  const compensatedDistance = Math.ceil(distance * Math.max(1, 1 / aspectRatio) * 1.2);
+  
   const { streets, isLoading, error } = useStreetData({
     latitude,
     longitude,
-    distance,
+    distance: compensatedDistance,
     enabled: true,
   });
 
-  // Calculate bounds from distance
+  // Calculate bounds that match the poster aspect ratio
   const getBounds = useCallback(() => {
     // Convert distance (meters) to degrees (approximate)
-    const latDelta = distance / 111320; // 1 degree latitude ≈ 111.32 km
-    const lngDelta = distance / (111320 * Math.cos(latitude * Math.PI / 180));
+    const metersPerDegreeLat = 111320;
+    const metersPerDegreeLng = 111320 * Math.cos(latitude * Math.PI / 180);
+    
+    // Base radius in degrees
+    const latRadius = distance / metersPerDegreeLat;
+    const lngRadius = distance / metersPerDegreeLng;
+    
+    // Adjust for aspect ratio - expand in the appropriate direction
+    let finalLatRadius = latRadius;
+    let finalLngRadius = lngRadius;
+    
+    if (aspectRatio > 1) {
+      // Landscape: expand longitude (width)
+      finalLngRadius = latRadius * aspectRatio;
+    } else {
+      // Portrait: expand latitude (height)
+      finalLatRadius = lngRadius / aspectRatio;
+    }
     
     return {
-      minLat: latitude - latDelta,
-      maxLat: latitude + latDelta,
-      minLng: longitude - lngDelta,
-      maxLng: longitude + lngDelta,
+      minLat: latitude - finalLatRadius,
+      maxLat: latitude + finalLatRadius,
+      minLng: longitude - finalLngRadius,
+      maxLng: longitude + finalLngRadius,
     };
-  }, [latitude, longitude, distance]);
+  }, [latitude, longitude, distance, aspectRatio]);
 
   // Convert lat/lng to canvas coordinates
   const toCanvasCoords = useCallback((lat: number, lng: number, width: number, height: number, bounds: ReturnType<typeof getBounds>) => {
     const x = ((lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * width;
-    const y = height - ((lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * height; // Flip Y
+    const y = height - ((lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * height;
     return { x, y };
   }, []);
 
@@ -106,30 +128,18 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Get container size and set canvas size (with pixel ratio for sharpness)
-    const rect = container.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
+    // Use fixed high-resolution canvas
+    const width = CANVAS_BASE_WIDTH;
+    const height = width / aspectRatio;
     
-    // Aspect ratio based on orientation
-    const aspectRatio = orientation === 'horizontal' ? 4/3 : 3/4;
-    let canvasWidth = rect.width;
-    let canvasHeight = canvasWidth / aspectRatio;
+    // Set canvas size at 2x for retina displays
+    const scale = 2;
+    canvas.width = width * scale;
+    canvas.height = height * scale;
     
-    // Limit height to container
-    if (canvasHeight > rect.height) {
-      canvasHeight = rect.height;
-      canvasWidth = canvasHeight * aspectRatio;
-    }
-
-    canvas.width = canvasWidth * dpr;
-    canvas.height = canvasHeight * dpr;
-    canvas.style.width = `${canvasWidth}px`;
-    canvas.style.height = `${canvasHeight}px`;
+    // Scale context to match
+    ctx.scale(scale, scale);
     
-    ctx.scale(dpr, dpr);
-
-    const width = canvasWidth;
-    const height = canvasHeight;
     const bounds = getBounds();
 
     // 1. Background
@@ -144,7 +154,7 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
       if (!segment) continue;
 
       const color = getStreetColor(streetType);
-      const lineWidth = (STREET_WIDTHS[streetType] || 0.4) * (width / 400); // Scale with canvas size
+      const lineWidth = STREET_WIDTHS[streetType] || 0.7;
       
       ctx.strokeStyle = color;
       ctx.lineWidth = lineWidth;
@@ -167,28 +177,27 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     }
 
     // 3. Top gradient fade
-    const topGradient = ctx.createLinearGradient(0, 0, 0, height * 0.25);
+    const topGradient = ctx.createLinearGradient(0, 0, 0, height * 0.2);
     topGradient.addColorStop(0, theme.gradientColor);
     topGradient.addColorStop(1, 'transparent');
     ctx.fillStyle = topGradient;
-    ctx.fillRect(0, 0, width, height * 0.25);
+    ctx.fillRect(0, 0, width, height * 0.2);
 
-    // 4. Bottom gradient fade
-    const bottomGradient = ctx.createLinearGradient(0, height * 0.67, 0, height);
+    // 4. Bottom gradient fade (stronger for text legibility)
+    const bottomGradient = ctx.createLinearGradient(0, height * 0.7, 0, height);
     bottomGradient.addColorStop(0, 'transparent');
     bottomGradient.addColorStop(1, theme.gradientColor);
     ctx.fillStyle = bottomGradient;
-    ctx.fillRect(0, height * 0.67, width, height * 0.33);
+    ctx.fillRect(0, height * 0.7, width, height * 0.3);
 
     // 5. Typography
     const textColor = config.customTextColor || theme.text;
-    const scale = width / 400; // Base scale factor
     
-    // Font sizes
-    const fontSizeMultiplier = fontSize === 'small' ? 0.8 : fontSize === 'large' ? 1.2 : 1;
-    const mainFontSize = 28 * scale * fontSizeMultiplier;
-    const subFontSize = 14 * scale * fontSizeMultiplier;
-    const coordFontSize = 10 * scale * fontSizeMultiplier;
+    // Font sizes based on canvas size
+    const fontSizeMultiplier = fontSize === 'small' ? 0.85 : fontSize === 'large' ? 1.15 : 1;
+    const mainFontSize = 48 * fontSizeMultiplier;
+    const subFontSize = 18 * fontSizeMultiplier;
+    const coordFontSize = 14 * fontSizeMultiplier;
     
     const fontFamilyCSS = getFontFamily();
 
@@ -203,34 +212,34 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
 
     // Decorative line
     ctx.strokeStyle = textColor;
-    ctx.lineWidth = 1 * scale;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(width * 0.35, height * 0.89);
-    ctx.lineTo(width * 0.65, height * 0.89);
+    ctx.moveTo(width * 0.35, height * 0.895);
+    ctx.lineTo(width * 0.65, height * 0.895);
     ctx.stroke();
 
     // Country
     ctx.font = `300 ${subFontSize}px ${fontFamilyCSS}`;
-    ctx.fillText((countryLabel || country).toUpperCase(), width / 2, height * 0.92);
+    ctx.fillText((countryLabel || country).toUpperCase(), width / 2, height * 0.925);
 
     // Coordinates
     ctx.globalAlpha = 0.7;
     ctx.font = `${coordFontSize}px ${fontFamilyCSS}`;
-    ctx.fillText(formatCoordinates(latitude, longitude), width / 2, height * 0.95);
+    ctx.fillText(formatCoordinates(latitude, longitude), width / 2, height * 0.955);
     ctx.globalAlpha = 1;
 
     // Attribution
     ctx.globalAlpha = 0.5;
-    ctx.font = `${6 * scale}px ${fontFamilyCSS}`;
+    ctx.font = `10px ${fontFamilyCSS}`;
     ctx.textAlign = 'right';
-    ctx.fillText('© OpenStreetMap contributors', width - 8 * scale, height - 6 * scale);
+    ctx.fillText('© OpenStreetMap contributors', width - 12, height - 10);
     ctx.globalAlpha = 1;
 
     // Notify parent that canvas is ready for export
     if (onExportReady) {
       onExportReady(canvas);
     }
-  }, [streets, theme, city, country, countryLabel, latitude, longitude, fontFamily, fontSize, orientation, config.customTextColor, getBounds, toCanvasCoords, getStreetColor, getFontFamily, onExportReady]);
+  }, [streets, theme, city, country, countryLabel, latitude, longitude, fontFamily, fontSize, aspectRatio, config.customTextColor, getBounds, toCanvasCoords, getStreetColor, getFontFamily, onExportReady]);
 
   // Redraw when dependencies change
   useEffect(() => {
@@ -247,17 +256,17 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     return () => window.removeEventListener('resize', handleResize);
   }, [drawPoster]);
 
-  const aspectRatio = orientation === 'horizontal' ? 'aspect-[4/3]' : 'aspect-[3/4]';
+  const aspectClass = orientation === 'horizontal' ? 'aspect-[4/3]' : 'aspect-[3/4]';
 
   return (
     <div 
       ref={containerRef}
-      className={`relative w-full ${aspectRatio} rounded-lg shadow-2xl overflow-hidden`}
+      className={`relative w-full ${aspectClass} rounded-lg shadow-2xl overflow-hidden`}
       style={{ backgroundColor: theme.bg }}
     >
       <canvas 
         ref={canvasRef}
-        className="w-full h-full"
+        className="w-full h-full object-contain"
       />
       
       {/* Loading indicator */}
@@ -277,9 +286,9 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
         </div>
       )}
 
-      {/* Street count indicator (for debugging) */}
+      {/* Street count indicator (for debugging) - hidden in production */}
       {!isLoading && !error && streets.length > 0 && (
-        <div className="absolute top-2 left-2 bg-background/80 backdrop-blur-sm px-2 py-1 rounded text-xs text-muted-foreground z-30">
+        <div className="absolute top-2 left-2 bg-background/80 backdrop-blur-sm px-2 py-1 rounded text-xs text-muted-foreground z-30 hidden">
           {streets.reduce((acc, s) => acc + s.coordinates.length, 0)} Straßensegmente
         </div>
       )}
