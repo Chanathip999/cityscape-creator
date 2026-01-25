@@ -36,28 +36,6 @@ const getTileUrl = (themeId: string): string => {
   return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
 };
 
-// CSS filters to colorize map tiles based on theme
-const getMapFilter = (themeId: string): string => {
-  switch (themeId) {
-    case 'neon':
-      return 'brightness(1.5) contrast(1.8) saturate(3) hue-rotate(140deg)';
-    case 'midnight':
-      return 'sepia(0.6) brightness(1.1) contrast(1.4) saturate(1.8) hue-rotate(20deg)';
-    case 'terracotta':
-      return 'sepia(0.8) brightness(1.15) contrast(1.25) saturate(1.6) hue-rotate(-20deg)';
-    case 'forest':
-      return 'sepia(0.6) brightness(1.1) contrast(1.2) saturate(1.8) hue-rotate(50deg)';
-    case 'sunset':
-      return 'sepia(0.7) brightness(1.15) contrast(1.3) saturate(1.8) hue-rotate(-35deg)';
-    case 'ocean':
-      return 'sepia(0.5) brightness(1.1) contrast(1.2) saturate(1.6) hue-rotate(140deg)';
-    case 'copper':
-      return 'sepia(0.6) brightness(1.1) contrast(1.2) saturate(1.5) hue-rotate(80deg)';
-    default:
-      return 'none';
-  }
-};
-
 export const PosterPreview = ({ config, onLocationChange, interactive = false }: PosterPreviewProps) => {
   const { city, country, countryLabel, latitude, longitude, distance, theme, fontFamily, fontSize, orientation, customTextColor } = config;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -167,12 +145,6 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
           maxZoom: 19,
         }).addTo(map);
 
-        // Apply color filter to the tile pane
-        const tilePane = map.getPane('tilePane');
-        if (tilePane) {
-          tilePane.style.filter = getMapFilter(theme.id);
-        }
-
         if (interactive && onLocationChange) {
           map.on('moveend', () => {
             const center = map.getCenter();
@@ -242,7 +214,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
     });
   }, [latitude, longitude, distance]);
 
-  // Update tile layer and filter when theme changes
+  // Update tile layer when theme changes
   useEffect(() => {
     if (!mapInstanceRef.current || !tileLayerRef.current) return;
     
@@ -255,13 +227,6 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
           attribution: '',
           maxZoom: 19,
         }).addTo(mapInstanceRef.current);
-        
-        // Update the filter on the tile pane
-        const tilePane = mapInstanceRef.current.getPane('tilePane');
-        if (tilePane) {
-          tilePane.style.filter = getMapFilter(theme.id);
-          tilePane.style.transition = 'filter 0.3s ease';
-        }
       }
     };
     
