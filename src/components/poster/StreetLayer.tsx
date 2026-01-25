@@ -8,11 +8,11 @@ interface StreetLayerProps {
   mapInstance: any; // Leaflet map instance
 }
 
-// Line widths for each street type (thicker lines for cleaner look)
+// Line widths for each street type - motorways (biggest) are thickest
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 2.5,
-  primary: 1.8,
-  secondary: 1.4,
+  motorway: 3,   // Biggest streets - pink, thickest line
+  primary: 1.5,  // Smaller streets - cyan, thinner line
+  secondary: 1,
 };
 
 export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) => {
