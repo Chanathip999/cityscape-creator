@@ -5,13 +5,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Street types and their highway tags from most to least important
+// Street types - reduced to main roads only for faster loading and cleaner look
+// Excluded: tertiary, residential, living_street, unclassified, road
 const STREET_TYPES = [
   { type: 'motorway', tags: ['motorway', 'motorway_link'] },
   { type: 'primary', tags: ['trunk', 'trunk_link', 'primary', 'primary_link'] },
   { type: 'secondary', tags: ['secondary', 'secondary_link'] },
-  { type: 'tertiary', tags: ['tertiary', 'tertiary_link'] },
-  { type: 'residential', tags: ['residential', 'living_street', 'unclassified', 'road'] },
 ];
 
 interface StreetData {
