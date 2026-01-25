@@ -52,7 +52,7 @@ export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) =
           const line = L.polyline(polyline, {
             color,
             weight,
-            opacity: 0.75,
+            opacity: 0.55,
             lineCap: 'round',
             lineJoin: 'round',
             renderer: rendererRef.current,
