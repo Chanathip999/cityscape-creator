@@ -13,6 +13,9 @@ export interface PosterTheme {
   gradientColor: string;
 }
 
+export type FontFamily = 'mono' | 'sans' | 'serif';
+export type FontSize = 'small' | 'medium' | 'large';
+
 export interface PosterConfig {
   city: string;
   country: string;
@@ -23,6 +26,8 @@ export interface PosterConfig {
   theme: PosterTheme;
   width: number;
   height: number;
+  fontFamily: FontFamily;
+  fontSize: FontSize;
 }
 
 export const POSTER_THEMES: PosterTheme[] = [
@@ -98,6 +103,18 @@ export const POSTER_THEMES: PosterTheme[] = [
   },
 ];
 
+export const FONT_FAMILIES: { id: FontFamily; name: string }[] = [
+  { id: 'mono', name: 'Monospace' },
+  { id: 'sans', name: 'Sans-Serif' },
+  { id: 'serif', name: 'Serif' },
+];
+
+export const FONT_SIZES: { id: FontSize; name: string }[] = [
+  { id: 'small', name: 'Klein' },
+  { id: 'medium', name: 'Mittel' },
+  { id: 'large', name: 'Groß' },
+];
+
 export const DEFAULT_CONFIG: PosterConfig = {
   city: 'Berlin',
   country: 'Germany',
@@ -107,4 +124,6 @@ export const DEFAULT_CONFIG: PosterConfig = {
   theme: POSTER_THEMES[0],
   width: 12,
   height: 16,
+  fontFamily: 'mono',
+  fontSize: 'medium',
 };
