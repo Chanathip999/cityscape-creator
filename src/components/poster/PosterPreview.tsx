@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { PosterConfig } from '@/types/poster';
+import { useStreetData } from '@/hooks/useStreetData';
+import { StreetLayer } from './StreetLayer';
 import 'leaflet/dist/leaflet.css';
 
 interface PosterPreviewProps {
@@ -27,22 +29,21 @@ const getZoomFromDistance = (distance: number): number => {
   return 9;
 };
 
-const getTileUrl = (themeId: string): string => {
-  // Always use nolabels tiles for clean poster look
-  const darkThemes = ['neon', 'noir', 'midnight'];
-  if (darkThemes.includes(themeId)) {
-    return 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
-  }
-  return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
-};
-
 export const PosterPreview = ({ config, onLocationChange, interactive = false }: PosterPreviewProps) => {
   const { city, country, countryLabel, latitude, longitude, distance, theme, fontFamily, fontSize, orientation, customTextColor } = config;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
-  const tileLayerRef = useRef<any>(null);
   const [mapKey, setMapKey] = useState(0);
+  const [mapReady, setMapReady] = useState(false);
+
+  // Fetch street vector data from OSM
+  const { streets, isLoading: streetsLoading } = useStreetData({
+    latitude,
+    longitude,
+    distance,
+    enabled: true,
+  });
 
   // When the user interacts with the map (pan/zoom), Leaflet fires `moveend`.
   // Our external state update (lat/lng) would then trigger the "Update map view" effect
@@ -98,7 +99,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
         console.log('Map cleanup error:', e);
       }
       mapInstanceRef.current = null;
-      tileLayerRef.current = null;
+      setMapReady(false);
     }
   }, []);
 
@@ -130,6 +131,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
 
         console.log('Initializing map with container size:', rect.width, rect.height);
 
+        // Create map WITHOUT tile layer - we'll draw vector streets instead
         const map = L.map(container, {
           center: [latitude, longitude],
           zoom: getZoomFromDistance(distance),
@@ -140,11 +142,6 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
           attributionControl: false,
         });
 
-        const tileLayer = L.tileLayer(getTileUrl(theme.id), {
-          attribution: '',
-          maxZoom: 19,
-        }).addTo(map);
-
         if (interactive && onLocationChange) {
           map.on('moveend', () => {
             const center = map.getCenter();
@@ -154,7 +151,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
         }
 
         mapInstanceRef.current = map;
-        tileLayerRef.current = tileLayer;
+        setMapReady(true);
 
         // Multiple invalidateSize calls to ensure proper rendering
         const invalidateSizes = () => {
@@ -214,25 +211,6 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
     });
   }, [latitude, longitude, distance]);
 
-  // Update tile layer when theme changes
-  useEffect(() => {
-    if (!mapInstanceRef.current || !tileLayerRef.current) return;
-    
-    const loadNewTiles = async () => {
-      const L = await import('leaflet');
-      
-      if (tileLayerRef.current && mapInstanceRef.current) {
-        mapInstanceRef.current.removeLayer(tileLayerRef.current);
-        tileLayerRef.current = L.tileLayer(getTileUrl(theme.id), {
-          attribution: '',
-          maxZoom: 19,
-        }).addTo(mapInstanceRef.current);
-      }
-    };
-    
-    loadNewTiles();
-  }, [theme.id]);
-
   // ResizeObserver for container changes
   useEffect(() => {
     if (!containerRef.current) return;
@@ -269,6 +247,22 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
           height: '100%',
         }}
       />
+      
+      {/* Vector street layer */}
+      {mapReady && mapInstanceRef.current && (
+        <StreetLayer 
+          streets={streets} 
+          theme={theme} 
+          mapInstance={mapInstanceRef.current} 
+        />
+      )}
+      
+      {/* Loading indicator for streets */}
+      {streetsLoading && (
+        <div className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm px-2 py-1 rounded text-xs text-muted-foreground z-30">
+          Lade Straßen...
+        </div>
+      )}
       
       {/* Interactive hint */}
       {interactive && (

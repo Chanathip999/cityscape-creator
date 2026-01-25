@@ -2,3 +2,6 @@ project_id = "wfuctevpojkhcbbegzvh"
 
 [functions.poster-ai]
 verify_jwt = false
+
+[functions.fetch-streets]
+verify_jwt = false
