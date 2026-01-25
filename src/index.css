@@ -153,7 +153,20 @@
   z-index: 1 !important;
 }
 
+.leaflet-tile-pane {
+  z-index: 1 !important;
+}
+
+.leaflet-overlay-pane {
+  z-index: 2 !important;
+}
+
 .leaflet-top,
 .leaflet-bottom {
   z-index: 5 !important;
+}
+
+/* Ensure map container captures events */
+.leaflet-container {
+  z-index: 1;
 }

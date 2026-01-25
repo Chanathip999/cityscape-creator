@@ -228,11 +228,11 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
       className={`relative w-full ${aspectRatio} rounded-lg shadow-2xl overflow-hidden transition-all duration-300 ${interactive ? 'cursor-grab active:cursor-grabbing' : ''}`}
       style={{ backgroundColor: theme.bg }}
     >
-      {/* Map layer */}
+      {/* Map layer - needs z-index 5 to be above gradients for interaction */}
       <div 
         key={mapKey}
         ref={mapContainerRef}
-        className="absolute inset-0 z-0"
+        className="absolute inset-0 z-[5]"
         style={{ 
           backgroundColor: theme.bg,
           width: '100%',
