@@ -154,13 +154,15 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
           attributionControl: false,
         });
 
-        // When coloredStreets is enabled, hide the tile layer completely for pure vector look
-        const tileOpacity = coloredStreets ? 0 : 1;
-        const tileLayer = L.tileLayer(getTileUrl(theme.id), {
-          attribution: '',
-          maxZoom: 19,
-          opacity: tileOpacity,
-        }).addTo(map);
+        // Only add tile layer when coloredStreets is disabled
+        // When coloredStreets is enabled, we want pure vector look on solid background
+        let tileLayer: any = null;
+        if (!coloredStreets) {
+          tileLayer = L.tileLayer(getTileUrl(theme.id), {
+            attribution: '',
+            maxZoom: 19,
+          }).addTo(map);
+        }
 
         if (interactive && onLocationChange) {
           map.on('moveend', () => {
@@ -234,24 +236,28 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
 
   // Update tile layer when theme or coloredStreets changes
   useEffect(() => {
-    if (!mapInstanceRef.current || !tileLayerRef.current) return;
+    if (!mapInstanceRef.current) return;
     (async () => {
       const L = await import('leaflet');
       if (!mapInstanceRef.current) return;
 
-      try {
-        mapInstanceRef.current.removeLayer(tileLayerRef.current);
-      } catch {
-        // ignore
+      // Remove existing tile layer if present
+      if (tileLayerRef.current) {
+        try {
+          mapInstanceRef.current.removeLayer(tileLayerRef.current);
+        } catch {
+          // ignore
+        }
+        tileLayerRef.current = null;
       }
 
-      // Hide tile layer completely when coloredStreets is enabled for pure vector look
-      const tileOpacity = coloredStreets ? 0 : 1;
-      tileLayerRef.current = L.tileLayer(getTileUrl(theme.id), {
-        attribution: '',
-        maxZoom: 19,
-        opacity: tileOpacity,
-      }).addTo(mapInstanceRef.current);
+      // Only add tile layer when coloredStreets is disabled
+      if (!coloredStreets) {
+        tileLayerRef.current = L.tileLayer(getTileUrl(theme.id), {
+          attribution: '',
+          maxZoom: 19,
+        }).addTo(mapInstanceRef.current);
+      }
     })();
   }, [theme.id, coloredStreets]);
 
