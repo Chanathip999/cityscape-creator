@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['Roboto Mono', 'monospace'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -57,6 +61,29 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        poster: {
+          ocean: {
+            bg: "hsl(var(--poster-ocean-bg))",
+            text: "hsl(var(--poster-ocean-text))",
+            water: "hsl(var(--poster-ocean-water))",
+            road: "hsl(var(--poster-ocean-road))",
+          },
+          noir: {
+            bg: "hsl(var(--poster-noir-bg))",
+            text: "hsl(var(--poster-noir-text))",
+            road: "hsl(var(--poster-noir-road))",
+          },
+          beige: {
+            bg: "hsl(var(--poster-beige-bg))",
+            text: "hsl(var(--poster-beige-text))",
+            road: "hsl(var(--poster-beige-road))",
+          },
+          midnight: {
+            bg: "hsl(var(--poster-midnight-bg))",
+            text: "hsl(var(--poster-midnight-text))",
+            road: "hsl(var(--poster-midnight-road))",
+          },
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -65,25 +92,27 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(10px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "slide-in": {
+          from: { opacity: "0", transform: "translateX(-10px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "fade-in": "fade-in 0.5s ease-out",
+        "slide-in": "slide-in 0.3s ease-out",
       },
     },
   },
