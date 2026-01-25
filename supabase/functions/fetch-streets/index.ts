@@ -12,6 +12,7 @@ const STREET_TYPES = [
   { type: 'secondary', tags: ['secondary', 'secondary_link'] },
   { type: 'tertiary', tags: ['tertiary', 'tertiary_link'] },
   { type: 'residential', tags: ['residential', 'living_street', 'unclassified'] },
+  { type: 'service', tags: ['service', 'pedestrian', 'footway', 'path'] },
 ];
 
 // Simple in-memory cache for recent queries (TTL: 60 seconds)
@@ -133,27 +134,16 @@ Deno.serve(async (req) => {
         const geom = element.geometry;
         if (!geom || geom.length < 2) continue;
 
-        // Simplify: skip every other point if there are many
-        const simplified: [number, number][] = [];
-        const step = geom.length > 20 ? 2 : 1;
-        
-        for (let i = 0; i < geom.length; i += step) {
-          const pt = geom[i];
+        // Keep ALL points for smooth, high-quality lines (no simplification)
+        const points: [number, number][] = [];
+        for (const pt of geom) {
           if (pt && pt.lat !== undefined && pt.lon !== undefined) {
-            simplified.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
-          }
-        }
-        // Always include last point
-        const last = geom[geom.length - 1];
-        if (last && simplified.length > 0) {
-          const lastSimp = simplified[simplified.length - 1];
-          if (lastSimp[0] !== roundCoord(last.lat) || lastSimp[1] !== roundCoord(last.lon)) {
-            simplified.push([roundCoord(last.lat), roundCoord(last.lon)]);
+            points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
           }
         }
 
-        if (simplified.length >= 2) {
-          coordinates.push(simplified);
+        if (points.length >= 2) {
+          coordinates.push(points);
         }
       }
 

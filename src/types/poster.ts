@@ -10,6 +10,7 @@ export interface PosterTheme {
   roadSecondary: string;
   roadTertiary: string;
   roadResidential: string;
+  roadService: string;
   gradientColor: string;
 }
 
@@ -47,6 +48,7 @@ export const POSTER_THEMES: PosterTheme[] = [
     roadSecondary: '#4A8DAD',
     roadTertiary: '#6AB0D0',
     roadResidential: '#8CC8E0',
+    roadService: '#A8D8EC',
     gradientColor: '#E8F4F8',
   },
   {
@@ -61,6 +63,7 @@ export const POSTER_THEMES: PosterTheme[] = [
     roadSecondary: '#A0A0A0',
     roadTertiary: '#707070',
     roadResidential: '#505050',
+    roadService: '#353535',
     gradientColor: '#0D0D0D',
   },
   {
@@ -75,6 +78,7 @@ export const POSTER_THEMES: PosterTheme[] = [
     roadSecondary: '#8A8075',
     roadTertiary: '#AAA095',
     roadResidential: '#C0B8AD',
+    roadService: '#D5D0C8',
     gradientColor: '#F5F0E6',
   },
   {
@@ -89,6 +93,7 @@ export const POSTER_THEMES: PosterTheme[] = [
     roadSecondary: '#8A6E30',
     roadTertiary: '#5C4A20',
     roadResidential: '#3D3115',
+    roadService: '#2A2210',
     gradientColor: '#0A1628',
   },
   {
@@ -103,6 +108,7 @@ export const POSTER_THEMES: PosterTheme[] = [
     roadSecondary: '#5A8A7F',
     roadTertiary: '#7AABA0',
     roadResidential: '#9AC8BE',
+    roadService: '#B5DCD5',
     gradientColor: '#E8F0ED',
   },
   {
@@ -117,6 +123,7 @@ export const POSTER_THEMES: PosterTheme[] = [
     roadSecondary: '#CD853F',
     roadTertiary: '#DEB887',
     roadResidential: '#E8D4C0',
+    roadService: '#F0E0D0',
     gradientColor: '#FAF4EE',
   },
   {
@@ -131,6 +138,7 @@ export const POSTER_THEMES: PosterTheme[] = [
     roadSecondary: '#5A8A7A',
     roadTertiary: '#7AAA9A',
     roadResidential: '#A0C8B8',
+    roadService: '#B8DCD0',
     gradientColor: '#EEF4F0',
   },
   {
@@ -145,6 +153,7 @@ export const POSTER_THEMES: PosterTheme[] = [
     roadSecondary: '#666666',
     roadTertiary: '#999999',
     roadResidential: '#CCCCCC',
+    roadService: '#DDDDDD',
     gradientColor: '#FAFAFA',
   },
   {
@@ -159,6 +168,7 @@ export const POSTER_THEMES: PosterTheme[] = [
     roadSecondary: '#E08060',
     roadTertiary: '#F0A090',
     roadResidential: '#F8C8B8',
+    roadService: '#FAD8CC',
     gradientColor: '#FDF5F0',
   },
   {
@@ -173,6 +183,7 @@ export const POSTER_THEMES: PosterTheme[] = [
     roadSecondary: '#00A8CC',
     roadTertiary: '#007A99',
     roadResidential: '#004D66',
+    roadService: '#003344',
     gradientColor: '#0A0F1A',
   },
 ];

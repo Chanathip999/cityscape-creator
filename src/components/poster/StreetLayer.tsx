@@ -8,13 +8,24 @@ interface StreetLayerProps {
   mapInstance: any; // Leaflet map instance
 }
 
-// Line widths for each street type - finer lines like osmnx/matplotlib style
+// Line widths for each street type - ultra-fine like osmnx/matplotlib vector output
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 2.5,
-  primary: 1.8,
-  secondary: 1.2,
-  tertiary: 0.8,
-  residential: 0.4,
+  motorway: 1.8,
+  primary: 1.2,
+  secondary: 0.8,
+  tertiary: 0.5,
+  residential: 0.3,
+  service: 0.2,
+};
+
+// Opacity per street type for depth effect (smaller streets more subtle)
+const STREET_OPACITY: Record<string, number> = {
+  motorway: 1,
+  primary: 0.95,
+  secondary: 0.85,
+  tertiary: 0.75,
+  residential: 0.65,
+  service: 0.5,
 };
 
 export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) => {
@@ -46,7 +57,8 @@ export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) =
 
       for (const streetType of orderedStreets) {
         const color = getStreetColor(streetType.type, theme);
-        const weight = STREET_WIDTHS[streetType.type] || 1;
+        const weight = STREET_WIDTHS[streetType.type] || 0.3;
+        const opacity = STREET_OPACITY[streetType.type] || 0.6;
 
         for (const polyline of streetType.coordinates) {
           if (polyline.length < 2) continue;
@@ -54,7 +66,7 @@ export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) =
           const line = L.polyline(polyline, {
             color,
             weight,
-            opacity: 0.9,
+            opacity,
             lineCap: 'round',
             lineJoin: 'round',
             renderer: rendererRef.current,
@@ -97,7 +109,9 @@ function getStreetColor(type: string, theme: PosterTheme): string {
       return theme.roadTertiary;
     case 'residential':
       return theme.roadResidential;
+    case 'service':
+      return theme.roadService;
     default:
-      return theme.roadResidential;
+      return theme.roadService;
   }
 }
