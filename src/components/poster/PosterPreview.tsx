@@ -37,7 +37,7 @@ const getTileUrl = (themeId: string): string => {
 };
 
 export const PosterPreview = ({ config, onLocationChange, interactive = false }: PosterPreviewProps) => {
-  const { city, country, countryLabel, latitude, longitude, distance, theme, fontFamily, fontSize, orientation } = config;
+  const { city, country, countryLabel, latitude, longitude, distance, theme, fontFamily, fontSize, orientation, customTextColor } = config;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -58,10 +58,19 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
         return 'font-serif';
       case 'sans':
         return 'font-sans';
+      case 'display':
+        return 'font-display';
+      case 'elegant':
+        return 'font-elegant';
+      case 'condensed':
+        return 'font-condensed';
       default:
         return 'font-mono';
     }
   };
+
+  // Get the actual text color (custom or theme)
+  const textColor = customTextColor || theme.text;
 
   // Get font size multiplier
   const getFontSize = () => {
@@ -289,7 +298,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
         {/* City name */}
         <h1 
           className={`${getFontClass()} ${fontSizes.title} mb-2 tracking-[0.3em] font-bold`}
-          style={{ color: theme.text }}
+          style={{ color: textColor }}
         >
           {spacedText(city)}
         </h1>
@@ -297,13 +306,13 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
         {/* Decorative line */}
         <div 
           className="w-24 h-px mx-auto mb-2"
-          style={{ backgroundColor: theme.text }}
+          style={{ backgroundColor: textColor }}
         />
         
         {/* Country */}
         <p 
           className={`${getFontClass()} ${fontSizes.subtitle} mb-1 tracking-[0.15em] font-light`}
-          style={{ color: theme.text }}
+          style={{ color: textColor }}
         >
           {(countryLabel || country).toUpperCase()}
         </p>
@@ -311,7 +320,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
         {/* Coordinates */}
         <p 
           className={`${getFontClass()} ${fontSizes.coords} opacity-70 tracking-[0.05em]`}
-          style={{ color: theme.text }}
+          style={{ color: textColor }}
         >
           {formatCoordinates(latitude, longitude)}
         </p>
@@ -320,7 +329,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
       {/* Attribution */}
       <p 
         className="absolute bottom-2 right-2 text-[8px] opacity-50 font-mono z-20 pointer-events-none"
-        style={{ color: theme.text }}
+        style={{ color: textColor }}
       >
         © OpenStreetMap contributors
       </p>

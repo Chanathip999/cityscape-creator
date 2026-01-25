@@ -16,6 +16,10 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['Roboto Mono', 'monospace'],
+        serif: ['Cormorant Garamond', 'Georgia', 'serif'],
+        display: ['Bebas Neue', 'Impact', 'sans-serif'],
+        elegant: ['Playfair Display', 'Georgia', 'serif'],
+        condensed: ['Oswald', 'Arial Narrow', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
