@@ -232,7 +232,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
       <div 
         key={mapKey}
         ref={mapContainerRef}
-        className="absolute inset-0"
+        className="absolute inset-0 z-0"
         style={{ 
           backgroundColor: theme.bg,
           width: '100%',
