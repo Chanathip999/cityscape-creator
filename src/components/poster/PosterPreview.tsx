@@ -105,7 +105,21 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
       }
 
       leafletMapRef.current = map;
-      setIsMapReady(true);
+      
+      // Force map to recalculate size after initialization
+      setTimeout(() => {
+        if (leafletMapRef.current) {
+          leafletMapRef.current.invalidateSize();
+          setIsMapReady(true);
+        }
+      }, 100);
+      
+      // Additional invalidation for slow renders
+      setTimeout(() => {
+        if (leafletMapRef.current) {
+          leafletMapRef.current.invalidateSize();
+        }
+      }, 500);
     };
 
     initMap();
