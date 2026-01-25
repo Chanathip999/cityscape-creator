@@ -5,14 +5,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Street types - ALL levels for high-quality poster look (like osmnx)
+// Street types - reduced for memory efficiency (skip service/footway)
 const STREET_TYPES = [
   { type: 'motorway', tags: ['motorway', 'motorway_link'] },
   { type: 'primary', tags: ['trunk', 'trunk_link', 'primary', 'primary_link'] },
   { type: 'secondary', tags: ['secondary', 'secondary_link'] },
   { type: 'tertiary', tags: ['tertiary', 'tertiary_link'] },
   { type: 'residential', tags: ['residential', 'living_street', 'unclassified'] },
-  { type: 'service', tags: ['service', 'pedestrian', 'footway', 'path'] },
 ];
 
 // Simple in-memory cache for recent queries (TTL: 60 seconds)
@@ -134,11 +133,21 @@ Deno.serve(async (req) => {
         const geom = element.geometry;
         if (!geom || geom.length < 2) continue;
 
-        // Keep ALL points for smooth, high-quality lines (no simplification)
+        // Simplify for memory: keep every 2nd point for long ways
         const points: [number, number][] = [];
-        for (const pt of geom) {
+        const step = geom.length > 30 ? 2 : 1;
+        for (let i = 0; i < geom.length; i += step) {
+          const pt = geom[i];
           if (pt && pt.lat !== undefined && pt.lon !== undefined) {
             points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+          }
+        }
+        // Always include last point
+        const last = geom[geom.length - 1];
+        if (last && points.length > 0) {
+          const lastPt = points[points.length - 1];
+          if (lastPt[0] !== roundCoord(last.lat) || lastPt[1] !== roundCoord(last.lon)) {
+            points.push([roundCoord(last.lat), roundCoord(last.lon)]);
           }
         }
 
