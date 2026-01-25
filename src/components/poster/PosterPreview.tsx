@@ -29,8 +29,13 @@ const getZoomFromDistance = (distance: number): number => {
   return 9;
 };
 
-const getTileUrl = (themeId: string): string => {
-  // Label-free tiles for subtle context under vector streets
+const getTileUrl = (themeId: string, preferLight = false): string => {
+  // Label-free tiles for subtle context under vector streets.
+  // When colored streets are enabled, we prefer light tiles for better contrast.
+  if (preferLight) {
+    return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
+  }
+
   const darkThemes = ['neon', 'noir', 'midnight'];
   if (darkThemes.includes(themeId)) {
     return 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
@@ -155,7 +160,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
 
         // Keep the base map clearly visible even when colored streets are enabled
         const tileOpacity = 1;
-        const tileLayer = L.tileLayer(getTileUrl(theme.id), {
+        const tileLayer = L.tileLayer(getTileUrl(theme.id, coloredStreets), {
           attribution: '',
           maxZoom: 19,
           opacity: tileOpacity,
@@ -244,13 +249,13 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
         // ignore
       }
 
-      tileLayerRef.current = L.tileLayer(getTileUrl(theme.id), {
+       tileLayerRef.current = L.tileLayer(getTileUrl(theme.id, coloredStreets), {
         attribution: '',
         maxZoom: 19,
         opacity: 0.35,
       }).addTo(mapInstanceRef.current);
     })();
-  }, [theme.id]);
+  }, [theme.id, coloredStreets]);
 
   // ResizeObserver for container changes
   useEffect(() => {

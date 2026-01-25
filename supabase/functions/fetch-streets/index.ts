@@ -7,8 +7,9 @@ const corsHeaders = {
 
 // Street types - only major roads for fast loading
 const STREET_TYPES = [
-  { type: 'motorway', tags: ['motorway'] },
-  { type: 'primary', tags: ['trunk', 'primary'] },
+  // include *_link tags to avoid broken-looking discontinuities at junctions/ramps
+  { type: 'motorway', tags: ['motorway', 'motorway_link'] },
+  { type: 'primary', tags: ['trunk', 'trunk_link', 'primary', 'primary_link'] },
 ];
 
 // Simple in-memory cache for recent queries (TTL: 60 seconds)
@@ -75,16 +76,40 @@ Deno.serve(async (req) => {
 
     console.log('Sending Overpass query...');
 
-    const overpassUrl = 'https://overpass-api.de/api/interpreter';
-    const response = await fetch(overpassUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `data=${encodeURIComponent(overpassQuery)}`,
-    });
+    const overpassUrls = [
+      'https://overpass-api.de/api/interpreter',
+      'https://overpass.kumi.systems/api/interpreter',
+    ];
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Overpass API error:', response.status, errorText.substring(0, 200));
+    let response: Response | null = null;
+    let lastErrorText = '';
+
+    for (const overpassUrl of overpassUrls) {
+      try {
+        response = await fetch(overpassUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `data=${encodeURIComponent(overpassQuery)}`,
+        });
+
+        if (response.ok) break;
+        lastErrorText = await response.text();
+        console.error('Overpass API error:', overpassUrl, response.status, lastErrorText.substring(0, 200));
+      } catch (e) {
+        console.error('Overpass fetch failed:', overpassUrl, e);
+      }
+    }
+
+    if (!response || !response.ok) {
+      // Fallback: return last cached data (even if stale) so the preview doesn't look randomly cut.
+      if (cached) {
+        console.log('Overpass unavailable; serving stale cache for:', cacheKey);
+        return new Response(
+          JSON.stringify(cached.data),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'stale' } }
+        );
+      }
+
       return new Response(
         JSON.stringify({ error: 'Overpass API unavailable, try again' }),
         { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
