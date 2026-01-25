@@ -8,14 +8,14 @@ interface StreetLayerProps {
   mapInstance: any; // Leaflet map instance
 }
 
-// IMPORTANT: widths below ~1px tend to look like “bright edges + dark center” on dark backgrounds
-// due to antialiasing. Keep a 1px minimum to get a solid, filled look.
+// IMPORTANT: widths below ~1px tend to look like "bright edges + dark center" on dark backgrounds
+// due to antialiasing. Use significantly thicker lines (2-5px) for solid appearance.
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 3.0,
-  primary: 2.0,
-  secondary: 1.4,
-  tertiary: 1.1,
-  residential: 1.0,
+  motorway: 5.0,
+  primary: 3.5,
+  secondary: 2.5,
+  tertiary: 2.0,
+  residential: 1.5,
 };
 
 // For hybrid mode: only motorway/primary get theme colors, rest gets subtle gray
@@ -31,7 +31,7 @@ export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) =
     const drawStreets = async () => {
       const L = await import('leaflet');
 
-      // SVG strokes render more uniformly (no “hollow” antialias look on thin lines).
+      // SVG strokes render more uniformly (no "hollow" antialias look on thin lines).
       // Performance is fine for poster preview; final export is server-side anyway.
       if (!rendererRef.current) {
         rendererRef.current = L.svg({ padding: 0.5 });
@@ -51,7 +51,9 @@ export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) =
 
       for (const streetType of orderedStreets) {
         const color = getStreetColor(streetType.type, theme);
-        const weight = Math.max(1, STREET_WIDTHS[streetType.type] || 1);
+        const weight = Math.max(1.5, STREET_WIDTHS[streetType.type] || 1.5);
+        
+        console.log(`Rendering ${streetType.type}: ${streetType.coordinates.length} segments, weight: ${weight}px, color: ${color}`);
 
         for (const polyline of streetType.coordinates) {
           if (polyline.length < 2) continue;
