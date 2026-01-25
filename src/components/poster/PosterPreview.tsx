@@ -36,6 +36,28 @@ const getTileUrl = (themeId: string): string => {
   return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
 };
 
+// CSS filters to colorize map tiles based on theme
+const getMapFilter = (themeId: string): string => {
+  switch (themeId) {
+    case 'neon':
+      return 'brightness(1.2) contrast(1.3) saturate(1.5) hue-rotate(160deg)';
+    case 'midnight':
+      return 'sepia(0.3) brightness(0.9) contrast(1.1) hue-rotate(10deg)';
+    case 'terracotta':
+      return 'sepia(0.4) brightness(1.05) contrast(1.1) hue-rotate(-10deg)';
+    case 'forest':
+      return 'sepia(0.2) brightness(1) contrast(1.05) hue-rotate(80deg)';
+    case 'sunset':
+      return 'sepia(0.3) brightness(1.05) contrast(1.1) hue-rotate(-20deg)';
+    case 'ocean':
+      return 'sepia(0.15) brightness(1) contrast(1.05) hue-rotate(170deg)';
+    case 'copper':
+      return 'sepia(0.25) brightness(1) contrast(1.05) hue-rotate(120deg)';
+    default:
+      return 'none';
+  }
+};
+
 export const PosterPreview = ({ config, onLocationChange, interactive = false }: PosterPreviewProps) => {
   const { city, country, countryLabel, latitude, longitude, distance, theme, fontFamily, fontSize, orientation, customTextColor } = config;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -262,11 +284,12 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
       <div 
         key={mapKey}
         ref={mapContainerRef}
-        className="absolute inset-0 z-[5]"
+        className="absolute inset-0 z-[5] transition-all duration-500"
         style={{ 
           backgroundColor: theme.bg,
           width: '100%',
           height: '100%',
+          filter: getMapFilter(theme.id),
         }}
       />
       
