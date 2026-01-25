@@ -5,8 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Street types - reduced to main roads only for faster loading and cleaner look
-// Excluded: tertiary, residential, living_street, unclassified, road
+// Street types - only major roads for fast loading
 const STREET_TYPES = [
   { type: 'motorway', tags: ['motorway', 'motorway_link'] },
   { type: 'primary', tags: ['trunk', 'trunk_link', 'primary', 'primary_link'] },
@@ -15,11 +14,13 @@ const STREET_TYPES = [
 
 interface StreetData {
   type: string;
-  coordinates: [number, number][][]; // Array of polylines, each polyline is array of [lat, lng]
+  coordinates: [number, number][][];
 }
 
+// Round coordinate to reduce JSON size (~40% smaller)
+const roundCoord = (n: number): number => Math.round(n * 10000) / 10000;
+
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -36,32 +37,26 @@ Deno.serve(async (req) => {
 
     console.log(`Fetching streets for lat=${lat}, lng=${lng}, distance=${distance}m`);
 
-    // Calculate bounding box from center.
-    // IMPORTANT: `distance` in the UI behaves like a "zoom/range" value.
-    // Using it as a full half-width makes the bbox too large (4x area) and Overpass becomes slow.
-    // We therefore treat it as an approximate DIAMETER and use radius = distance/2.
-    const radius = Math.max(500, Number(distance) / 2);
+    // Use distance/4 as radius for much faster queries (covers visible area only)
+    const radius = Math.max(2000, Number(distance) / 4);
 
-    const latDelta = radius / 111320; // degrees latitude per meter
-    const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180)); // degrees longitude per meter
+    const latDelta = radius / 111320;
+    const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));
     
     const south = lat - latDelta;
     const north = lat + latDelta;
     const west = lng - lngDelta;
     const east = lng + lngDelta;
 
-    // Build Overpass query for all street types
     const highwayTags = STREET_TYPES.flatMap(st => st.tags);
-    const highwayFilter = highwayTags.map(tag => `["highway"="${tag}"]`).join('');
     
+    // Optimized query: shorter timeout, geometry output instead of full body
     const overpassQuery = `
-      [out:json][timeout:30];
+      [out:json][timeout:15];
       (
-        way["highway"~"^(${highwayTags.join('|')})$"](${south},${west},${north},${east});
+        way["highway"~"^(${highwayTags.join('|')})$"](${south.toFixed(5)},${west.toFixed(5)},${north.toFixed(5)},${east.toFixed(5)});
       );
-      out body;
-      >;
-      out skel qt;
+      out geom;
     `;
 
     console.log('Sending Overpass query...');
@@ -74,57 +69,54 @@ Deno.serve(async (req) => {
     });
 
     if (!response.ok) {
-      console.error('Overpass API error:', response.status, await response.text());
+      const errorText = await response.text();
+      console.error('Overpass API error:', response.status, errorText.substring(0, 200));
       return new Response(
-        JSON.stringify({ error: 'Failed to fetch street data from Overpass API' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Overpass API unavailable, try again' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const osmData = await response.json();
-    console.log(`Received ${osmData.elements?.length || 0} elements from Overpass`);
+    const elements = osmData.elements || [];
+    console.log(`Received ${elements.length} ways from Overpass`);
 
-    // Parse OSM data: build node lookup and extract ways
-    const nodes: Record<number, [number, number]> = {};
-    const ways: Array<{ id: number; highway: string; nodes: number[] }> = [];
-
-    for (const element of osmData.elements || []) {
-      if (element.type === 'node') {
-        nodes[element.id] = [element.lat, element.lon];
-      } else if (element.type === 'way' && element.tags?.highway) {
-        ways.push({
-          id: element.id,
-          highway: element.tags.highway,
-          nodes: element.nodes,
-        });
-      }
-    }
-
-    console.log(`Parsed ${Object.keys(nodes).length} nodes and ${ways.length} ways`);
-
-    // Group ways by street type
+    // With "out geom", each way already has geometry inline - no separate node lookup needed
     const streetData: StreetData[] = STREET_TYPES.map(streetType => {
       const coordinates: [number, number][][] = [];
 
-      for (const way of ways) {
-        if (streetType.tags.includes(way.highway)) {
-          const polyline: [number, number][] = [];
-          for (const nodeId of way.nodes) {
-            const coord = nodes[nodeId];
-            if (coord) {
-              polyline.push(coord);
-            }
+      for (const element of elements) {
+        if (element.type !== 'way' || !element.tags?.highway) continue;
+        if (!streetType.tags.includes(element.tags.highway)) continue;
+        
+        const geom = element.geometry;
+        if (!geom || geom.length < 2) continue;
+
+        // Simplify: skip every other point if there are many
+        const simplified: [number, number][] = [];
+        const step = geom.length > 20 ? 2 : 1;
+        
+        for (let i = 0; i < geom.length; i += step) {
+          const pt = geom[i];
+          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+            simplified.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
           }
-          if (polyline.length >= 2) {
-            coordinates.push(polyline);
+        }
+        // Always include last point
+        const last = geom[geom.length - 1];
+        if (last && simplified.length > 0) {
+          const lastSimp = simplified[simplified.length - 1];
+          if (lastSimp[0] !== roundCoord(last.lat) || lastSimp[1] !== roundCoord(last.lon)) {
+            simplified.push([roundCoord(last.lat), roundCoord(last.lon)]);
           }
+        }
+
+        if (simplified.length >= 2) {
+          coordinates.push(simplified);
         }
       }
 
-      return {
-        type: streetType.type,
-        coordinates,
-      };
+      return { type: streetType.type, coordinates };
     });
 
     const totalStreets = streetData.reduce((sum, st) => sum + st.coordinates.length, 0);
