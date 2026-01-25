@@ -1,8 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import html2canvas from 'html2canvas';
 import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, FontFamily, FontSize, PosterOrientation } from '@/types/poster';
-import { PosterPreview } from './PosterPreview';
+import { CanvasPosterPreview } from './CanvasPosterPreview';
 import { ThemeSelector } from './ThemeSelector';
 import { CitySearch } from './CitySearch';
 import { DistanceSlider } from './DistanceSlider';
@@ -13,37 +12,50 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Map, Download, Palette, Loader2 } from 'lucide-react';
+import { Map, Download, Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/hooks/use-toast';
 
 export const PosterEditor = () => {
   const [config, setConfig] = useState<PosterConfig>(DEFAULT_CONFIG);
   const [isExporting, setIsExporting] = useState(false);
-  const posterRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Store canvas reference when it's ready
+  const handleExportReady = useCallback((canvas: HTMLCanvasElement) => {
+    canvasRef.current = canvas;
+  }, []);
 
   const handleExport = useCallback(async () => {
-    if (!posterRef.current || isExporting) return;
+    if (isExporting) return;
     
     setIsExporting(true);
     
     try {
-      // Wait a moment to ensure all tiles and streets are rendered
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Wait a moment to ensure canvas is fully rendered
+      await new Promise(resolve => setTimeout(resolve, 100));
       
-      const canvas = await html2canvas(posterRef.current, {
-        scale: 3, // 3x for high resolution (~3000px)
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: config.theme.bg,
-        logging: false,
-      });
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        throw new Error('Canvas not ready');
+      }
+
+      // Create a high-resolution export canvas (3x scale)
+      const exportCanvas = document.createElement('canvas');
+      const scale = 3;
+      exportCanvas.width = canvas.width * scale / (window.devicePixelRatio || 1);
+      exportCanvas.height = canvas.height * scale / (window.devicePixelRatio || 1);
+      
+      const ctx = exportCanvas.getContext('2d');
+      if (!ctx) throw new Error('Could not get canvas context');
+      
+      // Draw the original canvas scaled up
+      ctx.drawImage(canvas, 0, 0, exportCanvas.width, exportCanvas.height);
       
       // Create download link
       const link = document.createElement('a');
       link.download = `${config.city.toLowerCase().replace(/\s+/g, '-')}-poster.png`;
-      link.href = canvas.toDataURL('image/png', 1.0);
+      link.href = exportCanvas.toDataURL('image/png', 1.0);
       link.click();
       
       toast({
@@ -86,14 +98,6 @@ export const PosterEditor = () => {
     }));
   };
 
-  const handleLocationChange = (lat: number, lng: number) => {
-    setConfig((prev) => ({
-      ...prev,
-      latitude: lat,
-      longitude: lng,
-    }));
-  };
-
   const handleFontFamilyChange = (fontFamily: FontFamily) => {
     setConfig((prev) => ({ ...prev, fontFamily }));
   };
@@ -108,10 +112,6 @@ export const PosterEditor = () => {
 
   const handleOrientationChange = (orientation: PosterOrientation) => {
     setConfig((prev) => ({ ...prev, orientation }));
-  };
-
-  const handleColoredStreetsChange = (coloredStreets: boolean) => {
-    setConfig((prev) => ({ ...prev, coloredStreets }));
   };
 
   const handleConfigUpdate = (updates: Partial<PosterConfig>) => {
@@ -246,32 +246,13 @@ export const PosterEditor = () => {
                 onDistanceChange={handleDistanceChange}
               />
 
-              <Separator />
-
-              {/* Colored Streets Toggle - DISABLED: Vector street rendering temporarily hidden
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Palette className="w-4 h-4 text-muted-foreground" />
-                  <div>
-                    <Label htmlFor="colored-streets" className="cursor-pointer">Farbige Straßen</Label>
-                    <p className="text-xs text-muted-foreground">Vektor-Straßen in Theme-Farben</p>
-                  </div>
-                </div>
-                <Switch
-                  id="colored-streets"
-                  checked={config.coloredStreets || false}
-                  onCheckedChange={handleColoredStreetsChange}
-                />
-              </div>
-              */}
-
               <p className="text-xs text-muted-foreground">
-                💡 Tipp: Du kannst die Karte direkt auf dem Poster ziehen, um sie zu positionieren.
+                💡 Die Poster werden mit Vektor-Straßendaten von OpenStreetMap generiert.
               </p>
             </motion.div>
           </div>
 
-          {/* Right: Interactive Poster Preview */}
+          {/* Right: Canvas Poster Preview */}
           <div className="lg:sticky lg:top-24 h-fit space-y-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -279,13 +260,10 @@ export const PosterEditor = () => {
               transition={{ delay: 0.2 }}
               className="max-w-lg mx-auto"
             >
-              <div ref={posterRef}>
-                <PosterPreview 
-                  config={config} 
-                  onLocationChange={handleLocationChange}
-                  interactive={true}
-                />
-              </div>
+              <CanvasPosterPreview 
+                config={config} 
+                onExportReady={handleExportReady}
+              />
             </motion.div>
             
             {/* AI Prompt Input - Below the poster */}
