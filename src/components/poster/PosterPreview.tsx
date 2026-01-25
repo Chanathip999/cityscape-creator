@@ -232,7 +232,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
     });
   }, [latitude, longitude, distance]);
 
-  // Update tile layer when theme changes
+  // Update tile layer when theme or coloredStreets changes
   useEffect(() => {
     if (!mapInstanceRef.current || !tileLayerRef.current) return;
     (async () => {
@@ -245,10 +245,12 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
         // ignore
       }
 
-       tileLayerRef.current = L.tileLayer(getTileUrl(theme.id), {
+      // Hide tile layer completely when coloredStreets is enabled for pure vector look
+      const tileOpacity = coloredStreets ? 0 : 1;
+      tileLayerRef.current = L.tileLayer(getTileUrl(theme.id), {
         attribution: '',
         maxZoom: 19,
-        opacity: 1,
+        opacity: tileOpacity,
       }).addTo(mapInstanceRef.current);
     })();
   }, [theme.id, coloredStreets]);
