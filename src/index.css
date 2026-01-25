@@ -170,3 +170,8 @@
 .leaflet-container {
   z-index: 1;
 }
+
+/* Apply filter to tile images - this ensures the CSS filter works on tiles */
+.leaflet-tile-pane img {
+  transition: filter 0.3s ease;
+}

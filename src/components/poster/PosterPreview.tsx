@@ -28,39 +28,31 @@ const getZoomFromDistance = (distance: number): number => {
 };
 
 const getTileUrl = (themeId: string): string => {
-  // Use appropriate tile styles
-  switch (themeId) {
-    case 'neon':
-    case 'noir':
-    case 'midnight':
-      // Dark tiles with visible roads
-      return 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-    case 'contrast':
-      // Light with all labels for high contrast
-      return 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-    default:
-      return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
+  // Always use nolabels tiles for clean poster look
+  const darkThemes = ['neon', 'noir', 'midnight'];
+  if (darkThemes.includes(themeId)) {
+    return 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
   }
+  return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
 };
 
 // CSS filters to colorize map tiles based on theme
 const getMapFilter = (themeId: string): string => {
   switch (themeId) {
     case 'neon':
-      // Strong cyan/teal tint for cyberpunk look
-      return 'brightness(1.4) contrast(1.5) saturate(2) hue-rotate(140deg)';
+      return 'brightness(1.5) contrast(1.8) saturate(3) hue-rotate(140deg)';
     case 'midnight':
-      return 'sepia(0.5) brightness(0.9) contrast(1.3) saturate(1.5) hue-rotate(15deg)';
+      return 'sepia(0.6) brightness(1.1) contrast(1.4) saturate(1.8) hue-rotate(20deg)';
     case 'terracotta':
-      return 'sepia(0.7) brightness(1.1) contrast(1.2) saturate(1.4) hue-rotate(-15deg)';
+      return 'sepia(0.8) brightness(1.15) contrast(1.25) saturate(1.6) hue-rotate(-20deg)';
     case 'forest':
-      return 'sepia(0.5) brightness(1.05) contrast(1.15) saturate(1.5) hue-rotate(60deg)';
+      return 'sepia(0.6) brightness(1.1) contrast(1.2) saturate(1.8) hue-rotate(50deg)';
     case 'sunset':
-      return 'sepia(0.6) brightness(1.1) contrast(1.2) saturate(1.5) hue-rotate(-30deg)';
+      return 'sepia(0.7) brightness(1.15) contrast(1.3) saturate(1.8) hue-rotate(-35deg)';
     case 'ocean':
-      return 'sepia(0.4) brightness(1.05) contrast(1.15) saturate(1.4) hue-rotate(150deg)';
+      return 'sepia(0.5) brightness(1.1) contrast(1.2) saturate(1.6) hue-rotate(140deg)';
     case 'copper':
-      return 'sepia(0.5) brightness(1.05) contrast(1.15) saturate(1.3) hue-rotate(90deg)';
+      return 'sepia(0.6) brightness(1.1) contrast(1.2) saturate(1.5) hue-rotate(80deg)';
     default:
       return 'none';
   }
@@ -175,6 +167,12 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
           maxZoom: 19,
         }).addTo(map);
 
+        // Apply color filter to the tile pane
+        const tilePane = map.getPane('tilePane');
+        if (tilePane) {
+          tilePane.style.filter = getMapFilter(theme.id);
+        }
+
         if (interactive && onLocationChange) {
           map.on('moveend', () => {
             const center = map.getCenter();
@@ -244,7 +242,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
     });
   }, [latitude, longitude, distance]);
 
-  // Update tile layer when theme changes
+  // Update tile layer and filter when theme changes
   useEffect(() => {
     if (!mapInstanceRef.current || !tileLayerRef.current) return;
     
@@ -257,6 +255,13 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
           attribution: '',
           maxZoom: 19,
         }).addTo(mapInstanceRef.current);
+        
+        // Update the filter on the tile pane
+        const tilePane = mapInstanceRef.current.getPane('tilePane');
+        if (tilePane) {
+          tilePane.style.filter = getMapFilter(theme.id);
+          tilePane.style.transition = 'filter 0.3s ease';
+        }
       }
     };
     
@@ -292,12 +297,11 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
       <div 
         key={mapKey}
         ref={mapContainerRef}
-        className="absolute inset-0 z-[5] transition-all duration-500"
+        className="absolute inset-0 z-[5]"
         style={{ 
           backgroundColor: theme.bg,
           width: '100%',
           height: '100%',
-          filter: getMapFilter(theme.id),
         }}
       />
       
