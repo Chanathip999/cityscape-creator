@@ -8,6 +8,7 @@ import { DistanceSlider } from './DistanceSlider';
 import { AIPromptInput } from './AIPromptInput';
 import { FontSelector } from './FontSelector';
 import { OrientationToggle } from './OrientationToggle';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -91,10 +92,13 @@ export const PosterEditor = () => {
               <p className="text-xs text-muted-foreground">Create beautiful city prints</p>
             </div>
           </div>
-          <Button variant="default" className="gap-2">
-            <Download className="w-4 h-4" />
-            Export Poster
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button variant="default" className="gap-2">
+              <Download className="w-4 h-4" />
+              Export Poster
+            </Button>
+          </div>
         </div>
       </header>
 
