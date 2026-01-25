@@ -9,20 +9,20 @@ interface CanvasPosterPreviewProps {
 
 // Exact street widths from Python script
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 1.2,
-  motorway_link: 1.2,
-  trunk: 1.0,
-  trunk_link: 1.0,
-  primary: 1.0,
-  primary_link: 1.0,
-  secondary: 0.8,
-  secondary_link: 0.8,
-  tertiary: 0.6,
-  tertiary_link: 0.6,
-  residential: 0.4,
-  living_street: 0.4,
-  unclassified: 0.4,
-  service: 0.3,
+  motorway: 5.0,
+  motorway_link: 5.0,
+  trunk: 4.0,
+  trunk_link: 4.0,
+  primary: 4.0,
+  primary_link: 4.0,
+  secondary: 3.0,
+  secondary_link: 3.0,
+  tertiary: 2.5,
+  tertiary_link: 2.5,
+  residential: 2.0,
+  living_street: 2.0,
+  unclassified: 2.0,
+  service: 1.5,
 };
 
 // Default poster dimensions (inches) from Python script
@@ -30,7 +30,7 @@ const DEFAULT_WIDTH = 12;
 const DEFAULT_HEIGHT = 16;
 
 // Canvas resolution for high quality output
-const DPI = 72; // Base DPI for preview
+const DPI = 300; // High DPI for sharp output
 const CANVAS_WIDTH = DEFAULT_WIDTH * DPI;
 const CANVAS_HEIGHT = DEFAULT_HEIGHT * DPI;
 
@@ -209,14 +209,16 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size based on orientation with 2x scale for retina
-    const scale = 2;
+    // Set canvas size based on orientation
     const width = orientation === 'horizontal' ? CANVAS_HEIGHT : CANVAS_WIDTH;
     const height = orientation === 'horizontal' ? CANVAS_WIDTH : CANVAS_HEIGHT;
 
-    canvas.width = width * scale;
-    canvas.height = height * scale;
-    ctx.scale(scale, scale);
+    canvas.width = width;
+    canvas.height = height;
+
+    // Enable high-quality rendering
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     const bounds = getCropLimits();
 
@@ -235,7 +237,7 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
       const color = getStreetColor(streetType);
       const baseWidth = getStreetWidth(streetType);
       // Scale line width with canvas size
-      const lineWidth = baseWidth * (width / 400);
+      const lineWidth = baseWidth;
 
       ctx.strokeStyle = color;
       ctx.lineWidth = lineWidth;
