@@ -28,17 +28,16 @@ const getZoomFromDistance = (distance: number): number => {
 };
 
 const getTileUrl = (themeId: string): string => {
-  // Use high-contrast tiles for themes that need color effects
-  // Stamen Toner has high contrast black/white which responds well to filters
+  // Use appropriate tile styles
   switch (themeId) {
     case 'neon':
-      // Use Stamen Toner for maximum contrast with neon colors
-      return 'https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}{r}.png';
     case 'noir':
     case 'midnight':
+      // Dark tiles with visible roads
       return 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
     case 'contrast':
-      return 'https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}{r}.png';
+      // Light with all labels for high contrast
+      return 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
     default:
       return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
   }
@@ -48,20 +47,20 @@ const getTileUrl = (themeId: string): string => {
 const getMapFilter = (themeId: string): string => {
   switch (themeId) {
     case 'neon':
-      // Invert to get light roads on dark, then shift to cyan
-      return 'invert(1) brightness(0.4) contrast(2) saturate(3) hue-rotate(140deg)';
+      // Strong cyan/teal tint for cyberpunk look
+      return 'brightness(1.4) contrast(1.5) saturate(2) hue-rotate(140deg)';
     case 'midnight':
-      return 'sepia(0.5) brightness(0.85) contrast(1.2) saturate(1.3) hue-rotate(15deg)';
+      return 'sepia(0.5) brightness(0.9) contrast(1.3) saturate(1.5) hue-rotate(15deg)';
     case 'terracotta':
-      return 'sepia(0.6) brightness(1.1) contrast(1.15) saturate(1.2) hue-rotate(-15deg)';
+      return 'sepia(0.7) brightness(1.1) contrast(1.2) saturate(1.4) hue-rotate(-15deg)';
     case 'forest':
-      return 'sepia(0.4) brightness(1.05) contrast(1.1) saturate(1.3) hue-rotate(70deg)';
+      return 'sepia(0.5) brightness(1.05) contrast(1.15) saturate(1.5) hue-rotate(60deg)';
     case 'sunset':
-      return 'sepia(0.5) brightness(1.1) contrast(1.15) saturate(1.4) hue-rotate(-25deg)';
+      return 'sepia(0.6) brightness(1.1) contrast(1.2) saturate(1.5) hue-rotate(-30deg)';
     case 'ocean':
-      return 'sepia(0.3) brightness(1.05) contrast(1.1) saturate(1.3) hue-rotate(160deg)';
+      return 'sepia(0.4) brightness(1.05) contrast(1.15) saturate(1.4) hue-rotate(150deg)';
     case 'copper':
-      return 'sepia(0.4) brightness(1.05) contrast(1.1) saturate(1.2) hue-rotate(100deg)';
+      return 'sepia(0.5) brightness(1.05) contrast(1.15) saturate(1.3) hue-rotate(90deg)';
     default:
       return 'none';
   }
