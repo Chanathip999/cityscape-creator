@@ -49,7 +49,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
   const [mapReady, setMapReady] = useState(false);
 
   // Only fetch street vector data when coloredStreets is enabled
-  const { streets, isLoading: streetsLoading } = useStreetData({
+  const { streets, isLoading: streetsLoading, error: streetsError } = useStreetData({
     latitude,
     longitude,
     distance,
@@ -311,6 +311,13 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
       {coloredStreets && streetsLoading && (
         <div className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm px-2 py-1 rounded text-xs text-muted-foreground z-30">
           Lade Straßen...
+        </div>
+      )}
+
+      {/* Error indicator for streets (so it's obvious when we're still seeing tiles) */}
+      {coloredStreets && !streetsLoading && streetsError && (
+        <div className="absolute top-2 right-2 bg-destructive/10 border border-destructive/30 backdrop-blur-sm px-2 py-1 rounded text-xs text-destructive z-30 max-w-[70%]">
+          Straßen konnten nicht geladen werden
         </div>
       )}
       
