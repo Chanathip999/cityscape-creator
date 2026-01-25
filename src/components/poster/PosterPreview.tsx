@@ -29,11 +29,21 @@ const getZoomFromDistance = (distance: number): number => {
   return 9;
 };
 
+const getTileUrl = (themeId: string): string => {
+  // Label-free tiles for subtle context under vector streets
+  const darkThemes = ['neon', 'noir', 'midnight'];
+  if (darkThemes.includes(themeId)) {
+    return 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
+  }
+  return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
+};
+
 export const PosterPreview = ({ config, onLocationChange, interactive = false }: PosterPreviewProps) => {
   const { city, country, countryLabel, latitude, longitude, distance, theme, fontFamily, fontSize, orientation, customTextColor } = config;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const tileLayerRef = useRef<any>(null);
   const [mapKey, setMapKey] = useState(0);
   const [mapReady, setMapReady] = useState(false);
 
@@ -99,6 +109,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
         console.log('Map cleanup error:', e);
       }
       mapInstanceRef.current = null;
+      tileLayerRef.current = null;
       setMapReady(false);
     }
   }, []);
@@ -131,7 +142,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
 
         console.log('Initializing map with container size:', rect.width, rect.height);
 
-        // Create map WITHOUT tile layer - we'll draw vector streets instead
+        // Create map with a subtle, label-free tile layer for context.
         const map = L.map(container, {
           center: [latitude, longitude],
           zoom: getZoomFromDistance(distance),
@@ -142,6 +153,12 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
           attributionControl: false,
         });
 
+        const tileLayer = L.tileLayer(getTileUrl(theme.id), {
+          attribution: '',
+          maxZoom: 19,
+          opacity: 0.35,
+        }).addTo(map);
+
         if (interactive && onLocationChange) {
           map.on('moveend', () => {
             const center = map.getCenter();
@@ -151,6 +168,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
         }
 
         mapInstanceRef.current = map;
+        tileLayerRef.current = tileLayer;
         setMapReady(true);
 
         // Multiple invalidateSize calls to ensure proper rendering
@@ -210,6 +228,27 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
       duration: 0.3,
     });
   }, [latitude, longitude, distance]);
+
+  // Update tile layer when theme changes
+  useEffect(() => {
+    if (!mapInstanceRef.current || !tileLayerRef.current) return;
+    (async () => {
+      const L = await import('leaflet');
+      if (!mapInstanceRef.current) return;
+
+      try {
+        mapInstanceRef.current.removeLayer(tileLayerRef.current);
+      } catch {
+        // ignore
+      }
+
+      tileLayerRef.current = L.tileLayer(getTileUrl(theme.id), {
+        attribution: '',
+        maxZoom: 19,
+        opacity: 0.35,
+      }).addTo(mapInstanceRef.current);
+    })();
+  }, [theme.id]);
 
   // ResizeObserver for container changes
   useEffect(() => {
