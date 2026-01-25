@@ -42,6 +42,13 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
   const tileLayerRef = useRef<any>(null);
   const [mapKey, setMapKey] = useState(0);
 
+  // When the user interacts with the map (pan/zoom), Leaflet fires `moveend`.
+  // Our external state update (lat/lng) would then trigger the "Update map view" effect
+  // and reset the zoom back to the distance-derived zoom, which feels like "jumping".
+  // We mark internal moves so we can avoid overriding the user's zoom.
+  const internalMoveRef = useRef(false);
+  const prevDistanceRef = useRef(distance);
+
   // Get font family class
   const getFontClass = () => {
     switch (fontFamily) {
@@ -130,6 +137,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
         if (interactive && onLocationChange) {
           map.on('moveend', () => {
             const center = map.getCenter();
+            internalMoveRef.current = true;
             onLocationChange(center.lat, center.lng);
           });
         }
@@ -177,6 +185,17 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
   // Update map view when location/distance changes
   useEffect(() => {
     if (!mapInstanceRef.current) return;
+
+    // If this update was caused by the user interacting with the map (pan/zoom),
+    // do not override their current zoom level. We only skip when distance didn't change.
+    if (interactive && internalMoveRef.current && distance === prevDistanceRef.current) {
+      internalMoveRef.current = false;
+      return;
+    }
+
+    // Reset the flag after handling any external update.
+    internalMoveRef.current = false;
+    prevDistanceRef.current = distance;
     
     mapInstanceRef.current.setView([latitude, longitude], getZoomFromDistance(distance), {
       animate: true,
