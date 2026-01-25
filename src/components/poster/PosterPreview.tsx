@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { PosterConfig } from '@/types/poster';
+import 'leaflet/dist/leaflet.css';
 
 interface PosterPreviewProps {
   config: PosterConfig;
@@ -35,10 +36,11 @@ const getTileUrl = (themeId: string): string => {
 
 export const PosterPreview = ({ config, onLocationChange, interactive = false }: PosterPreviewProps) => {
   const { city, country, countryLabel, latitude, longitude, distance, theme, fontFamily, fontSize, orientation } = config;
-  const mapRef = useRef<HTMLDivElement>(null);
-  const leafletMapRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
-  const [isMapReady, setIsMapReady] = useState(false);
+  const [mapKey, setMapKey] = useState(0);
 
   // Get font family class
   const getFontClass = () => {
@@ -69,132 +71,173 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
   // Aspect ratio based on orientation
   const aspectRatio = orientation === 'horizontal' ? 'aspect-[4/3]' : 'aspect-[3/4]';
 
-  // Initialize map
+  // Cleanup function
+  const cleanupMap = useCallback(() => {
+    if (mapInstanceRef.current) {
+      try {
+        mapInstanceRef.current.remove();
+      } catch (e) {
+        console.log('Map cleanup error:', e);
+      }
+      mapInstanceRef.current = null;
+      tileLayerRef.current = null;
+    }
+  }, []);
+
+  // Initialize map when container is ready
   useEffect(() => {
-    const initMap = async () => {
-      if (!mapRef.current) return;
-
-      // Clean up existing map
-      if (leafletMapRef.current) {
-        leafletMapRef.current.remove();
-        leafletMapRef.current = null;
+    let isMounted = true;
+    
+    const initializeMap = async () => {
+      // Wait for container to have dimensions
+      if (!mapContainerRef.current) return;
+      
+      const container = mapContainerRef.current;
+      const rect = container.getBoundingClientRect();
+      
+      // If container has no size, wait and retry
+      if (rect.width === 0 || rect.height === 0) {
+        console.log('Container has no size, waiting...');
+        setTimeout(initializeMap, 100);
+        return;
       }
 
-      const L = await import('leaflet');
-      
-      const map = L.map(mapRef.current, {
-        center: [latitude, longitude],
-        zoom: getZoomFromDistance(distance),
-        zoomControl: false,
-        scrollWheelZoom: interactive,
-        dragging: interactive,
-        doubleClickZoom: interactive,
-        attributionControl: false,
-      });
+      // Clean up any existing map
+      cleanupMap();
 
-      tileLayerRef.current = L.tileLayer(getTileUrl(theme.id), {
-        attribution: '',
-      }).addTo(map);
+      try {
+        const L = await import('leaflet');
+        
+        if (!isMounted || !mapContainerRef.current) return;
 
-      // Add move listener if interactive
-      if (interactive && onLocationChange) {
-        map.on('moveend', () => {
-          const center = map.getCenter();
-          onLocationChange(center.lat, center.lng);
+        console.log('Initializing map with container size:', rect.width, rect.height);
+
+        const map = L.map(container, {
+          center: [latitude, longitude],
+          zoom: getZoomFromDistance(distance),
+          zoomControl: false,
+          scrollWheelZoom: interactive,
+          dragging: interactive,
+          doubleClickZoom: interactive,
+          attributionControl: false,
         });
-      }
 
-      leafletMapRef.current = map;
-      
-      // Force map to recalculate size after initialization
-      setTimeout(() => {
-        if (leafletMapRef.current) {
-          leafletMapRef.current.invalidateSize();
-          setIsMapReady(true);
+        const tileLayer = L.tileLayer(getTileUrl(theme.id), {
+          attribution: '',
+          maxZoom: 19,
+        }).addTo(map);
+
+        if (interactive && onLocationChange) {
+          map.on('moveend', () => {
+            const center = map.getCenter();
+            onLocationChange(center.lat, center.lng);
+          });
         }
-      }, 100);
-      
-      // Additional invalidation for slow renders
-      setTimeout(() => {
-        if (leafletMapRef.current) {
-          leafletMapRef.current.invalidateSize();
-        }
-      }, 500);
+
+        mapInstanceRef.current = map;
+        tileLayerRef.current = tileLayer;
+
+        // Multiple invalidateSize calls to ensure proper rendering
+        const invalidateSizes = () => {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize({ animate: false });
+          }
+        };
+
+        // Immediate
+        invalidateSizes();
+        
+        // After a short delay
+        setTimeout(invalidateSizes, 50);
+        setTimeout(invalidateSizes, 150);
+        setTimeout(invalidateSizes, 300);
+        setTimeout(invalidateSizes, 500);
+        setTimeout(invalidateSizes, 1000);
+
+      } catch (error) {
+        console.error('Failed to initialize map:', error);
+      }
     };
 
-    initMap();
+    // Small delay to ensure DOM is ready
+    const timeoutId = setTimeout(initializeMap, 50);
 
     return () => {
-      if (leafletMapRef.current) {
-        leafletMapRef.current.remove();
-        leafletMapRef.current = null;
-      }
+      isMounted = false;
+      clearTimeout(timeoutId);
+      cleanupMap();
     };
-  }, [interactive]);
+  }, [mapKey, interactive]);
 
-  // Update map when config changes
+  // Force re-render map when orientation changes
   useEffect(() => {
-    if (!leafletMapRef.current || !isMapReady) return;
+    setMapKey(prev => prev + 1);
+  }, [orientation]);
+
+  // Update map view when location/distance changes
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
     
-    leafletMapRef.current.setView([latitude, longitude], getZoomFromDistance(distance), {
+    mapInstanceRef.current.setView([latitude, longitude], getZoomFromDistance(distance), {
       animate: true,
-      duration: 0.5,
+      duration: 0.3,
     });
-  }, [latitude, longitude, distance, isMapReady]);
+  }, [latitude, longitude, distance]);
 
   // Update tile layer when theme changes
   useEffect(() => {
-    if (!leafletMapRef.current || !tileLayerRef.current || !isMapReady) return;
+    if (!mapInstanceRef.current || !tileLayerRef.current) return;
     
-    const L = (window as any).L;
-    if (!L) return;
+    const loadNewTiles = async () => {
+      const L = await import('leaflet');
+      
+      if (tileLayerRef.current && mapInstanceRef.current) {
+        mapInstanceRef.current.removeLayer(tileLayerRef.current);
+        tileLayerRef.current = L.tileLayer(getTileUrl(theme.id), {
+          attribution: '',
+          maxZoom: 19,
+        }).addTo(mapInstanceRef.current);
+      }
+    };
+    
+    loadNewTiles();
+  }, [theme.id]);
 
-    leafletMapRef.current.removeLayer(tileLayerRef.current);
-    tileLayerRef.current = L.tileLayer(getTileUrl(theme.id), {
-      attribution: '',
-    }).addTo(leafletMapRef.current);
-  }, [theme.id, isMapReady]);
-
-  // Invalidate size when orientation changes
+  // ResizeObserver for container changes
   useEffect(() => {
-    if (!leafletMapRef.current || !isMapReady) return;
-    
-    setTimeout(() => {
-      leafletMapRef.current.invalidateSize();
-    }, 100);
-    
-    setTimeout(() => {
-      leafletMapRef.current.invalidateSize();
-    }, 300);
-  }, [orientation, isMapReady]);
-  
-  // ResizeObserver to handle container resizing
-  useEffect(() => {
-    if (!mapRef.current || !leafletMapRef.current) return;
+    if (!containerRef.current) return;
     
     const resizeObserver = new ResizeObserver(() => {
-      if (leafletMapRef.current) {
-        leafletMapRef.current.invalidateSize();
+      if (mapInstanceRef.current) {
+        setTimeout(() => {
+          mapInstanceRef.current?.invalidateSize({ animate: false });
+        }, 100);
       }
     });
     
-    resizeObserver.observe(mapRef.current);
+    resizeObserver.observe(containerRef.current);
     
     return () => {
       resizeObserver.disconnect();
     };
-  }, [isMapReady]);
+  }, []);
   
   return (
     <div 
-      className={`relative w-full ${aspectRatio} rounded-lg shadow-2xl overflow-hidden transition-all duration-500 ${interactive ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      ref={containerRef}
+      className={`relative w-full ${aspectRatio} rounded-lg shadow-2xl overflow-hidden transition-all duration-300 ${interactive ? 'cursor-grab active:cursor-grabbing' : ''}`}
       style={{ backgroundColor: theme.bg }}
     >
-      {/* Map layer - explicit min-height to ensure Leaflet renders properly */}
+      {/* Map layer */}
       <div 
-        ref={mapRef}
-        className="absolute inset-0 w-full h-full"
-        style={{ backgroundColor: theme.bg, minHeight: '300px' }}
+        key={mapKey}
+        ref={mapContainerRef}
+        className="absolute inset-0"
+        style={{ 
+          backgroundColor: theme.bg,
+          width: '100%',
+          height: '100%',
+        }}
       />
       
       {/* Interactive hint */}
