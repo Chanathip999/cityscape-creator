@@ -153,8 +153,8 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
           attributionControl: false,
         });
 
-        // Keep enough background context visible even when colored streets are enabled
-        const tileOpacity = coloredStreets ? 0.8 : 1;
+        // Keep the base map clearly visible even when colored streets are enabled
+        const tileOpacity = 1;
         const tileLayer = L.tileLayer(getTileUrl(theme.id), {
           attribution: '',
           maxZoom: 19,
@@ -316,7 +316,8 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
       <div 
         className="absolute top-0 left-0 right-0 h-1/4 pointer-events-none z-10"
         style={{ 
-          background: `linear-gradient(to bottom, ${theme.gradientColor} 0%, transparent 100%)` 
+          background: `linear-gradient(to bottom, ${theme.gradientColor} 0%, transparent 100%)`,
+          opacity: coloredStreets ? 0.25 : 1,
         }}
       />
       
@@ -324,7 +325,8 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
       <div 
         className="absolute bottom-0 left-0 right-0 h-1/3 pointer-events-none z-10"
         style={{ 
-          background: `linear-gradient(to top, ${theme.gradientColor} 0%, transparent 100%)` 
+          background: `linear-gradient(to top, ${theme.gradientColor} 0%, transparent 100%)`,
+          opacity: coloredStreets ? 0.25 : 1,
         }}
       />
       
