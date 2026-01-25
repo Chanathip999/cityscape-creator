@@ -3,45 +3,47 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, MapPin, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CitySearchProps {
   onCitySelect: (city: string, country: string, lat: number, lon: number) => void;
 }
 
-interface SearchResult {
-  display_name: string;
-  lat: string;
-  lon: string;
-  address?: {
-    city?: string;
-    town?: string;
-    village?: string;
-    country?: string;
-  };
+interface GeoNamesCity {
+  name: string;
+  country: string;
+  countryCode: string;
+  lat: number;
+  lng: number;
+  population: number;
+  region: string;
+  displayName: string;
 }
 
 export const CitySearch = ({ onCitySelect }: CitySearchProps) => {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [results, setResults] = useState<GeoNamesCity[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
 
   const searchCity = useCallback(async () => {
-    if (!query.trim()) return;
+    if (!query.trim() || query.trim().length < 2) return;
     
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`,
-        {
-          headers: {
-            'Accept-Language': 'en',
-          },
-        }
-      );
-      const data = await response.json();
-      setResults(data);
-      setShowResults(true);
+      const { data, error } = await supabase.functions.invoke('geonames-search', {
+        body: { query: query.trim() },
+      });
+
+      if (error) {
+        console.error('GeoNames search error:', error);
+        return;
+      }
+
+      if (data?.results) {
+        setResults(data.results);
+        setShowResults(true);
+      }
     } catch (error) {
       console.error('Search failed:', error);
     } finally {
@@ -49,12 +51,10 @@ export const CitySearch = ({ onCitySelect }: CitySearchProps) => {
     }
   }, [query]);
 
-  const handleSelect = (result: SearchResult) => {
-    const city = result.address?.city || result.address?.town || result.address?.village || query;
-    const country = result.address?.country || '';
-    onCitySelect(city, country, parseFloat(result.lat), parseFloat(result.lon));
+  const handleSelect = (result: GeoNamesCity) => {
+    onCitySelect(result.name, result.country, result.lat, result.lng);
     setShowResults(false);
-    setQuery(city);
+    setQuery(result.name);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -65,7 +65,7 @@ export const CitySearch = ({ onCitySelect }: CitySearchProps) => {
 
   return (
     <div className="space-y-3">
-      <label className="text-sm font-medium text-foreground">City Search</label>
+      <label className="text-sm font-medium text-foreground">Stadtsuche</label>
       <div className="relative">
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -74,13 +74,13 @@ export const CitySearch = ({ onCitySelect }: CitySearchProps) => {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Search for a city..."
+              placeholder="Stadt suchen..."
               className="pl-9"
             />
           </div>
           <Button 
             onClick={searchCity} 
-            disabled={isLoading}
+            disabled={isLoading || query.trim().length < 2}
             size="icon"
             variant="secondary"
           >
@@ -102,14 +102,19 @@ export const CitySearch = ({ onCitySelect }: CitySearchProps) => {
             >
               {results.map((result, index) => (
                 <button
-                  key={index}
+                  key={`${result.name}-${result.lat}-${index}`}
                   onClick={() => handleSelect(result)}
                   className="w-full px-4 py-3 text-left hover:bg-muted transition-colors flex items-start gap-3 border-b border-border last:border-0"
                 >
                   <MapPin className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" />
-                  <span className="text-sm text-foreground line-clamp-2">
-                    {result.display_name}
-                  </span>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-foreground">
+                      {result.name}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {result.region ? `${result.region}, ` : ''}{result.country}
+                    </span>
+                  </div>
                 </button>
               ))}
             </motion.div>
