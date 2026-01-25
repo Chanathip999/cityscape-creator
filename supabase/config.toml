@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.fetch-streets]
 verify_jwt = false
+
+[functions.geonames-search]
+verify_jwt = false

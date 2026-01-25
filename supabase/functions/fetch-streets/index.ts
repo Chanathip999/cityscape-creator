@@ -7,10 +7,14 @@ const corsHeaders = {
 
 // Street types - only major roads for fast loading
 const STREET_TYPES = [
-  { type: 'motorway', tags: ['motorway', 'motorway_link'] },
-  { type: 'primary', tags: ['trunk', 'trunk_link', 'primary', 'primary_link'] },
-  { type: 'secondary', tags: ['secondary', 'secondary_link'] },
+  { type: 'motorway', tags: ['motorway'] },
+  { type: 'primary', tags: ['trunk', 'primary'] },
+  { type: 'secondary', tags: ['secondary'] },
 ];
+
+// Simple in-memory cache for recent queries (TTL: 60 seconds)
+const cache = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_TTL = 60000;
 
 interface StreetData {
   type: string;
@@ -32,6 +36,17 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ error: 'Missing required parameters: lat, lng, distance' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Create cache key (rounded to 3 decimals for nearby hits)
+    const cacheKey = `${lat.toFixed(3)}-${lng.toFixed(3)}-${distance}`;
+    const cached = cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log('Cache hit for:', cacheKey);
+      return new Response(
+        JSON.stringify(cached.data),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -122,8 +137,20 @@ Deno.serve(async (req) => {
     const totalStreets = streetData.reduce((sum, st) => sum + st.coordinates.length, 0);
     console.log(`Returning ${totalStreets} street segments`);
 
+    const responseData = { streets: streetData };
+    
+    // Cache the result
+    cache.set(cacheKey, { data: responseData, timestamp: Date.now() });
+    
+    // Clean old cache entries
+    for (const [key, value] of cache.entries()) {
+      if (Date.now() - value.timestamp > CACHE_TTL) {
+        cache.delete(key);
+      }
+    }
+
     return new Response(
-      JSON.stringify({ streets: streetData }),
+      JSON.stringify(responseData),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
