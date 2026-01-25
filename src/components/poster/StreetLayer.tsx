@@ -17,12 +17,18 @@ const STREET_WIDTHS: Record<string, number> = {
 
 export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) => {
   const layerGroupRef = useRef<any>(null);
+  const rendererRef = useRef<any>(null);
 
   useEffect(() => {
     if (!mapInstance || !streets.length) return;
 
     const drawStreets = async () => {
       const L = await import('leaflet');
+
+      // Use canvas renderer for much better pan performance with many segments
+      if (!rendererRef.current) {
+        rendererRef.current = L.canvas({ padding: 0.5 });
+      }
 
       // Remove existing layer group
       if (layerGroupRef.current) {
@@ -49,6 +55,7 @@ export const StreetLayer = ({ streets, theme, mapInstance }: StreetLayerProps) =
             opacity: 0.9,
             lineCap: 'round',
             lineJoin: 'round',
+            renderer: rendererRef.current,
           });
 
           layerGroup.addLayer(line);

@@ -36,9 +36,14 @@ Deno.serve(async (req) => {
 
     console.log(`Fetching streets for lat=${lat}, lng=${lng}, distance=${distance}m`);
 
-    // Calculate bounding box from center and distance
-    const latDelta = (distance / 111320); // degrees latitude per meter
-    const lngDelta = (distance / (111320 * Math.cos(lat * Math.PI / 180))); // degrees longitude per meter
+    // Calculate bounding box from center.
+    // IMPORTANT: `distance` in the UI behaves like a "zoom/range" value.
+    // Using it as a full half-width makes the bbox too large (4x area) and Overpass becomes slow.
+    // We therefore treat it as an approximate DIAMETER and use radius = distance/2.
+    const radius = Math.max(500, Number(distance) / 2);
+
+    const latDelta = radius / 111320; // degrees latitude per meter
+    const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180)); // degrees longitude per meter
     
     const south = lat - latDelta;
     const north = lat + latDelta;
