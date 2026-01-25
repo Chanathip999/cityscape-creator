@@ -5,8 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Street types - reduced for memory efficiency (skip service/footway)
-const STREET_TYPES = [
+// Street types - dynamically filtered by distance to avoid memory issues
+const ALL_STREET_TYPES = [
   { type: 'motorway', tags: ['motorway', 'motorway_link'] },
   { type: 'primary', tags: ['trunk', 'trunk_link', 'primary', 'primary_link'] },
   { type: 'secondary', tags: ['secondary', 'secondary_link'] },
@@ -23,8 +23,8 @@ interface StreetData {
   coordinates: [number, number][][];
 }
 
-// Round coordinate to reduce JSON size (~40% smaller)
-const roundCoord = (n: number): number => Math.round(n * 10000) / 10000;
+// Round coordinate to reduce JSON size
+const roundCoord = (n: number): number => Math.round(n * 1000) / 1000;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -54,8 +54,21 @@ Deno.serve(async (req) => {
 
     console.log(`Fetching streets for lat=${lat}, lng=${lng}, distance=${distance}m`);
 
-    // Use distance as radius to cover the full visible map area
-    const radius = Math.max(3000, Number(distance));
+    const distanceNum = Number(distance);
+
+    // Cap radius to keep Overpass response manageable and avoid memory crashes.
+    // The preview is stylistic – we prefer reliability over perfect completeness.
+    const radius = Math.min(9000, Math.max(2500, distanceNum));
+
+    // Reduce detail for large areas to avoid memory limit exceeded.
+    // - very large: only major roads
+    // - medium: include tertiary
+    // - small: include residential
+    const activeStreetTypes = distanceNum > 12000
+      ? ALL_STREET_TYPES.slice(0, 3)
+      : distanceNum > 8000
+        ? ALL_STREET_TYPES.slice(0, 4)
+        : ALL_STREET_TYPES;
 
     const latDelta = radius / 111320;
     const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));
@@ -65,7 +78,7 @@ Deno.serve(async (req) => {
     const west = lng - lngDelta;
     const east = lng + lngDelta;
 
-    const highwayTags = STREET_TYPES.flatMap(st => st.tags);
+    const highwayTags = activeStreetTypes.flatMap(st => st.tags);
     
     // Optimized query: shorter timeout, geometry output instead of full body
     const overpassQuery = `
@@ -122,42 +135,52 @@ Deno.serve(async (req) => {
     const elements = osmData.elements || [];
     console.log(`Received ${elements.length} ways from Overpass`);
 
+    // Build a fast tag->type lookup to avoid N(types) scans per element
+    const tagToType = new Map<string, string>();
+    for (const st of activeStreetTypes) {
+      for (const tag of st.tags) tagToType.set(tag, st.type);
+    }
+
     // With "out geom", each way already has geometry inline - no separate node lookup needed
-    const streetData: StreetData[] = STREET_TYPES.map(streetType => {
-      const coordinates: [number, number][][] = [];
+    const coordsByType = new Map<string, [number, number][][]>();
+    for (const st of activeStreetTypes) coordsByType.set(st.type, []);
 
-      for (const element of elements) {
-        if (element.type !== 'way' || !element.tags?.highway) continue;
-        if (!streetType.tags.includes(element.tags.highway)) continue;
-        
-        const geom = element.geometry;
-        if (!geom || geom.length < 2) continue;
+    for (const element of elements) {
+      if (element.type !== 'way' || !element.tags?.highway) continue;
+      const type = tagToType.get(element.tags.highway);
+      if (!type) continue;
 
-        // Simplify for memory: keep every 2nd point for long ways
-        const points: [number, number][] = [];
-        const step = geom.length > 30 ? 2 : 1;
-        for (let i = 0; i < geom.length; i += step) {
-          const pt = geom[i];
-          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
-            points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
-          }
-        }
-        // Always include last point
-        const last = geom[geom.length - 1];
-        if (last && points.length > 0) {
-          const lastPt = points[points.length - 1];
-          if (lastPt[0] !== roundCoord(last.lat) || lastPt[1] !== roundCoord(last.lon)) {
-            points.push([roundCoord(last.lat), roundCoord(last.lon)]);
-          }
-        }
+      const geom = element.geometry;
+      if (!geom || geom.length < 2) continue;
 
-        if (points.length >= 2) {
-          coordinates.push(points);
+      // Simplify for memory: keep every 2nd point for long ways
+      const points: [number, number][] = [];
+      const step = geom.length > 30 ? 2 : 1;
+      for (let i = 0; i < geom.length; i += step) {
+        const pt = geom[i];
+        if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+          points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
         }
       }
 
-      return { type: streetType.type, coordinates };
-    });
+      // Always include last point
+      const last = geom[geom.length - 1];
+      if (last && points.length > 0) {
+        const lastPt = points[points.length - 1];
+        if (lastPt[0] !== roundCoord(last.lat) || lastPt[1] !== roundCoord(last.lon)) {
+          points.push([roundCoord(last.lat), roundCoord(last.lon)]);
+        }
+      }
+
+      if (points.length >= 2) {
+        coordsByType.get(type)?.push(points);
+      }
+    }
+
+    const streetData: StreetData[] = activeStreetTypes.map((st) => ({
+      type: st.type,
+      coordinates: coordsByType.get(st.type) || [],
+    }));
 
     const totalStreets = streetData.reduce((sum, st) => sum + st.coordinates.length, 0);
     console.log(`Returning ${totalStreets} street segments`);
