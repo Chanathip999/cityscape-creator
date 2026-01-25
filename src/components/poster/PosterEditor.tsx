@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme } from '@/types/poster';
+import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, FontFamily, FontSize } from '@/types/poster';
 import { PosterPreview } from './PosterPreview';
 import { ThemeSelector } from './ThemeSelector';
 import { CitySearch } from './CitySearch';
 import { DistanceSlider } from './DistanceSlider';
 import { MapPreview } from './MapPreview';
 import { AIChat } from './AIChat';
+import { FontSelector } from './FontSelector';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -46,6 +47,14 @@ export const PosterEditor = () => {
       latitude: lat,
       longitude: lng,
     }));
+  };
+
+  const handleFontFamilyChange = (fontFamily: FontFamily) => {
+    setConfig((prev) => ({ ...prev, fontFamily }));
+  };
+
+  const handleFontSizeChange = (fontSize: FontSize) => {
+    setConfig((prev) => ({ ...prev, fontSize }));
   };
 
   const handleConfigUpdate = (updates: Partial<PosterConfig>) => {
@@ -116,7 +125,7 @@ export const PosterEditor = () => {
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="city">City Name</Label>
+                      <Label htmlFor="city">Stadtname</Label>
                       <Input
                         id="city"
                         value={config.city}
@@ -127,7 +136,7 @@ export const PosterEditor = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="country">Country</Label>
+                      <Label htmlFor="country">Land</Label>
                       <Input
                         id="country"
                         value={config.country}
@@ -140,20 +149,27 @@ export const PosterEditor = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="countryLabel">Custom Country Label (optional)</Label>
+                    <Label htmlFor="countryLabel">Alternativer Text (optional)</Label>
                     <Input
                       id="countryLabel"
                       value={config.countryLabel || ''}
                       onChange={(e) =>
                         setConfig((prev) => ({ ...prev, countryLabel: e.target.value }))
                       }
-                      placeholder="e.g., Deutschland"
+                      placeholder="z.B. Deutschland"
                     />
                   </div>
 
                   <ThemeSelector
                     selectedTheme={config.theme}
                     onThemeChange={handleThemeChange}
+                  />
+
+                  <FontSelector
+                    fontFamily={config.fontFamily}
+                    fontSize={config.fontSize}
+                    onFontFamilyChange={handleFontFamilyChange}
+                    onFontSizeChange={handleFontSizeChange}
                   />
 
                   <DistanceSlider
@@ -170,7 +186,7 @@ export const PosterEditor = () => {
                   className="space-y-6"
                 >
                   <p className="text-sm text-muted-foreground">
-                    Drag the map to position your poster. The dashed circle shows the visible area.
+                    Ziehe die Karte um dein Poster zu positionieren. Der gestrichelte Kreis zeigt den sichtbaren Bereich.
                   </p>
                   <MapPreview
                     latitude={config.latitude}
