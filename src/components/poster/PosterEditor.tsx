@@ -248,7 +248,7 @@ export const PosterEditor = () => {
 
               <Separator />
 
-              {/* Colored Streets Toggle */}
+              {/* Colored Streets Toggle - DISABLED: Vector street rendering temporarily hidden
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Palette className="w-4 h-4 text-muted-foreground" />
@@ -263,6 +263,7 @@ export const PosterEditor = () => {
                   onCheckedChange={handleColoredStreetsChange}
                 />
               </div>
+              */}
 
               <p className="text-xs text-muted-foreground">
                 💡 Tipp: Du kannst die Karte direkt auf dem Poster ziehen, um sie zu positionieren.
