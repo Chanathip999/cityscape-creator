@@ -153,8 +153,8 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false }:
           attributionControl: false,
         });
 
-        // Use higher opacity for better visibility, slightly reduced when colored streets are enabled
-        const tileOpacity = coloredStreets ? 0.5 : 1;
+        // Keep enough background context visible even when colored streets are enabled
+        const tileOpacity = coloredStreets ? 0.8 : 1;
         const tileLayer = L.tileLayer(getTileUrl(theme.id), {
           attribution: '',
           maxZoom: 19,
