@@ -26,7 +26,7 @@ const STREET_WIDTHS: Record<string, number> = {
 };
 
 // High DPI for sharp output
-const DPI = 300;
+const DPI = 1200; // 4x higher resolution for ultra-sharp output
 const BASE_SIZE = 12; // Base size in inches
 
 const formatCoordinates = (lat: number, lon: number): string => {
@@ -287,23 +287,6 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     ctx.globalAlpha = 0.7;
     ctx.font = `${coordFontSize}px ${fontFamilyCSS}`;
     ctx.fillText(formatCoordinates(latitude, longitude), width / 2, height * 0.93);
-    ctx.globalAlpha = 1;
-
-    // Decorative line
-    ctx.strokeStyle = textColor;
-    ctx.lineWidth = 1 * scaleFactor;
-    ctx.beginPath();
-    ctx.moveTo(width * 0.4, height * 0.875);
-    ctx.lineTo(width * 0.6, height * 0.875);
-    ctx.stroke();
-
-    // Attribution
-    const attrFontSize = BASE_ATTR * scaleFactor;
-    ctx.globalAlpha = 0.5;
-    ctx.font = `${attrFontSize}px ${fontFamilyCSS}`;
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText('© OpenStreetMap contributors', width - 10, height - 10);
     ctx.globalAlpha = 1;
 
     if (onExportReady) {
