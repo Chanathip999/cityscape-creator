@@ -23,8 +23,9 @@ interface StreetData {
   coordinates: [number, number][][];
 }
 
-// Round coordinate to reduce JSON size
-const roundCoord = (n: number): number => Math.round(n * 1000) / 1000;
+// Round coordinate to reduce JSON size while maintaining ~1m precision
+// 5 decimals = ~1.1m precision (sufficient for smooth curves)
+const roundCoord = (n: number): number => Math.round(n * 100000) / 100000;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -153,10 +154,9 @@ Deno.serve(async (req) => {
       const geom = element.geometry;
       if (!geom || geom.length < 2) continue;
 
-      // Simplify for memory: keep every 2nd point for long ways
+      // Keep all points for smooth curves - high resolution is essential for poster quality
       const points: [number, number][] = [];
-      const step = geom.length > 30 ? 2 : 1;
-      for (let i = 0; i < geom.length; i += step) {
+      for (let i = 0; i < geom.length; i++) {
         const pt = geom[i];
         if (pt && pt.lat !== undefined && pt.lon !== undefined) {
           points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
