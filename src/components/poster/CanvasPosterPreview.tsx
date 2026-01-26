@@ -8,23 +8,23 @@ interface CanvasPosterPreviewProps {
   containerRef?: React.RefObject<HTMLDivElement>;
 }
 
-// Street widths matching Python script ratios (0.4-1.2 range)
-// These are multiplied by a scale factor based on canvas size
+// Street widths matching Python script - very fine lines for elegant look
+// These are absolute pixel values at 300 DPI base resolution
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 1.2,
-  motorway_link: 1.2,
-  trunk: 1.0,
-  trunk_link: 1.0,
-  primary: 1.0,
-  primary_link: 1.0,
-  secondary: 0.8,
-  secondary_link: 0.8,
-  tertiary: 0.6,
-  tertiary_link: 0.6,
-  residential: 0.4,
-  living_street: 0.4,
-  unclassified: 0.4,
-  service: 0.3,
+  motorway: 5.0,
+  motorway_link: 4.0,
+  trunk: 4.0,
+  trunk_link: 3.5,
+  primary: 3.5,
+  primary_link: 3.0,
+  secondary: 2.5,
+  secondary_link: 2.0,
+  tertiary: 1.8,
+  tertiary_link: 1.5,
+  residential: 1.2,
+  living_street: 1.0,
+  unclassified: 1.0,
+  service: 0.8,
 };
 
 // High DPI for sharp output
@@ -134,10 +134,9 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     [theme]
   );
 
-  const getStreetWidth = useCallback((type: string, scaleFactor: number): number => {
-    const baseWidth = STREET_WIDTHS[type] || 0.3;
-    // Scale width based on canvas size - similar to Python script's approach
-    return baseWidth * scaleFactor;
+  const getStreetWidth = useCallback((type: string): number => {
+    // Return absolute pixel width - no scaling needed as canvas is already at target DPI
+    return STREET_WIDTHS[type] || 0.8;
   }, []);
 
   const getFontFamily = useCallback(() => {
@@ -215,9 +214,6 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
 
     const bounds = getCropLimits();
 
-    // Scale factor for line widths (matching Python script approach)
-    const widthScaleFactor = width / (BASE_SIZE * DPI) * 3;
-
     // Background
     ctx.fillStyle = theme.bg;
     ctx.fillRect(0, 0, width, height);
@@ -268,7 +264,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       if (!segment) continue;
 
       const color = getStreetColor(streetType);
-      const lineWidth = getStreetWidth(streetType, widthScaleFactor);
+      const lineWidth = getStreetWidth(streetType);
 
       ctx.strokeStyle = color;
       ctx.lineWidth = lineWidth;
