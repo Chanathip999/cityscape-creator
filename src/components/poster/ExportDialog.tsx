@@ -43,7 +43,7 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
 
     try {
       // Wait for map tiles to fully load
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 3000));
 
       const element = posterRef.current;
       if (!element) {
@@ -64,7 +64,7 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
 
       // Calculate scale factor - use higher scale for sharper output
       const currentWidth = element.offsetWidth;
-      const scale = (exportWidth / currentWidth) * 1.5; // Extra 1.5x for sharper tiles
+      const scale = (exportWidth / currentWidth) * 2.5; // Extra 2.5x for maximum sharpness
 
       // Use html2canvas to capture the element with maximum quality
       const canvas = await html2canvas(element, {
@@ -75,7 +75,7 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
         logging: false,
         width: element.offsetWidth,
         height: element.offsetHeight,
-        imageTimeout: 30000, // Longer timeout for tile loading
+        imageTimeout: 60000, // 60s timeout for tile loading
         onclone: (_clonedDoc, clonedElement) => {
           // Ensure map tiles are fully visible in clone
           const mapContainer = clonedElement.querySelector('.leaflet-container');
