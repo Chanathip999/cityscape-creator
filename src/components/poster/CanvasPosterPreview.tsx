@@ -32,8 +32,10 @@ interface CanvasPosterPreviewProps {
  * Street widths from maptoposter Python script get_edge_widths_by_type()
  * https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py#L217-L244
  * 
- * Python values: motorway=1.2, primary=1.0, secondary=0.8, tertiary=0.6, others=0.4
- * We scale these by (canvasWidth / 1200) in the render, matching the Python approach.
+ * Python exports at 12 inches base width (fig, ax = plt.subplots(figsize=(12, 12 / aspect)))
+ * Line widths in Python are in points (72 points = 1 inch).
+ * For our canvas, we scale: (canvasWidth / 12 inches / 72 dpi) * pythonWidth
+ * Simplified: pythonWidth * (canvasWidth / 864)
  */
 const STREET_WIDTHS: Record<string, number> = {
   motorway: 1.2,
@@ -52,10 +54,11 @@ const STREET_WIDTHS: Record<string, number> = {
   service: 0.3,
 };
 
-// High DPI for ultra-sharp output (matching maptoposter quality)
+// DPI and base size for high resolution output
 // Reference: https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py
-const DPI = 400;
-const BASE_SIZE = 14;
+// Python uses 300 DPI for export (line 536)
+const DPI = 300;
+const BASE_SIZE = 12; // Python uses 12 inches (line 272)
 
 export const CanvasPosterPreview = ({ config, onExportReady, containerRef: externalContainerRef }: CanvasPosterPreviewProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -122,10 +125,13 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   );
 
   const getStreetWidth = useCallback((type: string, canvasWidth: number): number => {
-    // Scale widths by (canvasWidth / 1200) matching Python script approach
+    // Python uses 12 inch figure width at 72 dpi for line calculations
+    // Scale widths: pythonWidth * (canvasWidth / (12 * 72)) = pythonWidth * (canvasWidth / 864)
+    // But we need visible lines, so multiply by additional factor for DPI scaling
     const baseWidth = STREET_WIDTHS[type] || 0.4;
-    const scaleFactor = canvasWidth / 1200;
-    return baseWidth * scaleFactor;
+    const scaleFactor = canvasWidth / 864;
+    // Minimum line width of 1px for visibility, max reasonable width
+    return Math.max(1, Math.min(baseWidth * scaleFactor, 12));
   }, []);
 
   const getCropLimits = useCallback(() => {
@@ -286,23 +292,25 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // City name - dynamically adjust based on length
+    // City name - dynamically adjust based on length (Python: city_char_count > 10)
+    // https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py#L480-L492
     const cityCharCount = city.length;
     let adjustedTitleSize = scaledFonts.title;
     if (cityCharCount > 10) {
       const lengthFactor = 10 / cityCharCount;
-      adjustedTitleSize = Math.max(scaledFonts.title * lengthFactor, 16 * (height / 1000));
+      adjustedTitleSize = Math.max(scaledFonts.title * lengthFactor, 20 * (height / 1000));
     }
 
-    // City with spaced letters (matching Python script)
-    const spacedCity = formatDisplayText(city).split('').join(' ');
+    // City text - use tracking for letter spacing (NOT extra spaces between characters)
+    // Python uses: "  ".join(list(city.upper())) - but we use CSS-style tracking instead
+    const cityText = formatDisplayText(city);
     ctx.font = `${FONT_WEIGHTS.title} ${adjustedTitleSize}px ${fontStack}`;
     drawTextWithTracking(
       ctx,
-      spacedCity,
+      cityText,
       width / 2,
       height * TEXT_POSITIONS.title,
-      TRACKING.title * 0.5, // Reduced tracking since letters are already spaced
+      TRACKING.title,
       adjustedTitleSize
     );
 
