@@ -6,6 +6,7 @@ interface PosterPreviewProps {
   config: PosterConfig;
   onLocationChange?: (lat: number, lng: number) => void;
   interactive?: boolean;
+  containerRef?: React.RefObject<HTMLDivElement>;
 }
 
 const formatCoordinates = (lat: number, lon: number): string => {
@@ -35,9 +36,10 @@ const getTileUrl = (themeId: string): string => {
   return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
 };
 
-export const PosterPreview = ({ config, onLocationChange, interactive = false }: PosterPreviewProps) => {
+export const PosterPreview = ({ config, onLocationChange, interactive = false, containerRef: externalContainerRef }: PosterPreviewProps) => {
   const { city, country, countryLabel, latitude, longitude, distance, theme, fontFamily, fontSize, aspectRatio, customTextColor } = config;
-  const containerRef = useRef<HTMLDivElement>(null);
+  const internalContainerRef = useRef<HTMLDivElement>(null);
+  const containerRef = externalContainerRef || internalContainerRef;
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
