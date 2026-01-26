@@ -75,16 +75,18 @@ Deno.serve(async (req) => {
     const distanceNum = Number(distance);
 
     // Keep radius within safe limits - client handles tiling for larger areas
-    // Max 8km per tile to stay within edge function memory limits
-    const radius = Math.min(8000, Math.max(2500, distanceNum));
+    // NOTE: 8km tiles can still exceed memory in dense cities when including footways.
+    // We cap to 5km per request and let the client request more tiles if needed.
+    const radius = Math.min(5000, Math.max(2500, distanceNum));
 
     // ALWAYS use all street types for maximum detail
     // Client handles large areas by splitting into multiple tile requests
     const activeStreetTypes = ALL_STREET_TYPES;
     console.log('Using full detail (all street types)');
 
-    // Include water/parks for all tiles (smaller tile size allows this)
-    const includeWaterParks = true;
+    // Water/parks can explode the response size in some cities.
+    // Keep them only for small tiles where the Overpass payload stays manageable.
+    const includeWaterParks = radius <= 3000;
 
     const latDelta = radius / 111320;
     const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));

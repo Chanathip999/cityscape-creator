@@ -105,7 +105,9 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   const compensatedDistance = Math.ceil(
     distance * (Math.max(ratioHeight, ratioWidth) / Math.min(ratioHeight, ratioWidth)) / 4
   );
-  const fetchDistance = Math.max(distance, compensatedDistance) * 2; // Fetch more for pan
+  // Fetch a bit beyond the crop to allow panning without constantly re-fetching.
+  // Too high increases tile count and backend load.
+  const fetchDistance = Math.max(distance, compensatedDistance) * 1.5;
 
   const { streets, railways, water, parks, isLoading, error } = useStreetData({
     latitude,
