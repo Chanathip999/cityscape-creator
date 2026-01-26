@@ -32,8 +32,10 @@ interface RenderRequest {
   fontFamily: string;
   fontSize: string;
   customTextColor?: string;
-  width?: number;  // Output width in pixels (default 1920)
-  height?: number; // Output height in pixels (auto-calculated from aspect ratio if not provided)
+  width?: number;
+  height?: number;
+  showGradients?: boolean; // Enable/disable gradient fades
+  showDecorativeLine?: boolean; // Enable/disable line between city and country
 }
 
 interface StreetSegment {
@@ -42,12 +44,11 @@ interface StreetSegment {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Constants (ported from Python maptoposter script)
-// https://github.com/originalankur/maptoposter
+// Constants from maptoposter Python script
+// https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Street widths matching Python script lines 231-240
-// These values are scaled by (width / 1200) in generateSVG
+// Street widths from get_edge_widths_by_type() - lines 231-240
 const STREET_WIDTHS: Record<string, number> = {
   motorway: 1.2,
   motorway_link: 1.0,
@@ -79,26 +80,27 @@ const ASPECT_RATIOS: Record<string, { width: number; height: number }> = {
   '19:6': { width: 19, height: 6 },
 };
 
-// Typography settings matching Python script lines 500-516
-// Text is positioned using normalized coordinates (y=0.14 for city, y=0.10 for country, y=0.07 for coords)
-// Python uses bottom-up positioning, we invert for SVG (top-down)
-const TRACKING = {
-  title: 0.3,      // Letter spacing for city name
-  subtitle: 0.15,  // Letter spacing for country
-  coords: 0.05,    // Letter spacing for coordinates
+// Typography from Python script - using ax.transAxes (normalized 0-1 coordinates)
+// Python positions from BOTTOM, so we convert: SVG_Y = 1 - PYTHON_Y
+const TEXT_POSITIONS = {
+  title: 0.86,           // City: Python y=0.14 → 1-0.14 = 0.86
+  decorativeLine: 0.875, // Line: Python y=0.125 → 1-0.125 = 0.875
+  subtitle: 0.90,        // Country: Python y=0.10 → 1-0.10 = 0.90
+  coords: 0.93,          // Coords: Python y=0.07 → 1-0.07 = 0.93
+  attribution: 0.98,     // Attribution: Python y=0.02 → 1-0.02 = 0.98
 };
 
-// Python positions from bottom (y=0.14 means 14% from bottom = 86% from top)
-const TEXT_POSITIONS = {
-  title: 0.86,     // City: Python y=0.14 → SVG 1-0.14 = 0.86
-  subtitle: 0.90,  // Country: Python y=0.10 → SVG 1-0.10 = 0.90
-  coords: 0.93,    // Coords: Python y=0.07 → SVG 1-0.07 = 0.93
+// Letter spacing (tracking) in em units
+const TRACKING = {
+  title: 0.3,
+  subtitle: 0.15,
+  coords: 0.05,
 };
 
 const FONT_WEIGHTS = {
-  title: 700,      // Bold for city
-  subtitle: 300,   // Light for country
-  coords: 400,     // Regular for coordinates
+  title: 700,    // Bold
+  subtitle: 300, // Light
+  coords: 400,   // Regular
 };
 
 // Base font sizes at 1000px height
@@ -113,6 +115,15 @@ const FONT_SIZE_MULTIPLIERS: Record<string, number> = {
   small: 0.8,
   medium: 1.0,
   large: 1.2,
+};
+
+// Gradient fade positions from Python script (lines 150-182)
+// create_gradient_fade: top gradient at y=0.75-1.0, bottom at y=0.0-0.25
+const GRADIENT_CONFIG = {
+  topStart: 0.0,    // SVG: starts at top
+  topEnd: 0.25,     // Python: 1.0 to 0.75 → SVG: 0.0 to 0.25
+  bottomStart: 0.75, // Python: 0.25 to 0.0 → SVG: 0.75 to 1.0
+  bottomEnd: 1.0,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -180,6 +191,16 @@ function getStreetColor(type: string, theme: RenderRequest['theme']): string {
   if (['tertiary', 'tertiary_link'].includes(type)) return theme.roadTertiary;
   if (['residential', 'living_street', 'unclassified'].includes(type)) return theme.roadResidential;
   return theme.roadService || theme.roadResidential;
+}
+
+// Parse hex color to RGB
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16),
+  } : { r: 0, g: 0, b: 0 };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -326,7 +347,7 @@ async function fetchStreetData(lat: number, lng: number, distance: number): Prom
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SVG Generation (since we can't use Canvas in Deno easily)
+// SVG Generation (matching Python maptoposter output)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function generateSVG(request: RenderRequest, data: {
@@ -337,7 +358,6 @@ function generateSVG(request: RenderRequest, data: {
   const aspectConfig = ASPECT_RATIOS[request.aspectRatio] || ASPECT_RATIOS['3:4'];
   const aspectValue = aspectConfig.width / aspectConfig.height;
   
-  // Calculate dimensions
   const baseWidth = request.width || 1920;
   const width = baseWidth;
   const height = request.height || Math.round(baseWidth / aspectValue);
@@ -345,7 +365,7 @@ function generateSVG(request: RenderRequest, data: {
   const bounds = getCropLimits(request.latitude, request.longitude, request.distance, aspectValue);
   const theme = request.theme;
   
-  // Scale factor for line widths (based on width / 12 like Python script)
+  // Scale factor for line widths (matching Python: width / 1200)
   const scaleFactor = width / 1200;
   
   // Font scaling
@@ -358,14 +378,35 @@ function generateSVG(request: RenderRequest, data: {
   const attrSize = BASE_FONT_SIZES.attribution * fontScale;
   
   const textColor = request.customTextColor || theme.text;
+  const bgRgb = hexToRgb(theme.bg);
+  
+  // Decorative line width (matching Python: 0.1 * city font size)
+  const lineWidth = titleSize * 0.02;
+  const lineLength = width * 0.15; // 15% of width
   
   // Build SVG
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
   
+  // Gradient definitions for fade effect (matching Python create_gradient_fade)
+  if (request.showGradients !== false) {
+    svg += `
+      <defs>
+        <linearGradient id="topFade" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="rgb(${bgRgb.r},${bgRgb.g},${bgRgb.b})" stop-opacity="1"/>
+          <stop offset="100%" stop-color="rgb(${bgRgb.r},${bgRgb.g},${bgRgb.b})" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="bottomFade" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="rgb(${bgRgb.r},${bgRgb.g},${bgRgb.b})" stop-opacity="0"/>
+          <stop offset="100%" stop-color="rgb(${bgRgb.r},${bgRgb.g},${bgRgb.b})" stop-opacity="1"/>
+        </linearGradient>
+      </defs>
+    `;
+  }
+  
   // Background
   svg += `<rect width="${width}" height="${height}" fill="${theme.bg}"/>`;
   
-  // Parks
+  // Layer 1: Parks (z-order 2 in Python)
   for (const polygon of data.parks) {
     if (polygon.length < 3) continue;
     const points = polygon.map(([lat, lng]) => {
@@ -375,7 +416,7 @@ function generateSVG(request: RenderRequest, data: {
     svg += `<polygon points="${points}" fill="${theme.parks}"/>`;
   }
   
-  // Water
+  // Layer 2: Water (z-order 1 in Python)
   for (const polygon of data.water) {
     if (polygon.length < 3) continue;
     const points = polygon.map(([lat, lng]) => {
@@ -385,7 +426,7 @@ function generateSVG(request: RenderRequest, data: {
     svg += `<polygon points="${points}" fill="${theme.water}"/>`;
   }
   
-  // Streets (draw in order: service -> motorway)
+  // Layer 3: Streets (z-order 3 in Python) - draw in order: service -> motorway
   const streetOrder = ['service', 'residential', 'tertiary', 'secondary', 'primary', 'motorway'];
   
   for (const streetType of streetOrder) {
@@ -393,8 +434,8 @@ function generateSVG(request: RenderRequest, data: {
     if (!segment) continue;
     
     const color = getStreetColor(streetType, theme);
-    const baseWidth = STREET_WIDTHS[streetType] || 0.4;
-    const lineWidth = baseWidth * scaleFactor;
+    const baseLineWidth = STREET_WIDTHS[streetType] || 0.4;
+    const strokeWidth = baseLineWidth * scaleFactor;
     
     for (const polyline of segment.coordinates) {
       if (polyline.length < 2) continue;
@@ -404,26 +445,39 @@ function generateSVG(request: RenderRequest, data: {
         return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
       }).join(' ');
       
-      svg += `<path d="${d}" stroke="${color}" stroke-width="${lineWidth.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+      svg += `<path d="${d}" stroke="${color}" stroke-width="${strokeWidth.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
     }
   }
   
-  // Typography
+  // Layer 4: Gradient fades (z-order 10 in Python)
+  if (request.showGradients !== false) {
+    const fadeHeight = height * 0.25; // 25% of height for each fade
+    svg += `<rect x="0" y="0" width="${width}" height="${fadeHeight}" fill="url(#topFade)"/>`;
+    svg += `<rect x="0" y="${height - fadeHeight}" width="${width}" height="${fadeHeight}" fill="url(#bottomFade)"/>`;
+  }
+  
+  // Layer 5: Typography (z-order 11 in Python)
   const cityText = request.city.toUpperCase();
   const countryText = request.country.toUpperCase();
   const coordsText = formatCoordinates(request.latitude, request.longitude);
   
-  // City name
-  svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.title}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${titleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.title}" letter-spacing="${(TRACKING.title * titleSize).toFixed(1)}px">${cityText}</text>`;
+  // City name (spaced uppercase letters)
+  const spacedCity = cityText.split('').join(' ');
+  svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.title}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${titleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.title}" letter-spacing="${(TRACKING.title * titleSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif">${spacedCity}</text>`;
+  
+  // Decorative line between city and country (matching Python y=0.125)
+  if (request.showDecorativeLine !== false) {
+    svg += `<line x1="${(width - lineLength) / 2}" y1="${height * TEXT_POSITIONS.decorativeLine}" x2="${(width + lineLength) / 2}" y2="${height * TEXT_POSITIONS.decorativeLine}" stroke="${textColor}" stroke-width="${lineWidth.toFixed(2)}" opacity="0.6"/>`;
+  }
   
   // Country
-  svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.subtitle}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${subtitleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.subtitle}" letter-spacing="${(TRACKING.subtitle * subtitleSize).toFixed(1)}px">${countryText}</text>`;
+  svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.subtitle}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${subtitleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.subtitle}" letter-spacing="${(TRACKING.subtitle * subtitleSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif">${countryText}</text>`;
   
   // Coordinates
-  svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.coords}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${coordsSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.coords}" letter-spacing="${(TRACKING.coords * coordsSize).toFixed(1)}px" opacity="0.7">${coordsText}</text>`;
+  svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.coords}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${coordsSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.coords}" letter-spacing="${(TRACKING.coords * coordsSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif" opacity="0.7">${coordsText}</text>`;
   
   // Attribution
-  svg += `<text x="${width - 10}" y="${height - 10}" text-anchor="end" fill="${textColor}" font-size="${attrSize.toFixed(1)}px" opacity="0.5">© OpenStreetMap contributors</text>`;
+  svg += `<text x="${width - 10}" y="${height - 10}" text-anchor="end" fill="${textColor}" font-size="${attrSize.toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif" opacity="0.5">© OpenStreetMap contributors</text>`;
   
   svg += '</svg>';
   
@@ -442,7 +496,6 @@ Deno.serve(async (req) => {
   try {
     const request: RenderRequest = await req.json();
 
-    // Validate required fields
     if (!request.city || !request.latitude || !request.longitude || !request.theme) {
       return new Response(
         JSON.stringify({ error: 'Missing required parameters' }),
@@ -452,7 +505,6 @@ Deno.serve(async (req) => {
 
     console.log(`Rendering poster for ${request.city} at ${request.latitude}, ${request.longitude}`);
 
-    // Fetch street data
     const aspectConfig = ASPECT_RATIOS[request.aspectRatio] || ASPECT_RATIOS['3:4'];
     const aspectValue = aspectConfig.width / aspectConfig.height;
     const compensatedDistance = Math.ceil(
@@ -464,10 +516,8 @@ Deno.serve(async (req) => {
     
     console.log(`Fetched ${data.streets.reduce((sum, s) => sum + s.coordinates.length, 0)} streets, ${data.water.length} water, ${data.parks.length} parks`);
 
-    // Generate SVG
     const svg = generateSVG(request, data);
 
-    // Return SVG (can be converted to PNG on client if needed)
     return new Response(svg, {
       headers: {
         ...corsHeaders,
