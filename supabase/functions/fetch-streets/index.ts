@@ -74,15 +74,37 @@ Deno.serve(async (req) => {
 
     const distanceNum = Number(distance);
 
-    // Use full radius for detailed street data (matching maptoposter)
+    // Cap radius to prevent memory issues on large areas
+    // For very large areas (>15km), we need to reduce detail to fit in memory
     const radius = Math.min(15000, Math.max(2500, distanceNum));
 
-    // Always fetch all street types for maximum detail
-    // The service type now includes pedestrian/footway/path for fine detail
-    const activeStreetTypes = ALL_STREET_TYPES;
+    // Progressive detail reduction based on area size to prevent memory crashes
+    // Larger areas = fewer street types to keep memory usage manageable
+    let activeStreetTypes: typeof ALL_STREET_TYPES;
+    if (distanceNum > 20000) {
+      // Very large areas: only major roads (motorway, primary, secondary)
+      activeStreetTypes = ALL_STREET_TYPES.slice(0, 3);
+      console.log('Using reduced detail (major roads only) for large area');
+    } else if (distanceNum > 15000) {
+      // Large areas: exclude service roads
+      activeStreetTypes = ALL_STREET_TYPES.slice(0, 5);
+      console.log('Using reduced detail (no service roads) for large area');
+    } else if (distanceNum > 10000) {
+      // Medium-large areas: full street types but simplified service
+      activeStreetTypes = ALL_STREET_TYPES.map(st => 
+        st.type === 'service' 
+          ? { type: 'service', tags: ['service'] } // Exclude footway/path for medium areas
+          : st
+      );
+      console.log('Using medium detail for area');
+    } else {
+      // Small areas: full detail including pedestrian paths
+      activeStreetTypes = ALL_STREET_TYPES;
+      console.log('Using full detail for small area');
+    }
 
     // Only fetch water/parks for smaller areas to avoid memory crashes
-    const includeWaterParks = distanceNum <= 10000;
+    const includeWaterParks = distanceNum <= 8000;
 
     const latDelta = radius / 111320;
     const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));
