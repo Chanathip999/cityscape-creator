@@ -75,8 +75,8 @@ Deno.serve(async (req) => {
     const distanceNum = Number(distance);
 
     // Keep radius within safe limits - client handles tiling for larger areas
-    // Max 10km per tile to stay within edge function memory limits
-    const radius = Math.min(10000, Math.max(2500, distanceNum));
+    // Max 8km per tile to stay within edge function memory limits
+    const radius = Math.min(8000, Math.max(2500, distanceNum));
 
     // ALWAYS use all street types for maximum detail
     // Client handles large areas by splitting into multiple tile requests
