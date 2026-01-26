@@ -30,6 +30,12 @@ interface ExportDialogProps {
 // Base width for Full HD export
 const BASE_EXPORT_WIDTH = 1920;
 
+// Browser canvas limits: exceeding these often results in blank/gray exports.
+// 16384 is a common max dimension; keep a little headroom.
+const MAX_CANVAS_DIMENSION = 16000;
+// Also cap total pixels to reduce memory blowups.
+const MAX_CANVAS_PIXELS = 16000 * 16000; // 256MP
+
 export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
   const [isExporting, setIsExporting] = useState(false);
   const [format, setFormat] = useState<ExportFormat>('png');
@@ -62,9 +68,25 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
       const exportWidth = BASE_EXPORT_WIDTH * multiplier;
       const exportHeight = Math.round(exportWidth * (ratioHeight / ratioWidth));
 
-      // Calculate scale factor - use higher scale for sharper output
+      // Calculate scale factor.
+      // IMPORTANT: Too-high scale can exceed browser canvas limits, producing gray/blank output.
       const currentWidth = element.offsetWidth;
-      const scale = (exportWidth / currentWidth) * 4; // Extra 4x for ultra-sharp output
+      const baseScale = exportWidth / currentWidth;
+      const requestedExtraSharpness = 4; // user asked for higher capture resolution
+
+      // Predict the internal raster size that html2canvas will try to render.
+      const predictedW = element.offsetWidth * baseScale * requestedExtraSharpness;
+      const predictedH = element.offsetHeight * baseScale * requestedExtraSharpness;
+
+      // Cap by max dimension and max total pixels.
+      const capByDim = Math.min(
+        MAX_CANVAS_DIMENSION / Math.max(1, predictedW),
+        MAX_CANVAS_DIMENSION / Math.max(1, predictedH)
+      );
+      const capByPixels = Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, predictedW * predictedH));
+      const safetyCap = Math.min(1, capByDim, capByPixels);
+
+      const scale = baseScale * requestedExtraSharpness * safetyCap;
 
       // Use html2canvas to capture the element with maximum quality
       const canvas = await html2canvas(element, {
