@@ -30,7 +30,8 @@ interface TileResult {
 }
 
 // Maximum radius per tile request to stay within edge function memory limits
-const MAX_TILE_RADIUS = 8000; // 8km per tile for safety margin
+// 8km can still exceed memory in dense cities (lots of footways). Use 5km.
+const MAX_TILE_RADIUS = 5000;
 
 // Calculate tiles needed for a given area - prioritizes center coverage
 function calculateTiles(lat: number, lng: number, distance: number): { lat: number; lng: number; radius: number }[] {
@@ -44,9 +45,9 @@ function calculateTiles(lat: number, lng: number, distance: number): { lat: numb
   // Always start with center tile
   tiles.push({ lat, lng, radius: MAX_TILE_RADIUS });
 
-  // Calculate how many tiles we need to cover the full area
-  // Each tile covers 2*radius, with some overlap for seamless coverage
-  const tileSpacing = MAX_TILE_RADIUS * 1.5; // 75% of diameter = 25% overlap
+  // Tile spacing with overlap for seamless coverage
+  // 0.75 of diameter => 25% overlap
+  const tileSpacing = MAX_TILE_RADIUS * 1.5;
   const numTilesPerSide = Math.ceil(distance / tileSpacing);
   
   if (numTilesPerSide <= 1) {
@@ -181,8 +182,8 @@ export const useStreetData = ({
         const tiles = calculateTiles(latitude, longitude, distance);
         console.log(`Fetching ${tiles.length} tile(s) for area`);
 
-        // Fetch all tiles in parallel (but limit concurrency to avoid overwhelming the API)
-        const BATCH_SIZE = 4;
+        // Fetch tiles in small batches to avoid compute spikes and WORKER_LIMIT
+        const BATCH_SIZE = 2;
         const results: TileResult[] = [];
 
         for (let i = 0; i < tiles.length; i += BATCH_SIZE) {
