@@ -30,10 +30,11 @@ const getZoomFromDistance = (distance: number): number => {
 
 const getTileUrl = (themeId: string): string => {
   const darkThemes = ['neon', 'noir', 'midnight'];
+  // Use @2x retina tiles for higher resolution
   if (darkThemes.includes(themeId)) {
-    return 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
+    return 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png';
   }
-  return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
+  return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png';
 };
 
 export const PosterPreview = ({ config, onLocationChange, interactive = false, containerRef: externalContainerRef }: PosterPreviewProps) => {
