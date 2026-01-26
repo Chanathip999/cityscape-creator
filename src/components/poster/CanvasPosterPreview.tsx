@@ -344,14 +344,26 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     switch (aspectRatio) {
       case '1:1':
         return 'aspect-square';
-      case '4:3':
-        return 'aspect-[4/3]';
+      case '2:3':
+        return 'aspect-[2/3]';
+      case '3:2':
+        return 'aspect-[3/2]';
       case '3:4':
         return 'aspect-[3/4]';
-      case '16:9':
-        return 'aspect-video';
+      case '4:3':
+        return 'aspect-[4/3]';
+      case '4:5':
+        return 'aspect-[4/5]';
+      case '5:4':
+        return 'aspect-[5/4]';
       case '9:16':
         return 'aspect-[9/16]';
+      case '16:9':
+        return 'aspect-video';
+      case '6:19':
+        return 'aspect-[6/19]';
+      case '19:6':
+        return 'aspect-[19/6]';
       default:
         return 'aspect-[3/4]';
     }

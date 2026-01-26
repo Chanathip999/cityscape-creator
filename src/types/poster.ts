@@ -17,12 +17,12 @@ export interface PosterTheme {
 export type FontFamily = 'mono' | 'sans' | 'serif' | 'display' | 'elegant' | 'condensed';
 export type FontSize = 'small' | 'medium' | 'large';
 export type PosterOrientation = 'vertical' | 'horizontal';
-export type AspectRatioId = '1:1' | '3:4' | '4:3' | '16:9' | '9:16';
+export type AspectRatioId = '1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '9:16' | '16:9' | '6:19' | '19:6';
 export type ExportFormat = 'png' | 'jpeg';
 export type ExportResolution = 'fullhd' | '4k' | '8k';
 
 export interface AspectRatio {
-  id: AspectRatioId;
+  id: string;
   name: string;
   width: number;
   height: number;
@@ -55,10 +55,16 @@ export interface PosterConfig {
 
 export const ASPECT_RATIOS: AspectRatio[] = [
   { id: '1:1', name: 'Quadrat', width: 1, height: 1 },
+  { id: '2:3', name: 'Foto Portrait', width: 2, height: 3 },
+  { id: '3:2', name: 'Foto Landscape', width: 3, height: 2 },
   { id: '3:4', name: 'Portrait', width: 3, height: 4 },
   { id: '4:3', name: 'Landscape', width: 4, height: 3 },
-  { id: '16:9', name: 'Breitbild', width: 16, height: 9 },
+  { id: '4:5', name: 'Instagram', width: 4, height: 5 },
+  { id: '5:4', name: 'Large Print', width: 5, height: 4 },
   { id: '9:16', name: 'Story', width: 9, height: 16 },
+  { id: '16:9', name: 'Breitbild', width: 16, height: 9 },
+  { id: '6:19', name: 'Panorama Hoch', width: 6, height: 19 },
+  { id: '19:6', name: 'Panorama Quer', width: 19, height: 6 },
 ];
 
 export const EXPORT_FORMATS: { id: ExportFormat; name: string; mimeType: string }[] = [
