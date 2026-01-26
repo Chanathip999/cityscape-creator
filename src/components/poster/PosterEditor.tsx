@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, FontFamily, FontSize, AspectRatioId } from '@/types/poster';
 import { PosterPreview } from './PosterPreview';
@@ -8,23 +8,16 @@ import { DistanceSlider } from './DistanceSlider';
 import { AIPromptInput } from './AIPromptInput';
 import { FontSelector } from './FontSelector';
 import { AspectRatioSelector } from './AspectRatioSelector';
+import { ExportDialog } from './ExportDialog';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Map, Download } from 'lucide-react';
+import { Map } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { toast } from '@/hooks/use-toast';
 
 export const PosterEditor = () => {
   const [config, setConfig] = useState<PosterConfig>(DEFAULT_CONFIG);
-
-  const handleExport = () => {
-    toast({
-      title: 'Export',
-      description: 'Export-Funktion für Leaflet-Vorschau nicht verfügbar.',
-    });
-  };
+  const posterRef = useRef<HTMLDivElement>(null);
 
   const handleCitySelect = (city: string, country: string, lat: number, lon: number) => {
     setConfig((prev) => ({
@@ -97,10 +90,7 @@ export const PosterEditor = () => {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="default" className="gap-2" onClick={handleExport}>
-              <Download className="w-4 h-4" />
-              Export Poster
-            </Button>
+            <ExportDialog config={config} posterRef={posterRef} />
           </div>
         </div>
       </header>
@@ -202,7 +192,7 @@ export const PosterEditor = () => {
               transition={{ delay: 0.2 }}
               className="max-w-lg mx-auto"
             >
-              <PosterPreview config={config} />
+              <PosterPreview config={config} containerRef={posterRef} />
             </motion.div>
             
             {/* AI Prompt Input - Below the poster */}

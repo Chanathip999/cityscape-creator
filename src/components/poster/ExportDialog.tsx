@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -20,32 +20,34 @@ import {
   ASPECT_RATIOS,
 } from '@/types/poster';
 import { toast } from '@/hooks/use-toast';
+import html2canvas from 'html2canvas';
 
 interface ExportDialogProps {
   config: PosterConfig;
-  canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  posterRef: React.RefObject<HTMLDivElement>;
 }
 
 // Base width for Full HD export
 const BASE_EXPORT_WIDTH = 1920;
 
-export const ExportDialog = ({ config, canvasRef }: ExportDialogProps) => {
+export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
   const [isExporting, setIsExporting] = useState(false);
   const [format, setFormat] = useState<ExportFormat>('png');
   const [resolution, setResolution] = useState<ExportResolution>('4k');
   const [open, setOpen] = useState(false);
 
-  const handleExport = useCallback(async () => {
-    if (isExporting) return;
+  const handleExport = async () => {
+    if (isExporting || !posterRef.current) return;
 
     setIsExporting(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      // Wait for any pending renders
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-      const canvas = canvasRef.current;
-      if (!canvas) {
-        throw new Error('Canvas not ready');
+      const element = posterRef.current;
+      if (!element) {
+        throw new Error('Poster element not found');
       }
 
       // Get aspect ratio dimensions
@@ -60,20 +62,20 @@ export const ExportDialog = ({ config, canvasRef }: ExportDialogProps) => {
       const exportWidth = BASE_EXPORT_WIDTH * multiplier;
       const exportHeight = Math.round(exportWidth * (ratioHeight / ratioWidth));
 
-      // Create high-resolution export canvas
-      const exportCanvas = document.createElement('canvas');
-      exportCanvas.width = exportWidth;
-      exportCanvas.height = exportHeight;
+      // Calculate scale factor
+      const currentWidth = element.offsetWidth;
+      const scale = exportWidth / currentWidth;
 
-      const ctx = exportCanvas.getContext('2d');
-      if (!ctx) throw new Error('Could not get canvas context');
-
-      // Enable high-quality rendering
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-
-      // Draw the original canvas scaled to export dimensions
-      ctx.drawImage(canvas, 0, 0, exportWidth, exportHeight);
+      // Use html2canvas to capture the element
+      const canvas = await html2canvas(element, {
+        scale: scale,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: null,
+        logging: false,
+        width: element.offsetWidth,
+        height: element.offsetHeight,
+      });
 
       // Get format settings
       const formatConfig = EXPORT_FORMATS.find((f) => f.id === format);
@@ -84,7 +86,7 @@ export const ExportDialog = ({ config, canvasRef }: ExportDialogProps) => {
       const link = document.createElement('a');
       const fileName = `${config.city.toLowerCase().replace(/\s+/g, '-')}-${config.aspectRatio.replace(':', 'x')}-${resolution}`;
       link.download = `${fileName}.${format}`;
-      link.href = exportCanvas.toDataURL(mimeType, quality);
+      link.href = canvas.toDataURL(mimeType, quality);
       link.click();
 
       toast({
@@ -103,7 +105,7 @@ export const ExportDialog = ({ config, canvasRef }: ExportDialogProps) => {
     } finally {
       setIsExporting(false);
     }
-  }, [config, format, resolution, isExporting, canvasRef]);
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
