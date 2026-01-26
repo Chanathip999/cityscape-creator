@@ -210,30 +210,22 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
 
     const bounds = getCropLimits();
 
-    // Background
+    // =========================================
+    // Z-ORDER (from maptoposter Python script):
+    // z=0  Background color
+    // z=1  Water (blue polygons)
+    // z=2  Parks (green polygons)
+    // z=2.5 Railways
+    // z=3  Roads (via ox.plot_graph)
+    // z=10 Gradient fades (top & bottom)
+    // z=11 Text labels (city, country, coords)
+    // =========================================
+
+    // z=0: Background
     ctx.fillStyle = theme.bg;
     ctx.fillRect(0, 0, width, height);
 
-    // Layer 1: Draw parks (if available)
-    if (parks && parks.length > 0) {
-      ctx.fillStyle = theme.parks;
-      for (const polygon of parks) {
-        if (polygon.length < 3) continue;
-        
-        ctx.beginPath();
-        const start = toCanvasCoords(polygon[0][0], polygon[0][1], width, height, bounds);
-        ctx.moveTo(start.x, start.y);
-        
-        for (let i = 1; i < polygon.length; i++) {
-          const point = toCanvasCoords(polygon[i][0], polygon[i][1], width, height, bounds);
-          ctx.lineTo(point.x, point.y);
-        }
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
-
-    // Layer 2: Draw water (if available)
+    // z=1: Draw water first (below parks)
     if (water && water.length > 0) {
       ctx.fillStyle = theme.water;
       for (const polygon of water) {
@@ -252,7 +244,26 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       }
     }
 
-    // Layer 2.5: Draw railways
+    // z=2: Draw parks (above water)
+    if (parks && parks.length > 0) {
+      ctx.fillStyle = theme.parks;
+      for (const polygon of parks) {
+        if (polygon.length < 3) continue;
+        
+        ctx.beginPath();
+        const start = toCanvasCoords(polygon[0][0], polygon[0][1], width, height, bounds);
+        ctx.moveTo(start.x, start.y);
+        
+        for (let i = 1; i < polygon.length; i++) {
+          const point = toCanvasCoords(polygon[i][0], polygon[i][1], width, height, bounds);
+          ctx.lineTo(point.x, point.y);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // z=2.5: Draw railways (between parks and roads)
     if (railways && railways.length > 0) {
       const railwayColor = theme.railway || theme.text;
       const railwayWidth = Math.max(0.5, RAILWAY_WIDTH * (width / 864));
@@ -277,7 +288,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       }
     }
 
-    // Layer 3: Draw streets (residential first, motorway last)
+    // z=3: Draw streets (service first → motorway last for proper layering)
     const streetOrder = ['service', 'residential', 'tertiary', 'secondary', 'primary', 'motorway'];
 
     for (const streetType of streetOrder) {
@@ -307,7 +318,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       }
     }
 
-    // Layer 4: Gradient fades
+    // z=10: Gradient fades (top & bottom)
     const fadeHeight = height * 0.25;
     
     const topGradient = ctx.createLinearGradient(0, 0, 0, fadeHeight);
@@ -322,7 +333,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     ctx.fillStyle = bottomGradient;
     ctx.fillRect(0, height - fadeHeight, width, fadeHeight);
 
-    // Layer 5: Typography
+    // z=11: Typography (text labels)
     const textColor = config.customTextColor || theme.text;
     const fontStack = FONT_STACKS[fontFamily];
     const scaledFonts = getScaledFontSizes(height, fontSize);
