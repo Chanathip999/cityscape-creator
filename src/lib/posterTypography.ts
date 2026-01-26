@@ -62,10 +62,10 @@ export const TRACKING_CLASSES = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const TEXT_POSITIONS = {
-  title: 0.86,           // City name: Python y=0.14
+  title: 0.84,           // City name: Python y=0.14 → adjusted to prevent overlap
   decorativeLine: 0.875, // Decorative line: Python y=0.125
-  subtitle: 0.90,        // Country name: Python y=0.10
-  coords: 0.93,          // Coordinates: Python y=0.07
+  subtitle: 0.905,       // Country name: Python y=0.10 → adjusted
+  coords: 0.945,         // Coordinates: Python y=0.07 → adjusted
   attribution: 0.98,     // Attribution: Python y=0.02
 } as const;
 
