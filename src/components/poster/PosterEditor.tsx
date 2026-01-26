@@ -5,7 +5,7 @@ import { PosterPreview } from './PosterPreview';
 import { CanvasPosterPreview } from './CanvasPosterPreview';
 import { ThemeSelector } from './ThemeSelector';
 import { CitySearch } from './CitySearch';
-import { DistanceSlider } from './DistanceSlider';
+import { ZoomControls } from './ZoomControls';
 import { AIPromptInput } from './AIPromptInput';
 import { FontSelector } from './FontSelector';
 import { AspectRatioSelector } from './AspectRatioSelector';
@@ -184,12 +184,6 @@ export const PosterEditor = () => {
                 onAspectRatioChange={handleAspectRatioChange}
               />
 
-              {/* Distance Slider */}
-              <DistanceSlider
-                distance={config.distance}
-                onDistanceChange={handleDistanceChange}
-              />
-
               <p className="text-xs text-muted-foreground">
                 💡 {config.renderMode === 'vector' 
                   ? 'Vektor-Modus: Nur Straßen werden als scharfe Linien gezeichnet.'
@@ -204,13 +198,19 @@ export const PosterEditor = () => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.2 }}
-              className="max-w-lg mx-auto"
+              className="max-w-lg mx-auto relative"
             >
               {config.renderMode === 'vector' ? (
                 <CanvasPosterPreview config={config} containerRef={posterRef} />
               ) : (
                 <PosterPreview config={config} containerRef={posterRef} />
               )}
+              
+              {/* Zoom Controls overlay */}
+              <ZoomControls
+                distance={config.distance}
+                onDistanceChange={handleDistanceChange}
+              />
             </motion.div>
             
             {/* AI Prompt Input - Below the poster */}
