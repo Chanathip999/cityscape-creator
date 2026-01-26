@@ -25,65 +25,95 @@ import html2canvas from 'html2canvas';
 interface ExportDialogProps {
   config: PosterConfig;
   posterRef: React.RefObject<HTMLDivElement>;
+  canvasRef?: React.RefObject<HTMLCanvasElement>;
 }
 
 // Base width for Full HD export
 const BASE_EXPORT_WIDTH = 1920;
 
-export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
+export const ExportDialog = ({ config, posterRef, canvasRef }: ExportDialogProps) => {
   const [isExporting, setIsExporting] = useState(false);
   const [format, setFormat] = useState<ExportFormat>('png');
   const [resolution, setResolution] = useState<ExportResolution>('4k');
   const [open, setOpen] = useState(false);
 
   const handleExport = async () => {
-    if (isExporting || !posterRef.current) return;
+    if (isExporting) return;
 
     setIsExporting(true);
 
     try {
-      // Wait for any pending renders and map tiles to load
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Wait for canvas to be ready
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-      const element = posterRef.current;
-      if (!element) {
-        throw new Error('Poster element not found');
-      }
+      let canvas: HTMLCanvasElement;
+      let exportWidth: number;
+      let exportHeight: number;
 
-      // Get aspect ratio dimensions
-      const aspectRatioConfig = ASPECT_RATIOS.find((r) => r.id === config.aspectRatio);
-      const ratioWidth = aspectRatioConfig?.width || 3;
-      const ratioHeight = aspectRatioConfig?.height || 4;
-
-      // Calculate export dimensions based on resolution
+      // Get resolution config
       const resolutionConfig = EXPORT_RESOLUTIONS.find((r) => r.id === resolution);
       const multiplier = resolutionConfig?.multiplier || 1;
 
-      const exportWidth = BASE_EXPORT_WIDTH * multiplier;
-      const exportHeight = Math.round(exportWidth * (ratioHeight / ratioWidth));
+      // Prefer high-res canvas if available (vector-based, 300 DPI)
+      if (canvasRef?.current) {
+        // Use the high-resolution CanvasPosterPreview canvas directly
+        const sourceCanvas = canvasRef.current;
+        
+        // The canvas is already at 300 DPI, so we export it directly
+        // For different resolutions, we scale appropriately
+        const targetWidth = BASE_EXPORT_WIDTH * multiplier;
+        const aspectRatio = sourceCanvas.height / sourceCanvas.width;
+        const targetHeight = Math.round(targetWidth * aspectRatio);
 
-      // Calculate scale factor
-      const currentWidth = element.offsetWidth;
-      const scale = exportWidth / currentWidth;
+        // Create a new canvas at target resolution
+        canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Could not get canvas context');
 
-      // Use html2canvas to capture the element with high quality settings
-      const canvas = await html2canvas(element, {
-        scale: scale,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: null,
-        logging: false,
-        width: element.offsetWidth,
-        height: element.offsetHeight,
-        imageTimeout: 15000,
-        onclone: (_clonedDoc, clonedElement) => {
-          // Ensure map tiles are fully visible in clone
-          const mapContainer = clonedElement.querySelector('.leaflet-container');
-          if (mapContainer) {
-            (mapContainer as HTMLElement).style.visibility = 'visible';
-          }
-        },
-      });
+        // Enable high-quality scaling
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        // Draw the source canvas scaled to target size
+        ctx.drawImage(sourceCanvas, 0, 0, targetWidth, targetHeight);
+
+        exportWidth = targetWidth;
+        exportHeight = targetHeight;
+      } else if (posterRef.current) {
+        // Fallback to html2canvas for Leaflet-based preview
+        const element = posterRef.current;
+        
+        const aspectRatioConfig = ASPECT_RATIOS.find((r) => r.id === config.aspectRatio);
+        const ratioWidth = aspectRatioConfig?.width || 3;
+        const ratioHeight = aspectRatioConfig?.height || 4;
+
+        exportWidth = BASE_EXPORT_WIDTH * multiplier;
+        exportHeight = Math.round(exportWidth * (ratioHeight / ratioWidth));
+
+        const currentWidth = element.offsetWidth;
+        const scale = exportWidth / currentWidth;
+
+        canvas = await html2canvas(element, {
+          scale: scale,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: null,
+          logging: false,
+          width: element.offsetWidth,
+          height: element.offsetHeight,
+          imageTimeout: 15000,
+          onclone: (_clonedDoc, clonedElement) => {
+            const mapContainer = clonedElement.querySelector('.leaflet-container');
+            if (mapContainer) {
+              (mapContainer as HTMLElement).style.visibility = 'visible';
+            }
+          },
+        });
+      } else {
+        throw new Error('No poster element available for export');
+      }
 
       // Get format settings
       const formatConfig = EXPORT_FORMATS.find((f) => f.id === format);
