@@ -48,9 +48,6 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
     setIsExporting(true);
 
     try {
-      // Wait for map tiles to fully load
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-
       const element = posterRef.current;
       if (!element) {
         throw new Error('Poster element not found');
@@ -68,58 +65,81 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
       const exportWidth = BASE_EXPORT_WIDTH * multiplier;
       const exportHeight = Math.round(exportWidth * (ratioHeight / ratioWidth));
 
-      // Calculate scale factor.
-      // IMPORTANT: Too-high scale can exceed browser canvas limits, producing gray/blank output.
-      const currentWidth = element.offsetWidth;
-      const baseScale = exportWidth / currentWidth;
-      const requestedExtraSharpness = 4; // user asked for higher capture resolution
+      let finalCanvas: HTMLCanvasElement;
 
-      // Predict the internal raster size that html2canvas will try to render.
-      const predictedW = element.offsetWidth * baseScale * requestedExtraSharpness;
-      const predictedH = element.offsetHeight * baseScale * requestedExtraSharpness;
-
-      // Cap by max dimension and max total pixels.
-      const capByDim = Math.min(
-        MAX_CANVAS_DIMENSION / Math.max(1, predictedW),
-        MAX_CANVAS_DIMENSION / Math.max(1, predictedH)
-      );
-      const capByPixels = Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, predictedW * predictedH));
-      const safetyCap = Math.min(1, capByDim, capByPixels);
-
-      const scale = baseScale * requestedExtraSharpness * safetyCap;
-
-      // Use html2canvas to capture the element with maximum quality
-      const canvas = await html2canvas(element, {
-        scale: scale,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: null,
-        logging: false,
-        width: element.offsetWidth,
-        height: element.offsetHeight,
-        imageTimeout: 60000, // 60s timeout for tile loading
-        onclone: (_clonedDoc, clonedElement) => {
-          // Ensure map tiles are fully visible in clone
-          const mapContainer = clonedElement.querySelector('.leaflet-container');
-          if (mapContainer) {
-            (mapContainer as HTMLElement).style.visibility = 'visible';
-          }
-        },
-      });
-
-      // Create final canvas at target resolution
-      const finalCanvas = document.createElement('canvas');
-      finalCanvas.width = exportWidth;
-      finalCanvas.height = exportHeight;
-      const ctx = finalCanvas.getContext('2d');
-      if (!ctx) throw new Error('Could not get canvas context');
-
-      // Enable high-quality scaling
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
+      // Check if we're in vector mode - look for a canvas element
+      const existingCanvas = element.querySelector('canvas');
       
-      // Draw scaled canvas to final size
-      ctx.drawImage(canvas, 0, 0, exportWidth, exportHeight);
+      if (config.renderMode === 'vector' && existingCanvas) {
+        // Vector mode: Use the canvas directly for sharp export
+        const sourceCanvas = existingCanvas as HTMLCanvasElement;
+        
+        // Create final canvas at target resolution
+        finalCanvas = document.createElement('canvas');
+        finalCanvas.width = exportWidth;
+        finalCanvas.height = exportHeight;
+        const ctx = finalCanvas.getContext('2d');
+        if (!ctx) throw new Error('Could not get canvas context');
+
+        // Enable high-quality scaling
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        // Draw source canvas to final size
+        ctx.drawImage(sourceCanvas, 0, 0, exportWidth, exportHeight);
+      } else {
+        // Tile mode: Use html2canvas
+        // Wait for map tiles to fully load
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+
+        // Calculate scale factor.
+        const currentWidth = element.offsetWidth;
+        const baseScale = exportWidth / currentWidth;
+        const requestedExtraSharpness = 4;
+
+        // Predict the internal raster size
+        const predictedW = element.offsetWidth * baseScale * requestedExtraSharpness;
+        const predictedH = element.offsetHeight * baseScale * requestedExtraSharpness;
+
+        // Cap by max dimension and max total pixels.
+        const capByDim = Math.min(
+          MAX_CANVAS_DIMENSION / Math.max(1, predictedW),
+          MAX_CANVAS_DIMENSION / Math.max(1, predictedH)
+        );
+        const capByPixels = Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, predictedW * predictedH));
+        const safetyCap = Math.min(1, capByDim, capByPixels);
+
+        const scale = baseScale * requestedExtraSharpness * safetyCap;
+
+        // Use html2canvas to capture the element
+        const canvas = await html2canvas(element, {
+          scale: scale,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: null,
+          logging: false,
+          width: element.offsetWidth,
+          height: element.offsetHeight,
+          imageTimeout: 60000,
+          onclone: (_clonedDoc, clonedElement) => {
+            const mapContainer = clonedElement.querySelector('.leaflet-container');
+            if (mapContainer) {
+              (mapContainer as HTMLElement).style.visibility = 'visible';
+            }
+          },
+        });
+
+        // Create final canvas at target resolution
+        finalCanvas = document.createElement('canvas');
+        finalCanvas.width = exportWidth;
+        finalCanvas.height = exportHeight;
+        const ctx = finalCanvas.getContext('2d');
+        if (!ctx) throw new Error('Could not get canvas context');
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(canvas, 0, 0, exportWidth, exportHeight);
+      }
 
       // Get format settings
       const formatConfig = EXPORT_FORMATS.find((f) => f.id === format);
@@ -150,7 +170,6 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
       setIsExporting(false);
     }
   };
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -236,9 +255,11 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
             </RadioGroup>
           </div>
 
-          {/* Info about map tiles */}
+          {/* Info about render mode */}
           <p className="text-xs text-muted-foreground">
-            💡 Hinweis: Die Karten-Tiles sind Rasterbilder. Für beste Qualität Full HD oder 4K wählen.
+            💡 {config.renderMode === 'vector' 
+              ? 'Vektor-Modus: Straßen werden als scharfe Linien exportiert.'
+              : 'Tile-Modus: Karten-Tiles werden gerastert. Für beste Qualität Full HD oder 4K wählen.'}
           </p>
 
           {/* Export Button */}

@@ -5,6 +5,7 @@ import { useStreetData } from '@/hooks/useStreetData';
 interface CanvasPosterPreviewProps {
   config: PosterConfig;
   onExportReady?: (canvas: HTMLCanvasElement) => void;
+  containerRef?: React.RefObject<HTMLDivElement>;
 }
 
 // Street widths scaled for high-resolution rendering
@@ -68,9 +69,10 @@ const createGradientFade = (
   ctx.fillRect(0, location === 'top' ? 0 : height * 0.75, width, fadeHeight);
 };
 
-export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPreviewProps) => {
+export const CanvasPosterPreview = ({ config, onExportReady, containerRef: externalContainerRef }: CanvasPosterPreviewProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const internalContainerRef = useRef<HTMLDivElement>(null);
+  const containerRef = externalContainerRef || internalContainerRef;
 
   const {
     city,

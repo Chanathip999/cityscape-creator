@@ -1,13 +1,15 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, FontFamily, FontSize, AspectRatioId } from '@/types/poster';
+import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, FontFamily, FontSize, AspectRatioId, RenderMode } from '@/types/poster';
 import { PosterPreview } from './PosterPreview';
+import { CanvasPosterPreview } from './CanvasPosterPreview';
 import { ThemeSelector } from './ThemeSelector';
 import { CitySearch } from './CitySearch';
 import { DistanceSlider } from './DistanceSlider';
 import { AIPromptInput } from './AIPromptInput';
 import { FontSelector } from './FontSelector';
 import { AspectRatioSelector } from './AspectRatioSelector';
+import { RenderModeSelector } from './RenderModeSelector';
 import { ExportDialog } from './ExportDialog';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
@@ -57,6 +59,10 @@ export const PosterEditor = () => {
 
   const handleAspectRatioChange = (aspectRatio: AspectRatioId) => {
     setConfig((prev) => ({ ...prev, aspectRatio }));
+  };
+
+  const handleRenderModeChange = (renderMode: RenderMode) => {
+    setConfig((prev) => ({ ...prev, renderMode }));
   };
 
   const handleConfigUpdate = (updates: Partial<PosterConfig>) => {
@@ -166,6 +172,12 @@ export const PosterEditor = () => {
 
               <Separator />
 
+              {/* Render Mode Selector */}
+              <RenderModeSelector
+                renderMode={config.renderMode}
+                onRenderModeChange={handleRenderModeChange}
+              />
+
               {/* Aspect Ratio Selector */}
               <AspectRatioSelector
                 aspectRatio={config.aspectRatio}
@@ -179,7 +191,9 @@ export const PosterEditor = () => {
               />
 
               <p className="text-xs text-muted-foreground">
-                💡 Die Poster werden mit Karten-Tiles von OpenStreetMap generiert.
+                💡 {config.renderMode === 'vector' 
+                  ? 'Vektor-Modus: Nur Straßen werden als scharfe Linien gezeichnet.'
+                  : 'Tile-Modus: Karten-Tiles von OpenStreetMap mit Details.'}
               </p>
             </motion.div>
           </div>
@@ -192,7 +206,11 @@ export const PosterEditor = () => {
               transition={{ delay: 0.2 }}
               className="max-w-lg mx-auto"
             >
-              <PosterPreview config={config} containerRef={posterRef} />
+              {config.renderMode === 'vector' ? (
+                <CanvasPosterPreview config={config} containerRef={posterRef} />
+              ) : (
+                <PosterPreview config={config} containerRef={posterRef} />
+              )}
             </motion.div>
             
             {/* AI Prompt Input - Below the poster */}

@@ -20,6 +20,7 @@ export type PosterOrientation = 'vertical' | 'horizontal';
 export type AspectRatioId = '1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '9:16' | '16:9' | '6:19' | '19:6';
 export type ExportFormat = 'png' | 'jpeg';
 export type ExportResolution = 'fullhd' | '4k' | '8k';
+export type RenderMode = 'tiles' | 'vector';
 
 export interface AspectRatio {
   id: string;
@@ -51,6 +52,7 @@ export interface PosterConfig {
   aspectRatio: AspectRatioId;
   customTextColor?: string;
   coloredStreets?: boolean;
+  renderMode: RenderMode;
 }
 
 export const ASPECT_RATIOS: AspectRatio[] = [
@@ -258,6 +260,11 @@ export const FONT_SIZES: { id: FontSize; name: string }[] = [
   { id: 'large', name: 'Groß' },
 ];
 
+export const RENDER_MODES: { id: RenderMode; name: string; description: string }[] = [
+  { id: 'tiles', name: 'Detailliert', description: 'Karten-Tiles mit Gebäuden, Parks & Wasser' },
+  { id: 'vector', name: 'Minimalistisch', description: 'Nur Straßen als Vektorgrafik' },
+];
+
 export const DEFAULT_CONFIG: PosterConfig = {
   city: 'Berlin',
   country: 'Germany',
@@ -272,4 +279,5 @@ export const DEFAULT_CONFIG: PosterConfig = {
   orientation: 'vertical',
   aspectRatio: '3:4',
   coloredStreets: false,
+  renderMode: 'vector',
 };
