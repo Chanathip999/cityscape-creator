@@ -290,14 +290,16 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     createGradientFade(ctx, theme.gradientColor, 'top', width, height);
     createGradientFade(ctx, theme.gradientColor, 'bottom', width, height);
 
-    // Layer 5: Typography
+    // Layer 5: Typography - much larger fonts to match tile mode
     const textColor = config.customTextColor || theme.text;
-    const scaleFactor = width / (BASE_SIZE * DPI);
+    
+    // Scale fonts relative to canvas height for consistent appearance
+    const fontScale = height / 1000;
 
-    const BASE_MAIN = 60;
-    const BASE_SUB = 22;
-    const BASE_COORDS = 14;
-    const BASE_ATTR = 8;
+    const BASE_MAIN = 72;
+    const BASE_SUB = 28;
+    const BASE_COORDS = 18;
+    const BASE_ATTR = 10;
 
     const fontSizeMultiplier = fontSize === 'small' ? 0.8 : fontSize === 'large' ? 1.2 : 1;
     const fontFamilyCSS = getFontFamily();
@@ -306,42 +308,41 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // City name - dynamically adjust based on length (matching Python script)
-    const mainFontSize = BASE_MAIN * scaleFactor * fontSizeMultiplier;
+    // City name - dynamically adjust based on length
+    const mainFontSize = BASE_MAIN * fontScale * fontSizeMultiplier;
     const cityCharCount = city.length;
     let adjustedMainFontSize = mainFontSize;
     if (cityCharCount > 10) {
       const lengthFactor = 10 / cityCharCount;
-      adjustedMainFontSize = Math.max(mainFontSize * lengthFactor, 10 * scaleFactor);
+      adjustedMainFontSize = Math.max(mainFontSize * lengthFactor, 16 * fontScale);
     }
 
     ctx.font = `bold ${adjustedMainFontSize}px ${fontFamilyCSS}`;
     const cityText = spacedText(city);
-    ctx.fillText(cityText, width / 2, height * 0.86);
+    ctx.fillText(cityText, width / 2, height * 0.84);
 
-    // Separator line (matching Python script)
+    // Separator line
     ctx.strokeStyle = textColor;
-    ctx.lineWidth = 1 * scaleFactor;
+    ctx.lineWidth = 2 * fontScale;
     ctx.beginPath();
-    ctx.moveTo(width * 0.4, height * 0.875);
-    ctx.lineTo(width * 0.6, height * 0.875);
+    ctx.moveTo(width * 0.35, height * 0.86);
+    ctx.lineTo(width * 0.65, height * 0.86);
     ctx.stroke();
 
     // Country
-    const subFontSize = BASE_SUB * scaleFactor * fontSizeMultiplier;
+    const subFontSize = BASE_SUB * fontScale * fontSizeMultiplier;
     ctx.font = `300 ${subFontSize}px ${fontFamilyCSS}`;
-    ctx.fillText((countryLabel || country).toUpperCase(), width / 2, height * 0.90);
+    ctx.fillText((countryLabel || country).toUpperCase(), width / 2, height * 0.895);
 
     // Coordinates
-    const coordFontSize = BASE_COORDS * scaleFactor * fontSizeMultiplier;
+    const coordFontSize = BASE_COORDS * fontScale * fontSizeMultiplier;
     ctx.globalAlpha = 0.7;
     ctx.font = `${coordFontSize}px ${fontFamilyCSS}`;
-    ctx.fillText(formatCoordinates(latitude, longitude), width / 2, height * 0.93);
+    ctx.fillText(formatCoordinates(latitude, longitude), width / 2, height * 0.925);
     ctx.globalAlpha = 1;
 
-
     // Attribution
-    const attrFontSize = BASE_ATTR * scaleFactor;
+    const attrFontSize = BASE_ATTR * fontScale;
     ctx.globalAlpha = 0.5;
     ctx.font = `${attrFontSize}px ${fontFamilyCSS}`;
     ctx.textAlign = 'right';
@@ -420,7 +421,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       className={`relative w-full ${getAspectClass()} rounded-lg shadow-2xl overflow-hidden`}
       style={{ backgroundColor: theme.bg }}
     >
-      <canvas ref={canvasRef} className="w-full h-full object-contain" />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ objectFit: 'fill' }} />
 
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm">
