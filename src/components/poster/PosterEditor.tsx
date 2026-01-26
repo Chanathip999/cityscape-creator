@@ -1,27 +1,30 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, FontFamily, FontSize, AspectRatioId } from '@/types/poster';
-import { CanvasPosterPreview } from './CanvasPosterPreview';
+import { PosterPreview } from './PosterPreview';
 import { ThemeSelector } from './ThemeSelector';
 import { CitySearch } from './CitySearch';
 import { DistanceSlider } from './DistanceSlider';
 import { AIPromptInput } from './AIPromptInput';
 import { FontSelector } from './FontSelector';
 import { AspectRatioSelector } from './AspectRatioSelector';
-import { ExportDialog } from './ExportDialog';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Map } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Map, Download } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { toast } from '@/hooks/use-toast';
 
 export const PosterEditor = () => {
   const [config, setConfig] = useState<PosterConfig>(DEFAULT_CONFIG);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const handleExportReady = useCallback((canvas: HTMLCanvasElement) => {
-    canvasRef.current = canvas;
-  }, []);
+  const handleExport = () => {
+    toast({
+      title: 'Export',
+      description: 'Export-Funktion für Leaflet-Vorschau nicht verfügbar.',
+    });
+  };
 
   const handleCitySelect = (city: string, country: string, lat: number, lon: number) => {
     setConfig((prev) => ({
@@ -94,7 +97,10 @@ export const PosterEditor = () => {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <ExportDialog config={config} canvasRef={canvasRef} />
+            <Button variant="default" className="gap-2" onClick={handleExport}>
+              <Download className="w-4 h-4" />
+              Export Poster
+            </Button>
           </div>
         </div>
       </header>
@@ -183,12 +189,12 @@ export const PosterEditor = () => {
               />
 
               <p className="text-xs text-muted-foreground">
-                💡 Die Poster werden mit Vektor-Straßendaten von OpenStreetMap generiert.
+                💡 Die Poster werden mit Karten-Tiles von OpenStreetMap generiert.
               </p>
             </motion.div>
           </div>
 
-          {/* Right: Canvas Poster Preview */}
+          {/* Right: Poster Preview */}
           <div className="lg:sticky lg:top-24 h-fit space-y-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -196,10 +202,7 @@ export const PosterEditor = () => {
               transition={{ delay: 0.2 }}
               className="max-w-lg mx-auto"
             >
-              <CanvasPosterPreview 
-                config={config} 
-                onExportReady={handleExportReady}
-              />
+              <PosterPreview config={config} />
             </motion.div>
             
             {/* AI Prompt Input - Below the poster */}
