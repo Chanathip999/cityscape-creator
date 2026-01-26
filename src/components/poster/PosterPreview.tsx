@@ -259,7 +259,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false, c
   return (
     <div
       ref={containerRef}
-      className={`relative w-full ${getAspectClass()} rounded-lg shadow-2xl overflow-hidden`}
+      className={`relative w-full ${getAspectClass()} overflow-hidden`}
       style={{ backgroundColor: theme.bg }}
     >
       {/* Map layer */}
