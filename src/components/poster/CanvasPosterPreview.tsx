@@ -8,7 +8,7 @@
  * to ensure visual parity with the reference output.
  */
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { PosterConfig, ASPECT_RATIOS } from '@/types/poster';
 import { useStreetData } from '@/hooks/useStreetData';
 import {
@@ -32,46 +32,47 @@ interface CanvasPosterPreviewProps {
  * Street widths from maptoposter Python script get_edge_widths_by_type()
  * https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py#L217-L244
  * 
- * # In get_edge_colors_by_type() and get_edge_widths_by_type():
- * motorway, motorway_link     → Thickest (1.2), darkest
+ * These values match the original Python script EXACTLY for visual parity.
+ * motorway, motorway_link     → Thickest (1.2)
  * trunk, primary              → Thick (1.0)
  * secondary                   → Medium (0.8)
  * tertiary                    → Thin (0.6)
- * residential, living_street  → Thinnest (0.4), lightest
- * 
- * We multiply by a scale factor for canvas visibility
+ * residential, living_street  → Thinnest (0.4)
  */
-// Street widths - multiplied by 5 for better visibility matching maptoposter output
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 6.0,       // Python 1.2 * 5 for visibility
-  motorway_link: 5.0,  // Python 1.0 * 5
-  trunk: 5.0,          // Python 1.0 * 5
-  trunk_link: 4.5,     // Python 0.9 * 5
-  primary: 5.0,        // Python 1.0 * 5
-  primary_link: 4.5,   // Python 0.9 * 5
-  secondary: 4.0,      // Python 0.8 * 5
-  secondary_link: 3.5, // Python 0.7 * 5
-  tertiary: 3.0,       // Python 0.6 * 5
-  tertiary_link: 2.5,  // Python 0.5 * 5
-  residential: 2.0,    // Python 0.4 * 5
-  living_street: 2.0,  // Python 0.4 * 5
-  unclassified: 2.0,   // Python 0.4 * 5
-  service: 1.5,        // Python 0.3 * 5
+  motorway: 1.2,
+  motorway_link: 1.0,
+  trunk: 1.0,
+  trunk_link: 0.9,
+  primary: 1.0,
+  primary_link: 0.9,
+  secondary: 0.8,
+  secondary_link: 0.7,
+  tertiary: 0.6,
+  tertiary_link: 0.5,
+  residential: 0.4,
+  living_street: 0.4,
+  unclassified: 0.4,
+  service: 0.3,
 };
 
 // Railway width (z-order 2.5 in Python, between parks and roads)
-const RAILWAY_WIDTH = 2.5; // Python uses 0.5, we multiply for visibility
+const RAILWAY_WIDTH = 0.5;
 
 // DPI and base size for high resolution output
-// Reference: https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py
-// Python uses 300 DPI for export (line 536)
 const DPI = 300;
-const BASE_SIZE = 12; // Python uses 12 inches (line 272)
+const BASE_SIZE = 12; // Python uses 12 inches
 
 export const CanvasPosterPreview = ({ config, onExportReady, containerRef: externalContainerRef }: CanvasPosterPreviewProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const internalContainerRef = useRef<HTMLDivElement>(null);
   const containerRef = externalContainerRef || internalContainerRef;
+
+  // Pan/Zoom state
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [isPanning, setIsPanning] = useState(false);
+  const lastMousePos = useRef({ x: 0, y: 0 });
 
   const {
     city,
@@ -100,11 +101,11 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     ? Math.round(BASE_SIZE * DPI / aspectValue)
     : BASE_SIZE * DPI;
 
-  // Calculate compensated distance for data fetching (matching Python script formula)
+  // Calculate compensated distance for data fetching
   const compensatedDistance = Math.ceil(
     distance * (Math.max(ratioHeight, ratioWidth) / Math.min(ratioHeight, ratioWidth)) / 4
   );
-  const fetchDistance = Math.max(distance, compensatedDistance) * 1.5;
+  const fetchDistance = Math.max(distance, compensatedDistance) * 2; // Fetch more for pan
 
   const { streets, railways, water, parks, isLoading, error } = useStreetData({
     latitude,
@@ -112,6 +113,12 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     distance: fetchDistance,
     enabled: true,
   });
+
+  // Reset pan/zoom when location or aspect ratio changes
+  useEffect(() => {
+    setPanOffset({ x: 0, y: 0 });
+    setZoom(1);
+  }, [latitude, longitude, aspectRatio]);
 
   const getStreetColor = useCallback(
     (type: string): string => {
@@ -133,38 +140,42 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   );
 
   const getStreetWidth = useCallback((type: string, canvasWidth: number): number => {
-    // Street widths are pre-multiplied for visibility (matching maptoposter output)
-    // Scale by canvas size relative to 12-inch base (3600px at 300 DPI)
-    const baseWidth = STREET_WIDTHS[type] || 2.0;
-    const scaleFactor = canvasWidth / 3600;
-    // Ensure minimum visibility of 1px for detailed streets
-    return Math.max(1, baseWidth * scaleFactor * 2.5);
+    // Scale factor: Python uses 12 inches at 72 DPI = 864px base
+    // We scale proportionally to match the reference output
+    const baseWidth = STREET_WIDTHS[type] || 0.4;
+    const scaleFactor = canvasWidth / 864;
+    // Minimum 0.5px for visibility, max 8px
+    return Math.max(0.5, Math.min(baseWidth * scaleFactor, 8));
   }, []);
 
   const getCropLimits = useCallback(() => {
     const metersPerDegreeLat = 111320;
     const metersPerDegreeLng = 111320 * Math.cos((latitude * Math.PI) / 180);
 
-    let halfX = distance / metersPerDegreeLng;
-    let halfY = distance / metersPerDegreeLat;
+    // Apply zoom to effective distance
+    const effectiveDistance = distance / zoom;
 
-    // Adjust bounds based on aspect ratio (matching Python script logic)
+    let halfX = effectiveDistance / metersPerDegreeLng;
+    let halfY = effectiveDistance / metersPerDegreeLat;
+
+    // Adjust bounds based on aspect ratio
     if (aspectValue > 1) {
-      // Landscape: reduce height
       halfY = halfX / aspectValue;
     } else if (aspectValue < 1) {
-      // Portrait: reduce width
       halfX = halfY * aspectValue;
     }
-    // Square (1:1): keep equal
+
+    // Apply pan offset (convert from pixel offset to degree offset)
+    const panDegreesX = (panOffset.x / canvasWidth) * (halfX * 2);
+    const panDegreesY = (panOffset.y / canvasHeight) * (halfY * 2);
 
     return {
-      minLng: longitude - halfX,
-      maxLng: longitude + halfX,
-      minLat: latitude - halfY,
-      maxLat: latitude + halfY,
+      minLng: longitude - halfX - panDegreesX,
+      maxLng: longitude + halfX - panDegreesX,
+      minLat: latitude - halfY + panDegreesY,
+      maxLat: latitude + halfY + panDegreesY,
     };
-  }, [latitude, longitude, distance, aspectValue]);
+  }, [latitude, longitude, distance, aspectValue, zoom, panOffset, canvasWidth, canvasHeight]);
 
   const toCanvasCoords = useCallback(
     (
@@ -241,11 +252,10 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       }
     }
 
-    // Layer 2.5: Draw railways (z-order 2.5 in maptoposter - between parks and roads)
-    // https://github.com/Chanathip999/maptoposter - railways.plot with linewidth=0.5
+    // Layer 2.5: Draw railways
     if (railways && railways.length > 0) {
       const railwayColor = theme.railway || theme.text;
-      const railwayWidth = RAILWAY_WIDTH * (width / 3600) * 2;
+      const railwayWidth = Math.max(0.5, RAILWAY_WIDTH * (width / 864));
       
       ctx.strokeStyle = railwayColor;
       ctx.lineWidth = railwayWidth;
@@ -267,7 +277,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       }
     }
 
-    // Layer 3: Draw streets in order (residential first, motorway last for proper layering)
+    // Layer 3: Draw streets (residential first, motorway last)
     const streetOrder = ['service', 'residential', 'tertiary', 'secondary', 'primary', 'motorway'];
 
     for (const streetType of streetOrder) {
@@ -297,26 +307,22 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       }
     }
 
-    // Layer 4: Gradient fades (matching Python maptoposter create_gradient_fade)
-    // Top fade: y=0.75 to 1.0 in Python → y=0 to 0.25 in canvas
-    // Bottom fade: y=0 to 0.25 in Python → y=0.75 to 1.0 in canvas
+    // Layer 4: Gradient fades
     const fadeHeight = height * 0.25;
     
-    // Top gradient
     const topGradient = ctx.createLinearGradient(0, 0, 0, fadeHeight);
     topGradient.addColorStop(0, theme.bg);
     topGradient.addColorStop(1, 'transparent');
     ctx.fillStyle = topGradient;
     ctx.fillRect(0, 0, width, fadeHeight);
     
-    // Bottom gradient
     const bottomGradient = ctx.createLinearGradient(0, height - fadeHeight, 0, height);
     bottomGradient.addColorStop(0, 'transparent');
     bottomGradient.addColorStop(1, theme.bg);
     ctx.fillStyle = bottomGradient;
     ctx.fillRect(0, height - fadeHeight, width, fadeHeight);
 
-    // Layer 5: Typography - using shared config
+    // Layer 5: Typography
     const textColor = config.customTextColor || theme.text;
     const fontStack = FONT_STACKS[fontFamily];
     const scaledFonts = getScaledFontSizes(height, fontSize);
@@ -325,8 +331,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // City name - dynamically adjust based on length (Python: city_char_count > 10)
-    // https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py#L480-L492
+    // City name with dynamic size adjustment
     const cityCharCount = city.length;
     let adjustedTitleSize = scaledFonts.title;
     if (cityCharCount > 10) {
@@ -334,8 +339,6 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       adjustedTitleSize = Math.max(scaledFonts.title * lengthFactor, 20 * (height / 1000));
     }
 
-    // City text - use tracking for letter spacing (NOT extra spaces between characters)
-    // Python uses: "  ".join(list(city.upper())) - but we use CSS-style tracking instead
     const cityText = formatDisplayText(city);
     ctx.font = `${FONT_WEIGHTS.title} ${adjustedTitleSize}px ${fontStack}`;
     drawTextWithTracking(
@@ -347,11 +350,11 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       adjustedTitleSize
     );
 
-    // Decorative line between city and country (matching Python y=0.125)
+    // Decorative line
     const lineLength = width * 0.15;
-    const lineWidth = adjustedTitleSize * 0.02;
+    const decoLineWidth = adjustedTitleSize * 0.02;
     ctx.strokeStyle = textColor;
-    ctx.lineWidth = lineWidth;
+    ctx.lineWidth = decoLineWidth;
     ctx.globalAlpha = 0.6;
     ctx.beginPath();
     ctx.moveTo((width - lineLength) / 2, height * TEXT_POSITIONS.decorativeLine);
@@ -383,9 +386,6 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     );
     ctx.globalAlpha = 1;
 
-    // Attribution removed from preview per user request
-    // Only shown in final exports for legal compliance
-
     if (onExportReady) {
       onExportReady(canvas);
     }
@@ -416,52 +416,79 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     drawPoster();
   }, [drawPoster]);
 
-  useEffect(() => {
-    const handleResize = () => drawPoster();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [drawPoster]);
+  // Mouse event handlers for pan
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    setIsPanning(true);
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
+  }, []);
 
-  // Dynamic aspect ratio class
-  const getAspectClass = () => {
-    switch (aspectRatio) {
-      case '1:1':
-        return 'aspect-square';
-      case '2:3':
-        return 'aspect-[2/3]';
-      case '3:2':
-        return 'aspect-[3/2]';
-      case '3:4':
-        return 'aspect-[3/4]';
-      case '4:3':
-        return 'aspect-[4/3]';
-      case '4:5':
-        return 'aspect-[4/5]';
-      case '5:4':
-        return 'aspect-[5/4]';
-      case '9:16':
-        return 'aspect-[9/16]';
-      case '16:9':
-        return 'aspect-video';
-      case '6:19':
-        return 'aspect-[6/19]';
-      case '19:6':
-        return 'aspect-[19/6]';
-      default:
-        return 'aspect-[3/4]';
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isPanning) return;
+    
+    const dx = e.clientX - lastMousePos.current.x;
+    const dy = e.clientY - lastMousePos.current.y;
+    
+    // Scale movement by container size to canvas size ratio
+    const container = containerRef.current;
+    if (container) {
+      const scaleX = canvasWidth / container.clientWidth;
+      const scaleY = canvasHeight / container.clientHeight;
+      setPanOffset(prev => ({
+        x: prev.x + dx * scaleX,
+        y: prev.y + dy * scaleY,
+      }));
     }
+    
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
+  }, [isPanning, canvasWidth, canvasHeight, containerRef]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
+  // Wheel handler for zoom
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+    setZoom(prev => Math.max(0.5, Math.min(prev * zoomFactor, 4)));
+  }, []);
+
+  // Dynamic aspect ratio style
+  const aspectStyle = {
+    aspectRatio: `${ratioWidth} / ${ratioHeight}`,
+    backgroundColor: theme.bg,
   };
 
   return (
     <div
       ref={containerRef}
-      className={`relative w-full ${getAspectClass()} overflow-hidden`}
-      style={{ backgroundColor: theme.bg }}
+      className="relative w-full overflow-hidden cursor-grab active:cursor-grabbing"
+      style={aspectStyle}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
+      onWheel={handleWheel}
     >
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ objectFit: 'fill' }} />
+      <canvas 
+        ref={canvasRef} 
+        className="absolute inset-0 w-full h-full pointer-events-none" 
+        style={{ objectFit: 'contain' }} 
+      />
+
+      {/* Zoom indicator */}
+      {zoom !== 1 && (
+        <div className="absolute top-2 left-2 bg-background/80 backdrop-blur-sm px-2 py-1 rounded text-xs text-foreground z-30">
+          {Math.round(zoom * 100)}%
+        </div>
+      )}
 
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm">
+        <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm pointer-events-none">
           <div className="flex flex-col items-center gap-2">
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             <span className="text-sm text-muted-foreground">Lade Kartendaten...</span>
