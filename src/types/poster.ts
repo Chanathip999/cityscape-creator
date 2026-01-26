@@ -237,23 +237,23 @@ export const POSTER_THEMES: PosterTheme[] = [
     gradientColor: '#FDF5F0',
   },
   {
-    // Neon Cyberpunk theme - based on maptoposter neon_cyberpunk.json
+    // Neon Cyberpunk theme - EXACT values from maptoposter neon_cyberpunk.json
     // https://github.com/Chanathip999/maptoposter/blob/main/themes/neon_cyberpunk.json
     id: 'neon',
     name: 'Neon Cyberpunk',
-    bg: '#000000',          // Pure black background
-    text: '#00FFCC',        // Electric cyan text
-    water: '#1A1A1A',       // Dark grey water
-    parks: '#0F0F0F',       // Very dark grey parks
-    railway: '#FF00FF',     // Electric pink/magenta railways
-    roadMotorway: '#00FFCC', // Cyan motorways
-    roadPrimary: '#00E6B8',
-    roadSecondary: '#00CC99',
-    roadTertiary: '#00B285',
-    roadResidential: '#009971',
-    roadService: '#00805E',
-    roadDefault: '#00805E',
-    gradientColor: '#000000',
+    bg: '#0D0D1A',           // Dark night blue/black (exact)
+    text: '#00FFFF',         // Electric Cyan text (exact)
+    water: '#0A0A15',        // Very dark blue-tinted (exact)
+    parks: '#151525',        // Dark purple-tinted (exact)
+    railway: '#FFFF00',      // Yellow railways
+    roadMotorway: '#FF00FF', // Electric Pink (exact from JSON)
+    roadPrimary: '#00FFFF',  // Electric Cyan (exact from JSON)
+    roadSecondary: '#00C8C8',
+    roadTertiary: '#0098A0',
+    roadResidential: '#006870',
+    roadService: '#004850',
+    roadDefault: '#0098A0',
+    gradientColor: '#0D0D1A',
   },
 ];
 

@@ -41,25 +41,26 @@ interface CanvasPosterPreviewProps {
  * 
  * We multiply by a scale factor for canvas visibility
  */
+// Street widths - multiplied by 5 for better visibility matching maptoposter output
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 3.6,       // Python 1.2 * 3 for visibility
-  motorway_link: 3.0,  // Python 1.0 * 3
-  trunk: 3.0,          // Python 1.0 * 3
-  trunk_link: 2.7,     // Python 0.9 * 3
-  primary: 3.0,        // Python 1.0 * 3
-  primary_link: 2.7,   // Python 0.9 * 3
-  secondary: 2.4,      // Python 0.8 * 3
-  secondary_link: 2.1, // Python 0.7 * 3
-  tertiary: 1.8,       // Python 0.6 * 3
-  tertiary_link: 1.5,  // Python 0.5 * 3
-  residential: 1.2,    // Python 0.4 * 3
-  living_street: 1.2,  // Python 0.4 * 3
-  unclassified: 1.2,   // Python 0.4 * 3
-  service: 0.9,        // Python 0.3 * 3
+  motorway: 6.0,       // Python 1.2 * 5 for visibility
+  motorway_link: 5.0,  // Python 1.0 * 5
+  trunk: 5.0,          // Python 1.0 * 5
+  trunk_link: 4.5,     // Python 0.9 * 5
+  primary: 5.0,        // Python 1.0 * 5
+  primary_link: 4.5,   // Python 0.9 * 5
+  secondary: 4.0,      // Python 0.8 * 5
+  secondary_link: 3.5, // Python 0.7 * 5
+  tertiary: 3.0,       // Python 0.6 * 5
+  tertiary_link: 2.5,  // Python 0.5 * 5
+  residential: 2.0,    // Python 0.4 * 5
+  living_street: 2.0,  // Python 0.4 * 5
+  unclassified: 2.0,   // Python 0.4 * 5
+  service: 1.5,        // Python 0.3 * 5
 };
 
 // Railway width (z-order 2.5 in Python, between parks and roads)
-const RAILWAY_WIDTH = 1.5; // Python uses 0.5, we multiply for visibility
+const RAILWAY_WIDTH = 2.5; // Python uses 0.5, we multiply for visibility
 
 // DPI and base size for high resolution output
 // Reference: https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py
@@ -132,12 +133,12 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   );
 
   const getStreetWidth = useCallback((type: string, canvasWidth: number): number => {
-    // Street widths are pre-multiplied for visibility
+    // Street widths are pre-multiplied for visibility (matching maptoposter output)
     // Scale by canvas size relative to 12-inch base (3600px at 300 DPI)
-    const baseWidth = STREET_WIDTHS[type] || 1.2;
+    const baseWidth = STREET_WIDTHS[type] || 2.0;
     const scaleFactor = canvasWidth / 3600;
-    // Ensure minimum visibility of 0.5px, max of 15px
-    return Math.max(0.5, baseWidth * scaleFactor * 2);
+    // Ensure minimum visibility of 1px for detailed streets
+    return Math.max(1, baseWidth * scaleFactor * 2.5);
   }, []);
 
   const getCropLimits = useCallback(() => {
