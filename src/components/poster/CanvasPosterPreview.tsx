@@ -1,6 +1,16 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { PosterConfig, ASPECT_RATIOS } from '@/types/poster';
 import { useStreetData } from '@/hooks/useStreetData';
+import {
+  FONT_STACKS,
+  TRACKING,
+  TEXT_POSITIONS,
+  FONT_WEIGHTS,
+  formatCoordinates,
+  formatDisplayText,
+  getScaledFontSizes,
+  drawTextWithTracking,
+} from '@/lib/posterTypography';
 
 interface CanvasPosterPreviewProps {
   config: PosterConfig;
@@ -30,80 +40,6 @@ const STREET_WIDTHS: Record<string, number> = {
 // High DPI for sharp output
 const DPI = 300;
 const BASE_SIZE = 12; // Base size in inches
-
-const formatCoordinates = (lat: number, lon: number): string => {
-  const latStr = `${Math.abs(lat).toFixed(4)}° ${lat >= 0 ? 'N' : 'S'}`;
-  const lonStr = `${Math.abs(lon).toFixed(4)}° ${lon >= 0 ? 'E' : 'W'}`;
-  return `${latStr} / ${lonStr}`;
-};
-
-const spacedText = (text: string): string => {
-  // IMPORTANT: We'll match the detailed mode via tracking (letter-spacing),
-  // so we don't inject spaces here.
-  return text.toUpperCase();
-};
-
-const hexToRgba = (hex: string, alpha: number) => {
-  const value = hex.replace('#', '').trim();
-  const normalized = value.length === 3 ? value.split('').map((c) => c + c).join('') : value;
-  if (normalized.length !== 6) return `rgba(0,0,0,${alpha})`;
-
-  const r = parseInt(normalized.slice(0, 2), 16);
-  const g = parseInt(normalized.slice(2, 4), 16);
-  const b = parseInt(normalized.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
-
-const drawTextWithTracking = (
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  trackingEm: number,
-  fontPx: number
-) => {
-  const spacing = trackingEm * fontPx;
-  const chars = text.split('');
-  const widths = chars.map((ch) => ctx.measureText(ch).width);
-  const totalWidth = widths.reduce((acc, w) => acc + w, 0) + spacing * Math.max(0, chars.length - 1);
-
-  let cursor = x - totalWidth / 2;
-  for (let i = 0; i < chars.length; i++) {
-    const ch = chars[i];
-    ctx.fillText(ch, cursor + widths[i] / 2, y);
-    cursor += widths[i] + spacing;
-  }
-};
-
-const createGradientFade = (
-  ctx: CanvasRenderingContext2D,
-  color: string,
-  location: 'top' | 'bottom',
-  width: number,
-  height: number
-) => {
-  let gradient: CanvasGradient;
-  let yStart: number;
-  let fadeHeight: number;
-
-  if (location === 'bottom') {
-    yStart = height * 0.75;
-    fadeHeight = height * 0.25;
-    gradient = ctx.createLinearGradient(0, yStart, 0, height);
-    // Fade to transparent of the SAME color (not transparent-black)
-    gradient.addColorStop(0, hexToRgba(color, 0));
-    gradient.addColorStop(1, hexToRgba(color, 1));
-  } else {
-    yStart = 0;
-    fadeHeight = height * 0.25;
-    gradient = ctx.createLinearGradient(0, 0, 0, fadeHeight);
-    gradient.addColorStop(0, hexToRgba(color, 1));
-    gradient.addColorStop(1, hexToRgba(color, 0));
-  }
-
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, location === 'top' ? 0 : height * 0.75, width, fadeHeight);
-};
 
 export const CanvasPosterPreview = ({ config, onExportReady, containerRef: externalContainerRef }: CanvasPosterPreviewProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -173,23 +109,6 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     // Return absolute pixel width - no scaling needed as canvas is already at target DPI
     return STREET_WIDTHS[type] || 0.8;
   }, []);
-
-  const getFontFamily = useCallback(() => {
-    switch (fontFamily) {
-      case 'serif':
-        return '"Cormorant Garamond", Georgia, serif';
-      case 'sans':
-        return 'Inter, system-ui, sans-serif';
-      case 'display':
-        return '"Bebas Neue", Impact, sans-serif';
-      case 'elegant':
-        return '"Playfair Display", Georgia, serif';
-      case 'condensed':
-        return 'Oswald, "Arial Narrow", sans-serif';
-      default:
-        return '"Roboto Mono", monospace';
-    }
-  }, [fontFamily]);
 
   const getCropLimits = useCallback(() => {
     const metersPerDegreeLat = 111320;
@@ -321,79 +240,62 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       }
     }
 
-    // Layer 4: Gradients
-    // NOTE: In minimalist mode we keep the render strictly 2D.
-    // The top/bottom fades can read as a vignette/perspective effect in preview,
-    // so we disable them here.
-    // createGradientFade(ctx, theme.gradientColor, 'top', width, height);
-    // createGradientFade(ctx, theme.gradientColor, 'bottom', width, height);
+    // Layer 4: NO GRADIENTS - keep strictly 2D flat render
 
-    // Layer 5: Typography - much larger fonts to match tile mode
+    // Layer 5: Typography - using shared config
     const textColor = config.customTextColor || theme.text;
-    
-    // Scale fonts relative to canvas height for consistent appearance
-    const fontScale = height / 1000;
-
-    const BASE_MAIN = 72;
-    const BASE_SUB = 28;
-    const BASE_COORDS = 18;
-    const BASE_ATTR = 10;
-
-    const fontSizeMultiplier = fontSize === 'small' ? 0.8 : fontSize === 'large' ? 1.2 : 1;
-    const fontFamilyCSS = getFontFamily();
+    const fontStack = FONT_STACKS[fontFamily];
+    const scaledFonts = getScaledFontSizes(height, fontSize);
 
     ctx.fillStyle = textColor;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Tracking (letter-spacing) to match detailed mode (see index.css .poster-*)
-    const TRACK_TITLE = 0.3;
-    const TRACK_SUB = 0.15;
-    const TRACK_COORDS = 0.05;
-
     // City name - dynamically adjust based on length
-    const mainFontSize = BASE_MAIN * fontScale * fontSizeMultiplier;
     const cityCharCount = city.length;
-    let adjustedMainFontSize = mainFontSize;
+    let adjustedTitleSize = scaledFonts.title;
     if (cityCharCount > 10) {
       const lengthFactor = 10 / cityCharCount;
-      adjustedMainFontSize = Math.max(mainFontSize * lengthFactor, 16 * fontScale);
+      adjustedTitleSize = Math.max(scaledFonts.title * lengthFactor, 16 * (height / 1000));
     }
 
-    ctx.font = `700 ${adjustedMainFontSize}px ${fontFamilyCSS}`;
-    const cityText = spacedText(city);
-    drawTextWithTracking(ctx, cityText, width / 2, height * 0.84, TRACK_TITLE, adjustedMainFontSize);
-
-    // Country (no separator line - matching detailed mode)
-    const subFontSize = BASE_SUB * fontScale * fontSizeMultiplier;
-    ctx.font = `300 ${subFontSize}px ${fontFamilyCSS}`;
+    ctx.font = `${FONT_WEIGHTS.title} ${adjustedTitleSize}px ${fontStack}`;
     drawTextWithTracking(
       ctx,
-      (countryLabel || country).toUpperCase(),
+      formatDisplayText(city),
       width / 2,
-      height * 0.88,
-      TRACK_SUB,
-      subFontSize
+      height * TEXT_POSITIONS.title,
+      TRACKING.title,
+      adjustedTitleSize
+    );
+
+    // Country
+    ctx.font = `${FONT_WEIGHTS.subtitle} ${scaledFonts.subtitle}px ${fontStack}`;
+    drawTextWithTracking(
+      ctx,
+      formatDisplayText(countryLabel || country),
+      width / 2,
+      height * TEXT_POSITIONS.subtitle,
+      TRACKING.subtitle,
+      scaledFonts.subtitle
     );
 
     // Coordinates
-    const coordFontSize = BASE_COORDS * fontScale * fontSizeMultiplier;
     ctx.globalAlpha = 0.7;
-    ctx.font = `${coordFontSize}px ${fontFamilyCSS}`;
+    ctx.font = `${FONT_WEIGHTS.coords} ${scaledFonts.coords}px ${fontStack}`;
     drawTextWithTracking(
       ctx,
       formatCoordinates(latitude, longitude),
       width / 2,
-      height * 0.91,
-      TRACK_COORDS,
-      coordFontSize
+      height * TEXT_POSITIONS.coords,
+      TRACKING.coords,
+      scaledFonts.coords
     );
     ctx.globalAlpha = 1;
 
     // Attribution
-    const attrFontSize = BASE_ATTR * fontScale;
     ctx.globalAlpha = 0.5;
-    ctx.font = `${attrFontSize}px ${fontFamilyCSS}`;
+    ctx.font = `${FONT_WEIGHTS.attribution} ${scaledFonts.attribution}px ${fontStack}`;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'bottom';
     ctx.fillText('© OpenStreetMap contributors', width - 10, height - 10);
@@ -413,6 +315,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     latitude,
     longitude,
     fontSize,
+    fontFamily,
     config.customTextColor,
     canvasWidth,
     canvasHeight,
@@ -420,7 +323,6 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     toCanvasCoords,
     getStreetColor,
     getStreetWidth,
-    getFontFamily,
     onExportReady,
   ]);
 
