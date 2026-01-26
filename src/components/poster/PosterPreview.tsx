@@ -20,14 +20,14 @@ const spacedText = (text: string): string => {
 };
 
 const getZoomFromDistance = (distance: number): number => {
-  // Higher zoom levels = more detailed/sharper tiles
-  if (distance <= 2000) return 16;
-  if (distance <= 3000) return 15;
-  if (distance <= 5000) return 14;
-  if (distance <= 8000) return 13;
-  if (distance <= 12000) return 12;
-  if (distance <= 18000) return 11;
-  if (distance <= 25000) return 10;
+  // Much higher zoom levels for ultra-sharp tiles
+  if (distance <= 2000) return 17;
+  if (distance <= 3000) return 16;
+  if (distance <= 5000) return 15;
+  if (distance <= 8000) return 14;
+  if (distance <= 12000) return 13;
+  if (distance <= 18000) return 12;
+  if (distance <= 25000) return 11;
   return 9;
 };
 
@@ -160,9 +160,6 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false, c
         const tileLayer = L.tileLayer(getTileUrl(theme.id), {
           attribution: '',
           maxZoom: 19,
-          // Configure for @2x retina tiles - this makes them render at full resolution
-          tileSize: 512,
-          zoomOffset: -1,
         }).addTo(map);
 
         if (interactive && onLocationChange) {
@@ -234,9 +231,6 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false, c
         tileLayerRef.current = L.tileLayer(getTileUrl(theme.id), {
           attribution: '',
           maxZoom: 19,
-          // Configure for @2x retina tiles
-          tileSize: 512,
-          zoomOffset: -1,
         }).addTo(mapInstanceRef.current);
       }
     };
