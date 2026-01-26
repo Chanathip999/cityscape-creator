@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { lat, lng, distance } = await req.json();
+    const { lat, lng, distance, skipService = false } = await req.json();
 
     if (!lat || !lng || !distance) {
       return new Response(
@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     }
 
     // Create cache key (rounded to 3 decimals for nearby hits)
-    const cacheKey = `${lat.toFixed(3)}-${lng.toFixed(3)}-${distance}`;
+    const cacheKey = `${lat.toFixed(3)}-${lng.toFixed(3)}-${distance}-${skipService}`;
     const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       console.log('Cache hit for:', cacheKey);
@@ -70,19 +70,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Fetching streets for lat=${lat}, lng=${lng}, distance=${distance}m`);
+    console.log(`Fetching streets for lat=${lat}, lng=${lng}, distance=${distance}m, skipService=${skipService}`);
 
     const distanceNum = Number(distance);
 
-    // Keep radius within safe limits - reduced to 3km to prevent memory crashes
-    const radius = Math.min(3000, Math.max(1500, distanceNum));
+    // Keep radius within safe limits - 5km max per tile
+    const radius = Math.min(5000, Math.max(2000, distanceNum));
 
-    // Use all street types (footway/path already removed from definition)
-    const activeStreetTypes = ALL_STREET_TYPES;
-    console.log(`Using street types for ${radius}m radius`);
+    // Filter street types - skip service roads if requested (they're 60% of data)
+    const activeStreetTypes = skipService 
+      ? ALL_STREET_TYPES.filter(st => st.type !== 'service')
+      : ALL_STREET_TYPES;
+    console.log(`Using ${activeStreetTypes.length} street types (skipService: ${skipService})`);
 
-    // Disable water/parks entirely - they cause too much memory usage
-    // Can be re-enabled later with a dedicated endpoint or smaller radius
+    // Disable water/parks entirely for now
     const includeWaterParks = false;
 
     const latDelta = radius / 111320;
