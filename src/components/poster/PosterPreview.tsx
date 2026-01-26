@@ -318,14 +318,6 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false, c
           {formatCoordinates(latitude, longitude)}
         </p>
       </div>
-
-      {/* Attribution */}
-      <div
-        className="absolute bottom-1 right-2 text-[6px] opacity-50 z-20"
-        style={{ color: textColor }}
-      >
-        © OpenStreetMap contributors
-      </div>
     </div>
   );
 };
