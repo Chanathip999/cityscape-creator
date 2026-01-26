@@ -1,78 +1,27 @@
 import { useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, FontFamily, FontSize, PosterOrientation } from '@/types/poster';
+import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, FontFamily, FontSize, AspectRatioId } from '@/types/poster';
 import { CanvasPosterPreview } from './CanvasPosterPreview';
 import { ThemeSelector } from './ThemeSelector';
 import { CitySearch } from './CitySearch';
 import { DistanceSlider } from './DistanceSlider';
 import { AIPromptInput } from './AIPromptInput';
 import { FontSelector } from './FontSelector';
-import { OrientationToggle } from './OrientationToggle';
+import { AspectRatioSelector } from './AspectRatioSelector';
+import { ExportDialog } from './ExportDialog';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Map, Download, Loader2 } from 'lucide-react';
+import { Map } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { toast } from '@/hooks/use-toast';
 
 export const PosterEditor = () => {
   const [config, setConfig] = useState<PosterConfig>(DEFAULT_CONFIG);
-  const [isExporting, setIsExporting] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Store canvas reference when it's ready
   const handleExportReady = useCallback((canvas: HTMLCanvasElement) => {
     canvasRef.current = canvas;
   }, []);
-
-  const handleExport = useCallback(async () => {
-    if (isExporting) return;
-    
-    setIsExporting(true);
-    
-    try {
-      // Wait a moment to ensure canvas is fully rendered
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      const canvas = canvasRef.current;
-      if (!canvas) {
-        throw new Error('Canvas not ready');
-      }
-
-      // Create a high-resolution export canvas (3x scale)
-      const exportCanvas = document.createElement('canvas');
-      const scale = 3;
-      exportCanvas.width = canvas.width * scale / (window.devicePixelRatio || 1);
-      exportCanvas.height = canvas.height * scale / (window.devicePixelRatio || 1);
-      
-      const ctx = exportCanvas.getContext('2d');
-      if (!ctx) throw new Error('Could not get canvas context');
-      
-      // Draw the original canvas scaled up
-      ctx.drawImage(canvas, 0, 0, exportCanvas.width, exportCanvas.height);
-      
-      // Create download link
-      const link = document.createElement('a');
-      link.download = `${config.city.toLowerCase().replace(/\s+/g, '-')}-poster.png`;
-      link.href = exportCanvas.toDataURL('image/png', 1.0);
-      link.click();
-      
-      toast({
-        title: 'Export erfolgreich',
-        description: `${config.city} Poster wurde als PNG gespeichert.`,
-      });
-    } catch (error) {
-      console.error('Export failed:', error);
-      toast({
-        title: 'Export fehlgeschlagen',
-        description: 'Bitte versuche es erneut.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  }, [config, isExporting]);
 
   const handleCitySelect = (city: string, country: string, lat: number, lon: number) => {
     setConfig((prev) => ({
@@ -110,15 +59,14 @@ export const PosterEditor = () => {
     setConfig((prev) => ({ ...prev, customTextColor }));
   };
 
-  const handleOrientationChange = (orientation: PosterOrientation) => {
-    setConfig((prev) => ({ ...prev, orientation }));
+  const handleAspectRatioChange = (aspectRatio: AspectRatioId) => {
+    setConfig((prev) => ({ ...prev, aspectRatio }));
   };
 
   const handleConfigUpdate = (updates: Partial<PosterConfig>) => {
     setConfig((prev) => {
       const newConfig = { ...prev, ...updates };
       
-      // Handle theme update by ID
       if (updates.theme && typeof updates.theme === 'object' && 'id' in updates.theme) {
         const foundTheme = POSTER_THEMES.find(t => t.id === updates.theme?.id);
         if (foundTheme) {
@@ -146,19 +94,7 @@ export const PosterEditor = () => {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button 
-              variant="default" 
-              className="gap-2"
-              onClick={handleExport}
-              disabled={isExporting}
-            >
-              {isExporting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4" />
-              )}
-              {isExporting ? 'Exportiere...' : 'Export Poster'}
-            </Button>
+            <ExportDialog config={config} canvasRef={canvasRef} />
           </div>
         </div>
       </header>
@@ -234,10 +170,10 @@ export const PosterEditor = () => {
 
               <Separator />
 
-              {/* Orientation Toggle */}
-              <OrientationToggle
-                orientation={config.orientation}
-                onOrientationChange={handleOrientationChange}
+              {/* Aspect Ratio Selector */}
+              <AspectRatioSelector
+                aspectRatio={config.aspectRatio}
+                onAspectRatioChange={handleAspectRatioChange}
               />
 
               {/* Distance Slider */}

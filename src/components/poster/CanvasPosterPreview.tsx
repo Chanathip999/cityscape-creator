@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { PosterConfig } from '@/types/poster';
+import { PosterConfig, ASPECT_RATIOS } from '@/types/poster';
 import { useStreetData } from '@/hooks/useStreetData';
 
 interface CanvasPosterPreviewProps {
@@ -7,7 +7,7 @@ interface CanvasPosterPreviewProps {
   onExportReady?: (canvas: HTMLCanvasElement) => void;
 }
 
-// Exact street widths from Python script
+// Street widths scaled for high-resolution rendering
 const STREET_WIDTHS: Record<string, number> = {
   motorway: 5.0,
   motorway_link: 5.0,
@@ -25,14 +25,9 @@ const STREET_WIDTHS: Record<string, number> = {
   service: 1.5,
 };
 
-// Default poster dimensions (inches) from Python script
-const DEFAULT_WIDTH = 12;
-const DEFAULT_HEIGHT = 16;
-
-// Canvas resolution for high quality output
-const DPI = 300; // High DPI for sharp output
-const CANVAS_WIDTH = DEFAULT_WIDTH * DPI;
-const CANVAS_HEIGHT = DEFAULT_HEIGHT * DPI;
+// High DPI for sharp output
+const DPI = 300;
+const BASE_SIZE = 12; // Base size in inches
 
 const formatCoordinates = (lat: number, lon: number): string => {
   const latStr = `${Math.abs(lat).toFixed(4)}° ${lat >= 0 ? 'N' : 'S'}`;
@@ -40,12 +35,10 @@ const formatCoordinates = (lat: number, lon: number): string => {
   return `${latStr} / ${lonStr}`;
 };
 
-// Python: spaced_city = "  ".join(list(city.upper()))
 const spacedText = (text: string): string => {
   return text.toUpperCase().split('').join('  ');
 };
 
-// Create gradient fade effect (matching Python create_gradient_fade)
 const createGradientFade = (
   ctx: CanvasRenderingContext2D,
   color: string,
@@ -55,21 +48,18 @@ const createGradientFade = (
 ) => {
   let gradient: CanvasGradient;
   let yStart: number;
-  let yEnd: number;
   let fadeHeight: number;
 
   if (location === 'bottom') {
     yStart = height * 0.75;
-    yEnd = height;
     fadeHeight = height * 0.25;
-    gradient = ctx.createLinearGradient(0, yStart, 0, yEnd);
+    gradient = ctx.createLinearGradient(0, yStart, 0, height);
     gradient.addColorStop(0, 'transparent');
     gradient.addColorStop(1, color);
   } else {
     yStart = 0;
-    yEnd = height * 0.25;
     fadeHeight = height * 0.25;
-    gradient = ctx.createLinearGradient(0, yStart, 0, yEnd);
+    gradient = ctx.createLinearGradient(0, 0, 0, fadeHeight);
     gradient.addColorStop(0, color);
     gradient.addColorStop(1, 'transparent');
   }
@@ -92,20 +82,27 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     theme,
     fontFamily,
     fontSize,
-    orientation,
+    aspectRatio,
   } = config;
 
-  // Calculate poster dimensions based on orientation
-  const posterWidth = orientation === 'horizontal' ? DEFAULT_HEIGHT : DEFAULT_WIDTH;
-  const posterHeight = orientation === 'horizontal' ? DEFAULT_WIDTH : DEFAULT_HEIGHT;
-  const aspectRatio = posterWidth / posterHeight;
+  // Get aspect ratio dimensions
+  const aspectRatioConfig = ASPECT_RATIOS.find((r) => r.id === aspectRatio) || ASPECT_RATIOS[1];
+  const ratioWidth = aspectRatioConfig.width;
+  const ratioHeight = aspectRatioConfig.height;
+  const aspectValue = ratioWidth / ratioHeight;
 
-  // Python: compensated_dist = dist * (max(height, width) / min(height, width))/4
+  // Calculate canvas dimensions based on aspect ratio
+  const canvasWidth = aspectValue >= 1 
+    ? BASE_SIZE * DPI 
+    : Math.round(BASE_SIZE * DPI * aspectValue);
+  const canvasHeight = aspectValue >= 1 
+    ? Math.round(BASE_SIZE * DPI / aspectValue)
+    : BASE_SIZE * DPI;
+
+  // Calculate compensated distance for data fetching
   const compensatedDistance = Math.ceil(
-    distance * (Math.max(posterHeight, posterWidth) / Math.min(posterHeight, posterWidth)) / 4
+    distance * (Math.max(ratioHeight, ratioWidth) / Math.min(ratioHeight, ratioWidth)) / 4
   );
-
-  // Increase fetch radius to ensure full coverage
   const fetchDistance = Math.max(distance, compensatedDistance) * 1.5;
 
   const { streets, isLoading, error } = useStreetData({
@@ -115,7 +112,6 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     enabled: true,
   });
 
-  // Get street color based on highway type (matching Python get_edge_colors_by_type)
   const getStreetColor = useCallback(
     (type: string): string => {
       if (['motorway', 'motorway_link'].includes(type)) {
@@ -135,12 +131,10 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     [theme]
   );
 
-  // Get street width based on highway type (matching Python get_edge_widths_by_type)
   const getStreetWidth = useCallback((type: string): number => {
     return STREET_WIDTHS[type] || 0.4;
   }, []);
 
-  // Get font family CSS
   const getFontFamily = useCallback(() => {
     switch (fontFamily) {
       case 'serif':
@@ -158,24 +152,22 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     }
   }, [fontFamily]);
 
-  // Calculate crop limits to maintain aspect ratio (matching Python get_crop_limits)
   const getCropLimits = useCallback(() => {
-    // Convert distance to degrees (approximate mercator projection)
     const metersPerDegreeLat = 111320;
     const metersPerDegreeLng = 111320 * Math.cos((latitude * Math.PI) / 180);
 
-    // Start from the requested radius
     let halfX = distance / metersPerDegreeLng;
     let halfY = distance / metersPerDegreeLat;
 
-    // Cut inward to match aspect ratio
-    if (aspectRatio > 1) {
+    // Adjust bounds based on aspect ratio
+    if (aspectValue > 1) {
       // Landscape: reduce height
-      halfY = halfX / aspectRatio;
-    } else {
+      halfY = halfX / aspectValue;
+    } else if (aspectValue < 1) {
       // Portrait: reduce width
-      halfX = halfY * aspectRatio;
+      halfX = halfY * aspectValue;
     }
+    // Square (1:1): keep equal
 
     return {
       minLng: longitude - halfX,
@@ -183,25 +175,23 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
       minLat: latitude - halfY,
       maxLat: latitude + halfY,
     };
-  }, [latitude, longitude, distance, aspectRatio]);
+  }, [latitude, longitude, distance, aspectValue]);
 
-  // Convert lat/lng to canvas coordinates
   const toCanvasCoords = useCallback(
     (
       lat: number,
       lng: number,
-      canvasWidth: number,
-      canvasHeight: number,
+      width: number,
+      height: number,
       bounds: ReturnType<typeof getCropLimits>
     ) => {
-      const x = ((lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * canvasWidth;
-      const y = canvasHeight - ((lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * canvasHeight;
+      const x = ((lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * width;
+      const y = height - ((lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * height;
       return { x, y };
     },
     []
   );
 
-  // Main drawing function
   const drawPoster = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -209,25 +199,22 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size based on orientation
-    const width = orientation === 'horizontal' ? CANVAS_HEIGHT : CANVAS_WIDTH;
-    const height = orientation === 'horizontal' ? CANVAS_WIDTH : CANVAS_HEIGHT;
+    const width = canvasWidth;
+    const height = canvasHeight;
 
     canvas.width = width;
     canvas.height = height;
 
-    // Enable high-quality rendering
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
     const bounds = getCropLimits();
 
-    // 1. Background (matching Python: ax.set_facecolor(THEME['bg']))
+    // Background
     ctx.fillStyle = theme.bg;
     ctx.fillRect(0, 0, width, height);
 
-    // 2. Draw streets layer by layer (matching Python road hierarchy)
-    // Draw in order: residential -> tertiary -> secondary -> primary -> motorway
+    // Draw streets
     const streetOrder = ['residential', 'tertiary', 'secondary', 'primary', 'motorway'];
 
     for (const streetType of streetOrder) {
@@ -235,9 +222,7 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
       if (!segment) continue;
 
       const color = getStreetColor(streetType);
-      const baseWidth = getStreetWidth(streetType);
-      // Scale line width with canvas size
-      const lineWidth = baseWidth;
+      const lineWidth = getStreetWidth(streetType);
 
       ctx.strokeStyle = color;
       ctx.lineWidth = lineWidth;
@@ -259,15 +244,14 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
       }
     }
 
-    // 3. Gradients (matching Python create_gradient_fade)
+    // Gradients
     createGradientFade(ctx, theme.gradientColor, 'top', width, height);
     createGradientFade(ctx, theme.gradientColor, 'bottom', width, height);
 
-    // 4. Typography (matching Python font sizing and positioning)
+    // Typography
     const textColor = config.customTextColor || theme.text;
-    const scaleFactor = width / (DEFAULT_WIDTH * DPI);
+    const scaleFactor = width / (BASE_SIZE * DPI);
 
-    // Python base font sizes at 12 inches width
     const BASE_MAIN = 60;
     const BASE_SUB = 22;
     const BASE_COORDS = 14;
@@ -276,15 +260,12 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     const fontSizeMultiplier = fontSize === 'small' ? 0.8 : fontSize === 'large' ? 1.2 : 1;
     const fontFamilyCSS = getFontFamily();
 
-    // --- Bottom text (matching Python positioning) ---
     ctx.fillStyle = textColor;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // City name with letter spacing
+    // City name
     const mainFontSize = BASE_MAIN * scaleFactor * fontSizeMultiplier;
-    
-    // Adjust font size for long city names (matching Python logic)
     const cityCharCount = city.length;
     let adjustedMainFontSize = mainFontSize;
     if (cityCharCount > 10) {
@@ -296,19 +277,19 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     const cityText = spacedText(city);
     ctx.fillText(cityText, width / 2, height * 0.86);
 
-    // Country (matching Python: 0.10 from bottom = 0.90 from top)
+    // Country
     const subFontSize = BASE_SUB * scaleFactor * fontSizeMultiplier;
     ctx.font = `300 ${subFontSize}px ${fontFamilyCSS}`;
     ctx.fillText((countryLabel || country).toUpperCase(), width / 2, height * 0.90);
 
-    // Coordinates (matching Python: 0.07 from bottom = 0.93 from top)
+    // Coordinates
     const coordFontSize = BASE_COORDS * scaleFactor * fontSizeMultiplier;
     ctx.globalAlpha = 0.7;
     ctx.font = `${coordFontSize}px ${fontFamilyCSS}`;
     ctx.fillText(formatCoordinates(latitude, longitude), width / 2, height * 0.93);
     ctx.globalAlpha = 1;
 
-    // Decorative line (matching Python: between 0.4 and 0.6 at y=0.875)
+    // Decorative line
     ctx.strokeStyle = textColor;
     ctx.lineWidth = 1 * scaleFactor;
     ctx.beginPath();
@@ -316,7 +297,7 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     ctx.lineTo(width * 0.6, height * 0.875);
     ctx.stroke();
 
-    // Attribution (matching Python: bottom right)
+    // Attribution
     const attrFontSize = BASE_ATTR * scaleFactor;
     ctx.globalAlpha = 0.5;
     ctx.font = `${attrFontSize}px ${fontFamilyCSS}`;
@@ -325,7 +306,6 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     ctx.fillText('© OpenStreetMap contributors', width - 10, height - 10);
     ctx.globalAlpha = 1;
 
-    // Notify parent that canvas is ready
     if (onExportReady) {
       onExportReady(canvas);
     }
@@ -337,9 +317,10 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     countryLabel,
     latitude,
     longitude,
-    orientation,
     fontSize,
     config.customTextColor,
+    canvasWidth,
+    canvasHeight,
     getCropLimits,
     toCanvasCoords,
     getStreetColor,
@@ -358,12 +339,28 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     return () => window.removeEventListener('resize', handleResize);
   }, [drawPoster]);
 
-  const aspectClass = orientation === 'horizontal' ? 'aspect-[4/3]' : 'aspect-[3/4]';
+  // Dynamic aspect ratio class
+  const getAspectClass = () => {
+    switch (aspectRatio) {
+      case '1:1':
+        return 'aspect-square';
+      case '4:3':
+        return 'aspect-[4/3]';
+      case '3:4':
+        return 'aspect-[3/4]';
+      case '16:9':
+        return 'aspect-video';
+      case '9:16':
+        return 'aspect-[9/16]';
+      default:
+        return 'aspect-[3/4]';
+    }
+  };
 
   return (
     <div
       ref={containerRef}
-      className={`relative w-full ${aspectClass} rounded-lg shadow-2xl overflow-hidden`}
+      className={`relative w-full ${getAspectClass()} rounded-lg shadow-2xl overflow-hidden`}
       style={{ backgroundColor: theme.bg }}
     >
       <canvas ref={canvasRef} className="w-full h-full object-contain" />

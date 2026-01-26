@@ -17,6 +17,23 @@ export interface PosterTheme {
 export type FontFamily = 'mono' | 'sans' | 'serif' | 'display' | 'elegant' | 'condensed';
 export type FontSize = 'small' | 'medium' | 'large';
 export type PosterOrientation = 'vertical' | 'horizontal';
+export type AspectRatioId = '1:1' | '3:4' | '4:3' | '16:9' | '9:16';
+export type ExportFormat = 'png' | 'jpeg';
+export type ExportResolution = 'fullhd' | '4k' | '8k';
+
+export interface AspectRatio {
+  id: AspectRatioId;
+  name: string;
+  width: number;
+  height: number;
+}
+
+export interface ExportOption {
+  id: ExportResolution;
+  name: string;
+  multiplier: number;
+  description: string;
+}
 
 export interface PosterConfig {
   city: string;
@@ -31,9 +48,29 @@ export interface PosterConfig {
   fontFamily: FontFamily;
   fontSize: FontSize;
   orientation: PosterOrientation;
-  customTextColor?: string; // Optional custom text color override
-  coloredStreets?: boolean; // Optional: enable colored vector streets overlay (default: false)
+  aspectRatio: AspectRatioId;
+  customTextColor?: string;
+  coloredStreets?: boolean;
 }
+
+export const ASPECT_RATIOS: AspectRatio[] = [
+  { id: '1:1', name: 'Quadrat', width: 1, height: 1 },
+  { id: '3:4', name: 'Portrait', width: 3, height: 4 },
+  { id: '4:3', name: 'Landscape', width: 4, height: 3 },
+  { id: '16:9', name: 'Breitbild', width: 16, height: 9 },
+  { id: '9:16', name: 'Story', width: 9, height: 16 },
+];
+
+export const EXPORT_FORMATS: { id: ExportFormat; name: string; mimeType: string }[] = [
+  { id: 'png', name: 'PNG', mimeType: 'image/png' },
+  { id: 'jpeg', name: 'JPEG', mimeType: 'image/jpeg' },
+];
+
+export const EXPORT_RESOLUTIONS: ExportOption[] = [
+  { id: 'fullhd', name: 'Full HD', multiplier: 1, description: '1920px' },
+  { id: '4k', name: '4K', multiplier: 2, description: '3840px' },
+  { id: '8k', name: '8K', multiplier: 4, description: '7680px' },
+];
 
 export const POSTER_THEMES: PosterTheme[] = [
   {
@@ -227,5 +264,6 @@ export const DEFAULT_CONFIG: PosterConfig = {
   fontFamily: 'mono',
   fontSize: 'medium',
   orientation: 'vertical',
-  coloredStreets: false, // Default: use standard map tiles
+  aspectRatio: '3:4',
+  coloredStreets: false,
 };
