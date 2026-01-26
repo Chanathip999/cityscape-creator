@@ -289,13 +289,6 @@ export const CanvasPosterPreview = ({ config, onExportReady }: CanvasPosterPrevi
     ctx.fillText(formatCoordinates(latitude, longitude), width / 2, height * 0.93);
     ctx.globalAlpha = 1;
 
-    // Decorative line
-    ctx.strokeStyle = textColor;
-    ctx.lineWidth = 1 * scaleFactor;
-    ctx.beginPath();
-    ctx.moveTo(width * 0.4, height * 0.875);
-    ctx.lineTo(width * 0.6, height * 0.875);
-    ctx.stroke();
 
     // Attribution
     const attrFontSize = BASE_ATTR * scaleFactor;
