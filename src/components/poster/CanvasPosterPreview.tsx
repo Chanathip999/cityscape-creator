@@ -240,7 +240,24 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       }
     }
 
-    // Layer 4: NO GRADIENTS - keep strictly 2D flat render
+    // Layer 4: Gradient fades (matching Python maptoposter create_gradient_fade)
+    // Top fade: y=0.75 to 1.0 in Python → y=0 to 0.25 in canvas
+    // Bottom fade: y=0 to 0.25 in Python → y=0.75 to 1.0 in canvas
+    const fadeHeight = height * 0.25;
+    
+    // Top gradient
+    const topGradient = ctx.createLinearGradient(0, 0, 0, fadeHeight);
+    topGradient.addColorStop(0, theme.bg);
+    topGradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = topGradient;
+    ctx.fillRect(0, 0, width, fadeHeight);
+    
+    // Bottom gradient
+    const bottomGradient = ctx.createLinearGradient(0, height - fadeHeight, 0, height);
+    bottomGradient.addColorStop(0, 'transparent');
+    bottomGradient.addColorStop(1, theme.bg);
+    ctx.fillStyle = bottomGradient;
+    ctx.fillRect(0, height - fadeHeight, width, fadeHeight);
 
     // Layer 5: Typography - using shared config
     const textColor = config.customTextColor || theme.text;
@@ -259,15 +276,29 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       adjustedTitleSize = Math.max(scaledFonts.title * lengthFactor, 16 * (height / 1000));
     }
 
+    // City with spaced letters (matching Python script)
+    const spacedCity = formatDisplayText(city).split('').join(' ');
     ctx.font = `${FONT_WEIGHTS.title} ${adjustedTitleSize}px ${fontStack}`;
     drawTextWithTracking(
       ctx,
-      formatDisplayText(city),
+      spacedCity,
       width / 2,
       height * TEXT_POSITIONS.title,
-      TRACKING.title,
+      TRACKING.title * 0.5, // Reduced tracking since letters are already spaced
       adjustedTitleSize
     );
+
+    // Decorative line between city and country (matching Python y=0.125)
+    const lineLength = width * 0.15;
+    const lineWidth = adjustedTitleSize * 0.02;
+    ctx.strokeStyle = textColor;
+    ctx.lineWidth = lineWidth;
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.moveTo((width - lineLength) / 2, height * TEXT_POSITIONS.decorativeLine);
+    ctx.lineTo((width + lineLength) / 2, height * TEXT_POSITIONS.decorativeLine);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
 
     // Country
     ctx.font = `${FONT_WEIGHTS.subtitle} ${scaledFonts.subtitle}px ${fontStack}`;
