@@ -38,7 +38,41 @@ const formatCoordinates = (lat: number, lon: number): string => {
 };
 
 const spacedText = (text: string): string => {
-  return text.toUpperCase().split('').join(' ');
+  // IMPORTANT: We'll match the detailed mode via tracking (letter-spacing),
+  // so we don't inject spaces here.
+  return text.toUpperCase();
+};
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const value = hex.replace('#', '').trim();
+  const normalized = value.length === 3 ? value.split('').map((c) => c + c).join('') : value;
+  if (normalized.length !== 6) return `rgba(0,0,0,${alpha})`;
+
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const drawTextWithTracking = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  trackingEm: number,
+  fontPx: number
+) => {
+  const spacing = trackingEm * fontPx;
+  const chars = text.split('');
+  const widths = chars.map((ch) => ctx.measureText(ch).width);
+  const totalWidth = widths.reduce((acc, w) => acc + w, 0) + spacing * Math.max(0, chars.length - 1);
+
+  let cursor = x - totalWidth / 2;
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    ctx.fillText(ch, cursor + widths[i] / 2, y);
+    cursor += widths[i] + spacing;
+  }
 };
 
 const createGradientFade = (
@@ -56,14 +90,15 @@ const createGradientFade = (
     yStart = height * 0.75;
     fadeHeight = height * 0.25;
     gradient = ctx.createLinearGradient(0, yStart, 0, height);
-    gradient.addColorStop(0, 'transparent');
-    gradient.addColorStop(1, color);
+    // Fade to transparent of the SAME color (not transparent-black)
+    gradient.addColorStop(0, hexToRgba(color, 0));
+    gradient.addColorStop(1, hexToRgba(color, 1));
   } else {
     yStart = 0;
     fadeHeight = height * 0.25;
     gradient = ctx.createLinearGradient(0, 0, 0, fadeHeight);
-    gradient.addColorStop(0, color);
-    gradient.addColorStop(1, 'transparent');
+    gradient.addColorStop(0, hexToRgba(color, 1));
+    gradient.addColorStop(1, hexToRgba(color, 0));
   }
 
   ctx.fillStyle = gradient;
@@ -142,17 +177,17 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   const getFontFamily = useCallback(() => {
     switch (fontFamily) {
       case 'serif':
-        return 'Georgia, "Times New Roman", serif';
-      case 'sans':
-        return 'Inter, -apple-system, sans-serif';
-      case 'display':
-        return '"Playfair Display", Georgia, serif';
-      case 'elegant':
         return '"Cormorant Garamond", Georgia, serif';
+      case 'sans':
+        return 'Inter, system-ui, sans-serif';
+      case 'display':
+        return '"Bebas Neue", Impact, sans-serif';
+      case 'elegant':
+        return '"Playfair Display", Georgia, serif';
       case 'condensed':
         return 'Oswald, "Arial Narrow", sans-serif';
       default:
-        return '"Roboto Mono", "Courier New", monospace';
+        return '"Roboto Mono", monospace';
     }
   }, [fontFamily]);
 
@@ -308,6 +343,11 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
+    // Tracking (letter-spacing) to match detailed mode (see index.css .poster-*)
+    const TRACK_TITLE = 0.3;
+    const TRACK_SUB = 0.15;
+    const TRACK_COORDS = 0.05;
+
     // City name - dynamically adjust based on length
     const mainFontSize = BASE_MAIN * fontScale * fontSizeMultiplier;
     const cityCharCount = city.length;
@@ -317,20 +357,34 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       adjustedMainFontSize = Math.max(mainFontSize * lengthFactor, 16 * fontScale);
     }
 
-    ctx.font = `bold ${adjustedMainFontSize}px ${fontFamilyCSS}`;
+    ctx.font = `700 ${adjustedMainFontSize}px ${fontFamilyCSS}`;
     const cityText = spacedText(city);
-    ctx.fillText(cityText, width / 2, height * 0.84);
+    drawTextWithTracking(ctx, cityText, width / 2, height * 0.84, TRACK_TITLE, adjustedMainFontSize);
 
     // Country (no separator line - matching detailed mode)
     const subFontSize = BASE_SUB * fontScale * fontSizeMultiplier;
     ctx.font = `300 ${subFontSize}px ${fontFamilyCSS}`;
-    ctx.fillText((countryLabel || country).toUpperCase(), width / 2, height * 0.88);
+    drawTextWithTracking(
+      ctx,
+      (countryLabel || country).toUpperCase(),
+      width / 2,
+      height * 0.88,
+      TRACK_SUB,
+      subFontSize
+    );
 
     // Coordinates
     const coordFontSize = BASE_COORDS * fontScale * fontSizeMultiplier;
     ctx.globalAlpha = 0.7;
     ctx.font = `${coordFontSize}px ${fontFamilyCSS}`;
-    ctx.fillText(formatCoordinates(latitude, longitude), width / 2, height * 0.91);
+    drawTextWithTracking(
+      ctx,
+      formatCoordinates(latitude, longitude),
+      width / 2,
+      height * 0.91,
+      TRACK_COORDS,
+      coordFontSize
+    );
     ctx.globalAlpha = 1;
 
     // Attribution
