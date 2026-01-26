@@ -321,24 +321,16 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     const cityText = spacedText(city);
     ctx.fillText(cityText, width / 2, height * 0.84);
 
-    // Separator line
-    ctx.strokeStyle = textColor;
-    ctx.lineWidth = 2 * fontScale;
-    ctx.beginPath();
-    ctx.moveTo(width * 0.35, height * 0.86);
-    ctx.lineTo(width * 0.65, height * 0.86);
-    ctx.stroke();
-
-    // Country
+    // Country (no separator line - matching detailed mode)
     const subFontSize = BASE_SUB * fontScale * fontSizeMultiplier;
     ctx.font = `300 ${subFontSize}px ${fontFamilyCSS}`;
-    ctx.fillText((countryLabel || country).toUpperCase(), width / 2, height * 0.895);
+    ctx.fillText((countryLabel || country).toUpperCase(), width / 2, height * 0.88);
 
     // Coordinates
     const coordFontSize = BASE_COORDS * fontScale * fontSizeMultiplier;
     ctx.globalAlpha = 0.7;
     ctx.font = `${coordFontSize}px ${fontFamilyCSS}`;
-    ctx.fillText(formatCoordinates(latitude, longitude), width / 2, height * 0.925);
+    ctx.fillText(formatCoordinates(latitude, longitude), width / 2, height * 0.91);
     ctx.globalAlpha = 1;
 
     // Attribution
