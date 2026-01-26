@@ -263,12 +263,13 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false, c
 
       {/* Typography section - uses shared config (synced with minimalist mode) */}
       <div className={`absolute bottom-0 left-0 right-0 z-20 p-4 md:p-6 text-center pointer-events-none ${FONT_CSS_CLASSES[fontFamily]}`}>
-        {/* City name with spaced letters (matching maptoposter Python script) */}
+        {/* City name with CSS tracking for letter spacing (NOT extra spaces) */}
+        {/* Reference: https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py */}
         <h2
           className={`${fontClasses.title} font-bold ${TRACKING_CLASSES.title} mb-1`}
           style={{ color: textColor }}
         >
-          {formatDisplayText(city).split('').join(' ')}
+          {formatDisplayText(city)}
         </h2>
 
         {/* Decorative line between city and country (matching maptoposter y=0.125) */}
