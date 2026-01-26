@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, FontFamily, FontSize, AspectRatioId } from '@/types/poster';
-import { CanvasPosterPreview } from './CanvasPosterPreview';
+import { PosterPreview } from './PosterPreview';
 import { ThemeSelector } from './ThemeSelector';
 import { CitySearch } from './CitySearch';
 import { DistanceSlider } from './DistanceSlider';
@@ -192,7 +192,7 @@ export const PosterEditor = () => {
               transition={{ delay: 0.2 }}
               className="max-w-lg mx-auto"
             >
-              <CanvasPosterPreview config={config} />
+              <PosterPreview config={config} containerRef={posterRef} />
             </motion.div>
             
             {/* AI Prompt Input - Below the poster */}
