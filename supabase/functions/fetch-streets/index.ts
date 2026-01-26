@@ -12,6 +12,7 @@ const ALL_STREET_TYPES = [
   { type: 'secondary', tags: ['secondary', 'secondary_link'] },
   { type: 'tertiary', tags: ['tertiary', 'tertiary_link'] },
   { type: 'residential', tags: ['residential', 'living_street', 'unclassified'] },
+  { type: 'service', tags: ['service'] },
 ];
 
 // Simple in-memory cache for recent queries (TTL: 60 seconds)
@@ -21,6 +22,16 @@ const CACHE_TTL = 60000;
 interface StreetData {
   type: string;
   coordinates: [number, number][][];
+}
+
+interface WaterData {
+  type: 'water';
+  polygons: [number, number][][]; // Array of polygon rings
+}
+
+interface ParkData {
+  type: 'park';
+  polygons: [number, number][][];
 }
 
 // Round coordinate to reduce JSON size while maintaining ~1m precision
@@ -58,18 +69,17 @@ Deno.serve(async (req) => {
     const distanceNum = Number(distance);
 
     // Cap radius to keep Overpass response manageable and avoid memory crashes.
-    // The preview is stylistic – we prefer reliability over perfect completeness.
-    const radius = Math.min(9000, Math.max(2500, distanceNum));
+    const radius = Math.min(12000, Math.max(2500, distanceNum));
 
     // Reduce detail for large areas to avoid memory limit exceeded.
-    // - very large: only major roads
-    // - medium: include tertiary
-    // - small: include residential
     const activeStreetTypes = distanceNum > 12000
-      ? ALL_STREET_TYPES.slice(0, 3)
+      ? ALL_STREET_TYPES.slice(0, 4)
       : distanceNum > 8000
-        ? ALL_STREET_TYPES.slice(0, 4)
+        ? ALL_STREET_TYPES.slice(0, 5)
         : ALL_STREET_TYPES;
+
+    // Only fetch water/parks for smaller areas to avoid memory crashes
+    const includeWaterParks = distanceNum <= 10000;
 
     const latDelta = radius / 111320;
     const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));
@@ -80,15 +90,33 @@ Deno.serve(async (req) => {
     const east = lng + lngDelta;
 
     const highwayTags = activeStreetTypes.flatMap(st => st.tags);
+    const bbox = `${south.toFixed(5)},${west.toFixed(5)},${north.toFixed(5)},${east.toFixed(5)}`;
     
-    // Optimized query: shorter timeout, geometry output instead of full body
-    const overpassQuery = `
-      [out:json][timeout:15];
-      (
-        way["highway"~"^(${highwayTags.join('|')})$"](${south.toFixed(5)},${west.toFixed(5)},${north.toFixed(5)},${east.toFixed(5)});
-      );
-      out geom;
-    `;
+    // Build query conditionally - only include water/parks for smaller radii
+    let overpassQuery: string;
+    
+    if (includeWaterParks) {
+      overpassQuery = `
+        [out:json][timeout:25];
+        (
+          way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
+          way["natural"="water"](${bbox});
+          way["waterway"~"^(river|canal|riverbank)$"](${bbox});
+          way["leisure"="park"](${bbox});
+          way["landuse"~"^(grass|meadow)$"](${bbox});
+        );
+        out geom;
+      `;
+    } else {
+      // Large areas: streets only
+      overpassQuery = `
+        [out:json][timeout:20];
+        (
+          way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
+        );
+        out geom;
+      `;
+    }
 
     console.log('Sending Overpass query...');
 
@@ -134,7 +162,7 @@ Deno.serve(async (req) => {
 
     const osmData = await response.json();
     const elements = osmData.elements || [];
-    console.log(`Received ${elements.length} ways from Overpass`);
+    console.log(`Received ${elements.length} elements from Overpass`);
 
     // Build a fast tag->type lookup to avoid N(types) scans per element
     const tagToType = new Map<string, string>();
@@ -142,38 +170,62 @@ Deno.serve(async (req) => {
       for (const tag of st.tags) tagToType.set(tag, st.type);
     }
 
-    // With "out geom", each way already has geometry inline - no separate node lookup needed
+    // Process streets
     const coordsByType = new Map<string, [number, number][][]>();
     for (const st of activeStreetTypes) coordsByType.set(st.type, []);
 
-    for (const element of elements) {
-      if (element.type !== 'way' || !element.tags?.highway) continue;
-      const type = tagToType.get(element.tags.highway);
-      if (!type) continue;
+    // Process water and parks
+    const waterPolygons: [number, number][][] = [];
+    const parkPolygons: [number, number][][] = [];
 
+    for (const element of elements) {
+      if (element.type !== 'way') continue;
+      
       const geom = element.geometry;
       if (!geom || geom.length < 2) continue;
 
-      // Keep all points for smooth curves - high resolution is essential for poster quality
-      const points: [number, number][] = [];
-      for (let i = 0; i < geom.length; i++) {
-        const pt = geom[i];
-        if (pt && pt.lat !== undefined && pt.lon !== undefined) {
-          points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+      const tags = element.tags || {};
+
+      // Check if it's a highway
+      if (tags.highway) {
+        const type = tagToType.get(tags.highway);
+        if (!type) continue;
+
+        const points: [number, number][] = [];
+        for (let i = 0; i < geom.length; i++) {
+          const pt = geom[i];
+          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+            points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+          }
+        }
+
+        if (points.length >= 2) {
+          coordsByType.get(type)?.push(points);
         }
       }
-
-      // Always include last point
-      const last = geom[geom.length - 1];
-      if (last && points.length > 0) {
-        const lastPt = points[points.length - 1];
-        if (lastPt[0] !== roundCoord(last.lat) || lastPt[1] !== roundCoord(last.lon)) {
-          points.push([roundCoord(last.lat), roundCoord(last.lon)]);
+      // Check if it's water
+      else if (tags.natural === 'water' || tags.waterway) {
+        const points: [number, number][] = [];
+        for (const pt of geom) {
+          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+            points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+          }
+        }
+        if (points.length >= 3) {
+          waterPolygons.push(points);
         }
       }
-
-      if (points.length >= 2) {
-        coordsByType.get(type)?.push(points);
+      // Check if it's a park
+      else if (tags.leisure === 'park' || tags.landuse === 'grass' || tags.landuse === 'meadow') {
+        const points: [number, number][] = [];
+        for (const pt of geom) {
+          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+            points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+          }
+        }
+        if (points.length >= 3) {
+          parkPolygons.push(points);
+        }
       }
     }
 
@@ -183,9 +235,13 @@ Deno.serve(async (req) => {
     }));
 
     const totalStreets = streetData.reduce((sum, st) => sum + st.coordinates.length, 0);
-    console.log(`Returning ${totalStreets} street segments`);
+    console.log(`Returning ${totalStreets} street segments, ${waterPolygons.length} water polygons, ${parkPolygons.length} park polygons`);
 
-    const responseData = { streets: streetData };
+    const responseData = { 
+      streets: streetData,
+      water: waterPolygons,
+      parks: parkPolygons,
+    };
     
     // Cache the result
     cache.set(cacheKey, { data: responseData, timestamp: Date.now() });

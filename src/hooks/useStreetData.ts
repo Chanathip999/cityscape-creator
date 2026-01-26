@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface StreetSegment {
-  type: 'motorway' | 'primary' | 'secondary' | 'tertiary' | 'residential';
+  type: 'motorway' | 'primary' | 'secondary' | 'tertiary' | 'residential' | 'service';
   coordinates: [number, number][][]; // Array of polylines
 }
 
@@ -15,6 +15,8 @@ interface UseStreetDataProps {
 
 interface UseStreetDataResult {
   streets: StreetSegment[];
+  water: [number, number][][]; // Array of polygon rings
+  parks: [number, number][][]; // Array of polygon rings
   isLoading: boolean;
   error: string | null;
 }
@@ -26,6 +28,8 @@ export const useStreetData = ({
   enabled = true,
 }: UseStreetDataProps): UseStreetDataResult => {
   const [streets, setStreets] = useState<StreetSegment[]>([]);
+  const [water, setWater] = useState<[number, number][][]>([]);
+  const [parks, setParks] = useState<[number, number][][]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -69,6 +73,8 @@ export const useStreetData = ({
             count: s.coordinates.length,
           })));
           setStreets(data.streets);
+          setWater(data.water || []);
+          setParks(data.parks || []);
           lastParamsRef.current = paramsKey;
         }
       } catch (err) {
@@ -86,5 +92,5 @@ export const useStreetData = ({
     };
   }, [latitude, longitude, distance, enabled]);
 
-  return { streets, isLoading, error };
+  return { streets, water, parks, isLoading, error };
 };

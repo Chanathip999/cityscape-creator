@@ -8,22 +8,23 @@ interface CanvasPosterPreviewProps {
   containerRef?: React.RefObject<HTMLDivElement>;
 }
 
-// Street widths scaled for high-resolution rendering
+// Street widths matching Python script ratios (0.4-1.2 range)
+// These are multiplied by a scale factor based on canvas size
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 5.0,
-  motorway_link: 5.0,
-  trunk: 4.0,
-  trunk_link: 4.0,
-  primary: 4.0,
-  primary_link: 4.0,
-  secondary: 3.0,
-  secondary_link: 3.0,
-  tertiary: 2.5,
-  tertiary_link: 2.5,
-  residential: 2.0,
-  living_street: 2.0,
-  unclassified: 2.0,
-  service: 1.5,
+  motorway: 1.2,
+  motorway_link: 1.2,
+  trunk: 1.0,
+  trunk_link: 1.0,
+  primary: 1.0,
+  primary_link: 1.0,
+  secondary: 0.8,
+  secondary_link: 0.8,
+  tertiary: 0.6,
+  tertiary_link: 0.6,
+  residential: 0.4,
+  living_street: 0.4,
+  unclassified: 0.4,
+  service: 0.3,
 };
 
 // High DPI for sharp output
@@ -101,13 +102,13 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     ? Math.round(BASE_SIZE * DPI / aspectValue)
     : BASE_SIZE * DPI;
 
-  // Calculate compensated distance for data fetching
+  // Calculate compensated distance for data fetching (matching Python script formula)
   const compensatedDistance = Math.ceil(
     distance * (Math.max(ratioHeight, ratioWidth) / Math.min(ratioHeight, ratioWidth)) / 4
   );
   const fetchDistance = Math.max(distance, compensatedDistance) * 1.5;
 
-  const { streets, isLoading, error } = useStreetData({
+  const { streets, water, parks, isLoading, error } = useStreetData({
     latitude,
     longitude,
     distance: fetchDistance,
@@ -133,8 +134,10 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     [theme]
   );
 
-  const getStreetWidth = useCallback((type: string): number => {
-    return STREET_WIDTHS[type] || 0.4;
+  const getStreetWidth = useCallback((type: string, scaleFactor: number): number => {
+    const baseWidth = STREET_WIDTHS[type] || 0.3;
+    // Scale width based on canvas size - similar to Python script's approach
+    return baseWidth * scaleFactor;
   }, []);
 
   const getFontFamily = useCallback(() => {
@@ -161,7 +164,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     let halfX = distance / metersPerDegreeLng;
     let halfY = distance / metersPerDegreeLat;
 
-    // Adjust bounds based on aspect ratio
+    // Adjust bounds based on aspect ratio (matching Python script logic)
     if (aspectValue > 1) {
       // Landscape: reduce height
       halfY = halfX / aspectValue;
@@ -212,19 +215,60 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
 
     const bounds = getCropLimits();
 
+    // Scale factor for line widths (matching Python script approach)
+    const widthScaleFactor = width / (BASE_SIZE * DPI) * 3;
+
     // Background
     ctx.fillStyle = theme.bg;
     ctx.fillRect(0, 0, width, height);
 
-    // Draw streets
-    const streetOrder = ['residential', 'tertiary', 'secondary', 'primary', 'motorway'];
+    // Layer 1: Draw parks (if available)
+    if (parks && parks.length > 0) {
+      ctx.fillStyle = theme.parks;
+      for (const polygon of parks) {
+        if (polygon.length < 3) continue;
+        
+        ctx.beginPath();
+        const start = toCanvasCoords(polygon[0][0], polygon[0][1], width, height, bounds);
+        ctx.moveTo(start.x, start.y);
+        
+        for (let i = 1; i < polygon.length; i++) {
+          const point = toCanvasCoords(polygon[i][0], polygon[i][1], width, height, bounds);
+          ctx.lineTo(point.x, point.y);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // Layer 2: Draw water (if available)
+    if (water && water.length > 0) {
+      ctx.fillStyle = theme.water;
+      for (const polygon of water) {
+        if (polygon.length < 3) continue;
+        
+        ctx.beginPath();
+        const start = toCanvasCoords(polygon[0][0], polygon[0][1], width, height, bounds);
+        ctx.moveTo(start.x, start.y);
+        
+        for (let i = 1; i < polygon.length; i++) {
+          const point = toCanvasCoords(polygon[i][0], polygon[i][1], width, height, bounds);
+          ctx.lineTo(point.x, point.y);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // Layer 3: Draw streets in order (residential first, motorway last for proper layering)
+    const streetOrder = ['service', 'residential', 'tertiary', 'secondary', 'primary', 'motorway'];
 
     for (const streetType of streetOrder) {
       const segment = streets.find((s) => s.type === streetType);
       if (!segment) continue;
 
       const color = getStreetColor(streetType);
-      const lineWidth = getStreetWidth(streetType);
+      const lineWidth = getStreetWidth(streetType, widthScaleFactor);
 
       ctx.strokeStyle = color;
       ctx.lineWidth = lineWidth;
@@ -246,11 +290,11 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       }
     }
 
-    // Gradients
+    // Layer 4: Gradients
     createGradientFade(ctx, theme.gradientColor, 'top', width, height);
     createGradientFade(ctx, theme.gradientColor, 'bottom', width, height);
 
-    // Typography
+    // Layer 5: Typography
     const textColor = config.customTextColor || theme.text;
     const scaleFactor = width / (BASE_SIZE * DPI);
 
@@ -266,7 +310,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // City name
+    // City name - dynamically adjust based on length (matching Python script)
     const mainFontSize = BASE_MAIN * scaleFactor * fontSizeMultiplier;
     const cityCharCount = city.length;
     let adjustedMainFontSize = mainFontSize;
@@ -278,6 +322,14 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     ctx.font = `bold ${adjustedMainFontSize}px ${fontFamilyCSS}`;
     const cityText = spacedText(city);
     ctx.fillText(cityText, width / 2, height * 0.86);
+
+    // Separator line (matching Python script)
+    ctx.strokeStyle = textColor;
+    ctx.lineWidth = 1 * scaleFactor;
+    ctx.beginPath();
+    ctx.moveTo(width * 0.4, height * 0.875);
+    ctx.lineTo(width * 0.6, height * 0.875);
+    ctx.stroke();
 
     // Country
     const subFontSize = BASE_SUB * scaleFactor * fontSizeMultiplier;
@@ -306,6 +358,8 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     }
   }, [
     streets,
+    water,
+    parks,
     theme,
     city,
     country,
@@ -376,14 +430,14 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
         <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-2">
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-muted-foreground">Lade Straßendaten...</span>
+            <span className="text-sm text-muted-foreground">Lade Kartendaten...</span>
           </div>
         </div>
       )}
 
       {error && !isLoading && (
         <div className="absolute top-2 right-2 bg-destructive/10 border border-destructive/30 backdrop-blur-sm px-2 py-1 rounded text-xs text-destructive z-30">
-          Fehler beim Laden der Straßen
+          Fehler beim Laden der Daten
         </div>
       )}
     </div>
