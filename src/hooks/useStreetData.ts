@@ -30,39 +30,50 @@ interface TileResult {
 }
 
 // Maximum radius per tile request to stay within edge function memory limits
-const MAX_TILE_RADIUS = 10000; // 10km per tile
+const MAX_TILE_RADIUS = 8000; // 8km per tile for safety margin
 
-// Calculate tiles needed for a given area
+// Calculate tiles needed for a given area - prioritizes center coverage
 function calculateTiles(lat: number, lng: number, distance: number): { lat: number; lng: number; radius: number }[] {
+  // For small areas, single tile is enough
   if (distance <= MAX_TILE_RADIUS) {
-    // Single tile for small areas
     return [{ lat, lng, radius: distance }];
   }
 
-  // For large areas, create a grid of tiles
-  const tilesPerSide = Math.ceil(distance / MAX_TILE_RADIUS);
-  const tileRadius = distance / tilesPerSide;
   const tiles: { lat: number; lng: number; radius: number }[] = [];
+  
+  // Always start with center tile
+  tiles.push({ lat, lng, radius: MAX_TILE_RADIUS });
 
-  // Calculate the offset in degrees for each tile
-  const latOffset = (tileRadius * 2) / 111320; // degrees latitude per tile
-  const lngOffset = (tileRadius * 2) / (111320 * Math.cos(lat * Math.PI / 180)); // degrees longitude per tile
+  // Calculate how many tiles we need to cover the full area
+  // Each tile covers 2*radius, with some overlap for seamless coverage
+  const tileSpacing = MAX_TILE_RADIUS * 1.5; // 75% of diameter = 25% overlap
+  const numTilesPerSide = Math.ceil(distance / tileSpacing);
+  
+  if (numTilesPerSide <= 1) {
+    return tiles; // Center tile is enough
+  }
 
-  // Start from top-left corner
-  const startLat = lat + (latOffset * (tilesPerSide - 1)) / 2;
-  const startLng = lng - (lngOffset * (tilesPerSide - 1)) / 2;
+  // Calculate offset in degrees
+  const metersPerDegreeLat = 111320;
+  const metersPerDegreeLng = 111320 * Math.cos(lat * Math.PI / 180);
+  const latStep = tileSpacing / metersPerDegreeLat;
+  const lngStep = tileSpacing / metersPerDegreeLng;
 
-  for (let row = 0; row < tilesPerSide; row++) {
-    for (let col = 0; col < tilesPerSide; col++) {
-      tiles.push({
-        lat: startLat - row * latOffset,
-        lng: startLng + col * lngOffset,
-        radius: tileRadius,
-      });
+  // Add tiles in concentric rings around center
+  for (let ring = 1; ring <= numTilesPerSide; ring++) {
+    // Top and bottom rows of this ring
+    for (let col = -ring; col <= ring; col++) {
+      tiles.push({ lat: lat + ring * latStep, lng: lng + col * lngStep, radius: MAX_TILE_RADIUS });
+      tiles.push({ lat: lat - ring * latStep, lng: lng + col * lngStep, radius: MAX_TILE_RADIUS });
+    }
+    // Left and right columns (excluding corners already added)
+    for (let row = -ring + 1; row <= ring - 1; row++) {
+      tiles.push({ lat: lat + row * latStep, lng: lng + ring * lngStep, radius: MAX_TILE_RADIUS });
+      tiles.push({ lat: lat + row * latStep, lng: lng - ring * lngStep, radius: MAX_TILE_RADIUS });
     }
   }
 
-  console.log(`Created ${tiles.length} tiles for ${distance}m radius (${tilesPerSide}x${tilesPerSide} grid)`);
+  console.log(`Created ${tiles.length} tiles for ${distance}m radius (center + ${numTilesPerSide} rings)`);
   return tiles;
 }
 
