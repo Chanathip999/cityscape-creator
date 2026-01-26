@@ -303,8 +303,6 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false, c
           {spacedText(city)}
         </h2>
 
-        {/* Decorative line */}
-        <div className="w-16 h-[1px] mx-auto my-2" style={{ backgroundColor: textColor }} />
 
         {/* Country */}
         <p
