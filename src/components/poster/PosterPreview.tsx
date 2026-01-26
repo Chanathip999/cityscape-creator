@@ -20,11 +20,14 @@ const spacedText = (text: string): string => {
 };
 
 const getZoomFromDistance = (distance: number): number => {
-  if (distance <= 3000) return 14;
-  if (distance <= 6000) return 13;
-  if (distance <= 10000) return 12;
-  if (distance <= 15000) return 11;
-  if (distance <= 20000) return 10;
+  // Higher zoom levels = more detailed/sharper tiles
+  if (distance <= 2000) return 16;
+  if (distance <= 3000) return 15;
+  if (distance <= 5000) return 14;
+  if (distance <= 8000) return 13;
+  if (distance <= 12000) return 12;
+  if (distance <= 18000) return 11;
+  if (distance <= 25000) return 10;
   return 9;
 };
 
