@@ -1,3 +1,13 @@
+/**
+ * Canvas-based Poster Preview for Minimalist (Vector) mode.
+ * 
+ * IMPORTANT: This component's rendering logic is based on the maptoposter Python script:
+ * https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py
+ * 
+ * When modifying this component, always refer to the original Python implementation
+ * to ensure visual parity with the reference output.
+ */
+
 import { useEffect, useRef, useCallback } from 'react';
 import { PosterConfig, ASPECT_RATIOS } from '@/types/poster';
 import { useStreetData } from '@/hooks/useStreetData';
@@ -37,9 +47,10 @@ const STREET_WIDTHS: Record<string, number> = {
   service: 0.8,
 };
 
-// High DPI for sharp output
-const DPI = 300;
-const BASE_SIZE = 12; // Base size in inches
+// High DPI for ultra-sharp output (matching maptoposter quality)
+// Reference: https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py
+const DPI = 400; // Increased from 300 for higher resolution
+const BASE_SIZE = 14; // Increased from 12 for larger canvas
 
 export const CanvasPosterPreview = ({ config, onExportReady, containerRef: externalContainerRef }: CanvasPosterPreviewProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -324,13 +335,8 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     );
     ctx.globalAlpha = 1;
 
-    // Attribution
-    ctx.globalAlpha = 0.5;
-    ctx.font = `${FONT_WEIGHTS.attribution} ${scaledFonts.attribution}px ${fontStack}`;
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText('© OpenStreetMap contributors', width - 10, height - 10);
-    ctx.globalAlpha = 1;
+    // Attribution removed from preview per user request
+    // Only shown in final exports for legal compliance
 
     if (onExportReady) {
       onExportReady(canvas);

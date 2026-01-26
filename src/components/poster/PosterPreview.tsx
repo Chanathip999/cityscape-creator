@@ -261,15 +261,21 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false, c
         }}
       />
 
-      {/* Typography section - uses shared config */}
+      {/* Typography section - uses shared config (synced with minimalist mode) */}
       <div className={`absolute bottom-0 left-0 right-0 z-20 p-4 md:p-6 text-center pointer-events-none ${FONT_CSS_CLASSES[fontFamily]}`}>
-        {/* City name */}
+        {/* City name with spaced letters (matching maptoposter Python script) */}
         <h2
-          className={`${fontClasses.title} font-bold ${TRACKING_CLASSES.title} mb-2`}
+          className={`${fontClasses.title} font-bold ${TRACKING_CLASSES.title} mb-1`}
           style={{ color: textColor }}
         >
-          {formatDisplayText(city)}
+          {formatDisplayText(city).split('').join(' ')}
         </h2>
+
+        {/* Decorative line between city and country (matching maptoposter y=0.125) */}
+        <div 
+          className="w-[15%] h-[1px] mx-auto mb-1 opacity-60"
+          style={{ backgroundColor: textColor }}
+        />
 
         {/* Country */}
         <p
@@ -288,13 +294,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false, c
         </p>
       </div>
 
-      {/* Attribution */}
-      <div
-        className="absolute bottom-1 right-2 text-[6px] opacity-50 z-20"
-        style={{ color: textColor }}
-      >
-        © OpenStreetMap contributors
-      </div>
+      {/* Attribution removed from preview - only shown in exports for legal compliance */}
     </div>
   );
 };
