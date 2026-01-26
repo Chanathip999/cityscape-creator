@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { PosterConfig, ASPECT_RATIOS } from '@/types/poster';
+import {
+  FONT_CSS_CLASSES,
+  FONT_SIZE_CLASSES,
+  TRACKING_CLASSES,
+  formatCoordinates,
+  formatDisplayText,
+} from '@/lib/posterTypography';
 import 'leaflet/dist/leaflet.css';
 
 interface PosterPreviewProps {
@@ -8,17 +15,6 @@ interface PosterPreviewProps {
   interactive?: boolean;
   containerRef?: React.RefObject<HTMLDivElement>;
 }
-
-const formatCoordinates = (lat: number, lon: number): string => {
-  const latDir = lat >= 0 ? 'N' : 'S';
-  const lonDir = lon >= 0 ? 'E' : 'W';
-  return `${Math.abs(lat).toFixed(4)}° ${latDir} / ${Math.abs(lon).toFixed(4)}° ${lonDir}`;
-};
-
-const spacedText = (text: string): string => {
-  // Match canvas mode: use tracking/letter-spacing in CSS, not injected spaces.
-  return text.toUpperCase();
-};
 
 const getZoomFromDistance = (distance: number): number => {
   // Much higher zoom levels for ultra-sharp tiles
@@ -53,37 +49,8 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false, c
   const internalMoveRef = useRef(false);
   const prevDistanceRef = useRef(distance);
 
-  const getFontClass = () => {
-    switch (fontFamily) {
-      case 'serif':
-        return 'font-serif';
-      case 'sans':
-        return 'font-sans';
-      case 'display':
-        return 'font-display';
-      case 'elegant':
-        return 'font-elegant';
-      case 'condensed':
-        return 'font-condensed';
-      default:
-        return 'font-mono';
-    }
-  };
-
   const textColor = customTextColor || theme.text;
-
-  const getFontSize = () => {
-    switch (fontSize) {
-      case 'small':
-        return { title: 'text-xl md:text-2xl', subtitle: 'text-[10px]', coords: 'text-[8px]' };
-      case 'large':
-        return { title: 'text-3xl md:text-4xl lg:text-5xl', subtitle: 'text-sm', coords: 'text-xs' };
-      default:
-        return { title: 'text-2xl md:text-3xl lg:text-4xl', subtitle: 'text-xs md:text-sm', coords: 'text-xs' };
-    }
-  };
-
-  const fontSizes = getFontSize();
+  const fontClasses = FONT_SIZE_CLASSES[fontSize];
 
   // Get aspect ratio class
   const getAspectClass = () => {
@@ -294,28 +261,27 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false, c
         }}
       />
 
-      {/* Typography section */}
-      <div className={`absolute bottom-0 left-0 right-0 z-20 p-4 md:p-6 text-center pointer-events-none ${getFontClass()}`}>
+      {/* Typography section - uses shared config */}
+      <div className={`absolute bottom-0 left-0 right-0 z-20 p-4 md:p-6 text-center pointer-events-none ${FONT_CSS_CLASSES[fontFamily]}`}>
         {/* City name */}
         <h2
-          className={`${fontSizes.title} font-bold tracking-[0.3em] mb-2`}
+          className={`${fontClasses.title} font-bold ${TRACKING_CLASSES.title} mb-2`}
           style={{ color: textColor }}
         >
-          {spacedText(city)}
+          {formatDisplayText(city)}
         </h2>
-
 
         {/* Country */}
         <p
-          className={`${fontSizes.subtitle} tracking-[0.15em] mb-1 font-light`}
+          className={`${fontClasses.subtitle} ${TRACKING_CLASSES.subtitle} mb-1 font-light`}
           style={{ color: textColor }}
         >
-          {(countryLabel || country).toUpperCase()}
+          {formatDisplayText(countryLabel || country)}
         </p>
 
         {/* Coordinates */}
         <p
-          className={`${fontSizes.coords} tracking-[0.05em] opacity-70`}
+          className={`${fontClasses.coords} ${TRACKING_CLASSES.coords} opacity-70`}
           style={{ color: textColor }}
         >
           {formatCoordinates(latitude, longitude)}

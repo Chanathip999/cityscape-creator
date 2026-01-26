@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.geonames-search]
 verify_jwt = false
+
+[functions.render-poster]
+verify_jwt = false
