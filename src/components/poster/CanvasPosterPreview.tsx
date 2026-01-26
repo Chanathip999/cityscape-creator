@@ -322,8 +322,11 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     }
 
     // Layer 4: Gradients
-    createGradientFade(ctx, theme.gradientColor, 'top', width, height);
-    createGradientFade(ctx, theme.gradientColor, 'bottom', width, height);
+    // NOTE: In minimalist mode we keep the render strictly 2D.
+    // The top/bottom fades can read as a vignette/perspective effect in preview,
+    // so we disable them here.
+    // createGradientFade(ctx, theme.gradientColor, 'top', width, height);
+    // createGradientFade(ctx, theme.gradientColor, 'bottom', width, height);
 
     // Layer 5: Typography - much larger fonts to match tile mode
     const textColor = config.customTextColor || theme.text;

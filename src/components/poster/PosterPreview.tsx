@@ -16,7 +16,8 @@ const formatCoordinates = (lat: number, lon: number): string => {
 };
 
 const spacedText = (text: string): string => {
-  return text.toUpperCase().split('').join(' ');
+  // Match canvas mode: use tracking/letter-spacing in CSS, not injected spaces.
+  return text.toUpperCase();
 };
 
 const getZoomFromDistance = (distance: number): number => {
@@ -297,7 +298,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false, c
       <div className={`absolute bottom-0 left-0 right-0 z-20 p-4 md:p-6 text-center pointer-events-none ${getFontClass()}`}>
         {/* City name */}
         <h2
-          className={`${fontSizes.title} font-bold tracking-[0.2em] md:tracking-[0.3em] mb-2`}
+          className={`${fontSizes.title} font-bold tracking-[0.3em] mb-2`}
           style={{ color: textColor }}
         >
           {spacedText(city)}
@@ -314,7 +315,7 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false, c
 
         {/* Coordinates */}
         <p
-          className={`${fontSizes.coords} tracking-wider opacity-70`}
+          className={`${fontSizes.coords} tracking-[0.05em] opacity-70`}
           style={{ color: textColor }}
         >
           {formatCoordinates(latitude, longitude)}
