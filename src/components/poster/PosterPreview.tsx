@@ -160,6 +160,9 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false, c
         const tileLayer = L.tileLayer(getTileUrl(theme.id), {
           attribution: '',
           maxZoom: 19,
+          // Configure for @2x retina tiles - this makes them render at full resolution
+          tileSize: 512,
+          zoomOffset: -1,
         }).addTo(map);
 
         if (interactive && onLocationChange) {
@@ -231,6 +234,9 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false, c
         tileLayerRef.current = L.tileLayer(getTileUrl(theme.id), {
           attribution: '',
           maxZoom: 19,
+          // Configure for @2x retina tiles
+          tileSize: 512,
+          zoomOffset: -1,
         }).addTo(mapInstanceRef.current);
       }
     };
