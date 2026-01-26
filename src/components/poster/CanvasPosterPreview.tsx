@@ -32,27 +32,34 @@ interface CanvasPosterPreviewProps {
  * Street widths from maptoposter Python script get_edge_widths_by_type()
  * https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py#L217-L244
  * 
- * Python exports at 12 inches base width (fig, ax = plt.subplots(figsize=(12, 12 / aspect)))
- * Line widths in Python are in points (72 points = 1 inch).
- * For our canvas, we scale: (canvasWidth / 12 inches / 72 dpi) * pythonWidth
- * Simplified: pythonWidth * (canvasWidth / 864)
+ * # In get_edge_colors_by_type() and get_edge_widths_by_type():
+ * motorway, motorway_link     → Thickest (1.2), darkest
+ * trunk, primary              → Thick (1.0)
+ * secondary                   → Medium (0.8)
+ * tertiary                    → Thin (0.6)
+ * residential, living_street  → Thinnest (0.4), lightest
+ * 
+ * We multiply by a scale factor for canvas visibility
  */
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 1.2,
-  motorway_link: 1.0,
-  trunk: 1.0,
-  trunk_link: 0.9,
-  primary: 1.0,
-  primary_link: 0.9,
-  secondary: 0.8,
-  secondary_link: 0.7,
-  tertiary: 0.6,
-  tertiary_link: 0.5,
-  residential: 0.4,
-  living_street: 0.4,
-  unclassified: 0.4,
-  service: 0.3,
+  motorway: 3.6,       // Python 1.2 * 3 for visibility
+  motorway_link: 3.0,  // Python 1.0 * 3
+  trunk: 3.0,          // Python 1.0 * 3
+  trunk_link: 2.7,     // Python 0.9 * 3
+  primary: 3.0,        // Python 1.0 * 3
+  primary_link: 2.7,   // Python 0.9 * 3
+  secondary: 2.4,      // Python 0.8 * 3
+  secondary_link: 2.1, // Python 0.7 * 3
+  tertiary: 1.8,       // Python 0.6 * 3
+  tertiary_link: 1.5,  // Python 0.5 * 3
+  residential: 1.2,    // Python 0.4 * 3
+  living_street: 1.2,  // Python 0.4 * 3
+  unclassified: 1.2,   // Python 0.4 * 3
+  service: 0.9,        // Python 0.3 * 3
 };
+
+// Railway width (z-order 2.5 in Python, between parks and roads)
+const RAILWAY_WIDTH = 1.5; // Python uses 0.5, we multiply for visibility
 
 // DPI and base size for high resolution output
 // Reference: https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py
@@ -98,7 +105,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   );
   const fetchDistance = Math.max(distance, compensatedDistance) * 1.5;
 
-  const { streets, water, parks, isLoading, error } = useStreetData({
+  const { streets, railways, water, parks, isLoading, error } = useStreetData({
     latitude,
     longitude,
     distance: fetchDistance,
@@ -125,13 +132,12 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   );
 
   const getStreetWidth = useCallback((type: string, canvasWidth: number): number => {
-    // Python uses 12 inch figure width at 72 dpi for line calculations
-    // Scale widths: pythonWidth * (canvasWidth / (12 * 72)) = pythonWidth * (canvasWidth / 864)
-    // But we need visible lines, so multiply by additional factor for DPI scaling
-    const baseWidth = STREET_WIDTHS[type] || 0.4;
-    const scaleFactor = canvasWidth / 864;
-    // Minimum line width of 1px for visibility, max reasonable width
-    return Math.max(1, Math.min(baseWidth * scaleFactor, 12));
+    // Street widths are pre-multiplied for visibility
+    // Scale by canvas size relative to 12-inch base (3600px at 300 DPI)
+    const baseWidth = STREET_WIDTHS[type] || 1.2;
+    const scaleFactor = canvasWidth / 3600;
+    // Ensure minimum visibility of 0.5px, max of 15px
+    return Math.max(0.5, baseWidth * scaleFactor * 2);
   }, []);
 
   const getCropLimits = useCallback(() => {
@@ -231,6 +237,32 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
         }
         ctx.closePath();
         ctx.fill();
+      }
+    }
+
+    // Layer 2.5: Draw railways (z-order 2.5 in maptoposter - between parks and roads)
+    // https://github.com/Chanathip999/maptoposter - railways.plot with linewidth=0.5
+    if (railways && railways.length > 0) {
+      const railwayColor = theme.railway || theme.text;
+      const railwayWidth = RAILWAY_WIDTH * (width / 3600) * 2;
+      
+      ctx.strokeStyle = railwayColor;
+      ctx.lineWidth = railwayWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      
+      for (const polyline of railways) {
+        if (polyline.length < 2) continue;
+        
+        ctx.beginPath();
+        const start = toCanvasCoords(polyline[0][0], polyline[0][1], width, height, bounds);
+        ctx.moveTo(start.x, start.y);
+        
+        for (let i = 1; i < polyline.length; i++) {
+          const point = toCanvasCoords(polyline[i][0], polyline[i][1], width, height, bounds);
+          ctx.lineTo(point.x, point.y);
+        }
+        ctx.stroke();
       }
     }
 
@@ -358,6 +390,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     }
   }, [
     streets,
+    railways,
     water,
     parks,
     theme,

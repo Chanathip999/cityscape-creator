@@ -15,6 +15,7 @@ interface UseStreetDataProps {
 
 interface UseStreetDataResult {
   streets: StreetSegment[];
+  railways: [number, number][][]; // Railway polylines (z-order 2.5 in maptoposter)
   water: [number, number][][]; // Array of polygon rings
   parks: [number, number][][]; // Array of polygon rings
   isLoading: boolean;
@@ -28,6 +29,7 @@ export const useStreetData = ({
   enabled = true,
 }: UseStreetDataProps): UseStreetDataResult => {
   const [streets, setStreets] = useState<StreetSegment[]>([]);
+  const [railways, setRailways] = useState<[number, number][][]>([]);
   const [water, setWater] = useState<[number, number][][]>([]);
   const [parks, setParks] = useState<[number, number][][]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -73,6 +75,7 @@ export const useStreetData = ({
             count: s.coordinates.length,
           })));
           setStreets(data.streets);
+          setRailways(data.railways || []);
           setWater(data.water || []);
           setParks(data.parks || []);
           lastParamsRef.current = paramsKey;
@@ -92,5 +95,5 @@ export const useStreetData = ({
     };
   }, [latitude, longitude, distance, enabled]);
 
-  return { streets, water, parks, isLoading, error };
+  return { streets, railways, water, parks, isLoading, error };
 };

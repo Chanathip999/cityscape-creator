@@ -5,12 +5,14 @@ export interface PosterTheme {
   text: string;
   water: string;
   parks: string;
+  railway?: string; // Railway color (optional, from maptoposter)
   roadMotorway: string;
   roadPrimary: string;
   roadSecondary: string;
   roadTertiary: string;
   roadResidential: string;
   roadService: string;
+  roadDefault?: string; // Default road color for unknown types
   gradientColor: string;
 }
 
@@ -88,12 +90,14 @@ export const POSTER_THEMES: PosterTheme[] = [
     text: '#1B4965',
     water: '#B8D4E3',
     parks: '#D5E8D4',
+    railway: '#1B4965',
     roadMotorway: '#1B4965',
     roadPrimary: '#2D6A8A',
     roadSecondary: '#4A8DAD',
     roadTertiary: '#6AB0D0',
     roadResidential: '#8CC8E0',
     roadService: '#A8D8EC',
+    roadDefault: '#6AB0D0',
     gradientColor: '#E8F4F8',
   },
   {
@@ -103,12 +107,14 @@ export const POSTER_THEMES: PosterTheme[] = [
     text: '#FFFFFF',
     water: '#1A1A1A',
     parks: '#151515',
+    railway: '#666666',
     roadMotorway: '#FFFFFF',
     roadPrimary: '#D0D0D0',
     roadSecondary: '#A0A0A0',
     roadTertiary: '#707070',
     roadResidential: '#505050',
     roadService: '#353535',
+    roadDefault: '#707070',
     gradientColor: '#0D0D0D',
   },
   {
@@ -118,12 +124,14 @@ export const POSTER_THEMES: PosterTheme[] = [
     text: '#4A4035',
     water: '#D8D0C0',
     parks: '#E0E8D8',
+    railway: '#8A7060',
     roadMotorway: '#4A4035',
     roadPrimary: '#6A6055',
     roadSecondary: '#8A8075',
     roadTertiary: '#AAA095',
     roadResidential: '#C0B8AD',
     roadService: '#D5D0C8',
+    roadDefault: '#AAA095',
     gradientColor: '#F5F0E6',
   },
   {
@@ -133,12 +141,14 @@ export const POSTER_THEMES: PosterTheme[] = [
     text: '#D4A853',
     water: '#0F1E35',
     parks: '#0C1A2E',
+    railway: '#D4A853',
     roadMotorway: '#D4A853',
     roadPrimary: '#B8923F',
     roadSecondary: '#8A6E30',
     roadTertiary: '#5C4A20',
     roadResidential: '#3D3115',
     roadService: '#2A2210',
+    roadDefault: '#5C4A20',
     gradientColor: '#0A1628',
   },
   {
@@ -148,12 +158,14 @@ export const POSTER_THEMES: PosterTheme[] = [
     text: '#2D5249',
     water: '#C5D9D2',
     parks: '#D5E5DE',
+    railway: '#2D5249',
     roadMotorway: '#2D5249',
     roadPrimary: '#3D6A5F',
     roadSecondary: '#5A8A7F',
     roadTertiary: '#7AABA0',
     roadResidential: '#9AC8BE',
     roadService: '#B5DCD5',
+    roadDefault: '#7AABA0',
     gradientColor: '#E8F0ED',
   },
   {
@@ -163,12 +175,14 @@ export const POSTER_THEMES: PosterTheme[] = [
     text: '#8B4513',
     water: '#E8DFD5',
     parks: '#E5E8DC',
+    railway: '#8B4513',
     roadMotorway: '#A0522D',
     roadPrimary: '#B87333',
     roadSecondary: '#CD853F',
     roadTertiary: '#DEB887',
     roadResidential: '#E8D4C0',
     roadService: '#F0E0D0',
+    roadDefault: '#DEB887',
     gradientColor: '#FAF4EE',
   },
   {
@@ -178,12 +192,14 @@ export const POSTER_THEMES: PosterTheme[] = [
     text: '#2F4F4F',
     water: '#C8E0D8',
     parks: '#D5E8DC',
+    railway: '#2F4F4F',
     roadMotorway: '#2F4F4F',
     roadPrimary: '#3D6B5C',
     roadSecondary: '#5A8A7A',
     roadTertiary: '#7AAA9A',
     roadResidential: '#A0C8B8',
     roadService: '#B8DCD0',
+    roadDefault: '#7AAA9A',
     gradientColor: '#EEF4F0',
   },
   {
@@ -193,12 +209,14 @@ export const POSTER_THEMES: PosterTheme[] = [
     text: '#1A1A1A',
     water: '#D0D0D0',
     parks: '#E8E8E8',
+    railway: '#1A1A1A',
     roadMotorway: '#1A1A1A',
     roadPrimary: '#333333',
     roadSecondary: '#666666',
     roadTertiary: '#999999',
     roadResidential: '#CCCCCC',
     roadService: '#DDDDDD',
+    roadDefault: '#999999',
     gradientColor: '#FAFAFA',
   },
   {
@@ -208,28 +226,34 @@ export const POSTER_THEMES: PosterTheme[] = [
     text: '#C04000',
     water: '#F5E8E0',
     parks: '#F0E8DC',
+    railway: '#C04000',
     roadMotorway: '#C04000',
     roadPrimary: '#D06030',
     roadSecondary: '#E08060',
     roadTertiary: '#F0A090',
     roadResidential: '#F8C8B8',
     roadService: '#FAD8CC',
+    roadDefault: '#F0A090',
     gradientColor: '#FDF5F0',
   },
   {
+    // Neon Cyberpunk theme - based on maptoposter neon_cyberpunk.json
+    // https://github.com/Chanathip999/maptoposter/blob/main/themes/neon_cyberpunk.json
     id: 'neon',
     name: 'Neon Cyberpunk',
-    bg: '#0A0F1A',
-    text: '#00D4FF',
-    water: '#0D1520',
-    parks: '#0A1218',
-    roadMotorway: '#FF00FF',
-    roadPrimary: '#00D4FF',
-    roadSecondary: '#00A8CC',
-    roadTertiary: '#007A99',
-    roadResidential: '#004D66',
-    roadService: '#003344',
-    gradientColor: '#0A0F1A',
+    bg: '#000000',          // Pure black background
+    text: '#00FFCC',        // Electric cyan text
+    water: '#1A1A1A',       // Dark grey water
+    parks: '#0F0F0F',       // Very dark grey parks
+    railway: '#FF00FF',     // Electric pink/magenta railways
+    roadMotorway: '#00FFCC', // Cyan motorways
+    roadPrimary: '#00E6B8',
+    roadSecondary: '#00CC99',
+    roadTertiary: '#00B285',
+    roadResidential: '#009971',
+    roadService: '#00805E',
+    roadDefault: '#00805E',
+    gradientColor: '#000000',
   },
 ];
 

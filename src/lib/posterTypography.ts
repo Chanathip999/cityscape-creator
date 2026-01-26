@@ -53,13 +53,14 @@ export const TRACKING_CLASSES = {
 // - Decorative line: y=0.125 → SVG: 1-0.125 = 0.875
 // - Country: y=0.10 → SVG: 1-0.10 = 0.90
 // - Coordinates: y=0.07 → SVG: 1-0.07 = 0.93
+// IMPORTANT: These positions are spaced to prevent overlap at any font size
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const TEXT_POSITIONS = {
-  title: 0.86,           // City name
-  decorativeLine: 0.875, // Line between city and country
-  subtitle: 0.90,        // Country name
-  coords: 0.93,          // Coordinates
+  title: 0.82,           // City name (moved up from 0.86 to prevent overlap)
+  decorativeLine: 0.865, // Line between city and country
+  subtitle: 0.895,       // Country name
+  coords: 0.94,          // Coordinates
   attribution: 0.98,     // OSM attribution
 } as const;
 

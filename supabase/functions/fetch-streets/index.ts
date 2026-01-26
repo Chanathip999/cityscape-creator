@@ -24,6 +24,11 @@ interface StreetData {
   coordinates: [number, number][][];
 }
 
+interface RailwayData {
+  type: 'railway';
+  coordinates: [number, number][][]; // Array of polylines
+}
+
 interface WaterData {
   type: 'water';
   polygons: [number, number][][]; // Array of polygon rings
@@ -92,14 +97,16 @@ Deno.serve(async (req) => {
     const highwayTags = activeStreetTypes.flatMap(st => st.tags);
     const bbox = `${south.toFixed(5)},${west.toFixed(5)},${north.toFixed(5)},${east.toFixed(5)}`;
     
-    // Build query conditionally - only include water/parks for smaller radii
+    // Build query conditionally - include water/parks/railways for smaller radii
+    // z-order from maptoposter: z=3 roads, z=2.5 railways, z=2 parks, z=1 water, z=0 bg
     let overpassQuery: string;
     
     if (includeWaterParks) {
       overpassQuery = `
-        [out:json][timeout:25];
+        [out:json][timeout:30];
         (
           way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
+          way["railway"="rail"](${bbox});
           way["natural"="water"](${bbox});
           way["waterway"~"^(river|canal|riverbank)$"](${bbox});
           way["leisure"="park"](${bbox});
@@ -108,11 +115,12 @@ Deno.serve(async (req) => {
         out geom;
       `;
     } else {
-      // Large areas: streets only
+      // Large areas: streets and railways only
       overpassQuery = `
         [out:json][timeout:20];
         (
           way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
+          way["railway"="rail"](${bbox});
         );
         out geom;
       `;
@@ -174,6 +182,9 @@ Deno.serve(async (req) => {
     const coordsByType = new Map<string, [number, number][][]>();
     for (const st of activeStreetTypes) coordsByType.set(st.type, []);
 
+    // Process railways (z-order 2.5 in maptoposter)
+    const railwayLines: [number, number][][] = [];
+
     // Process water and parks
     const waterPolygons: [number, number][][] = [];
     const parkPolygons: [number, number][][] = [];
@@ -201,6 +212,18 @@ Deno.serve(async (req) => {
 
         if (points.length >= 2) {
           coordsByType.get(type)?.push(points);
+        }
+      }
+      // Check if it's a railway (z-order 2.5)
+      else if (tags.railway === 'rail') {
+        const points: [number, number][] = [];
+        for (const pt of geom) {
+          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+            points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+          }
+        }
+        if (points.length >= 2) {
+          railwayLines.push(points);
         }
       }
       // Check if it's water
@@ -235,10 +258,11 @@ Deno.serve(async (req) => {
     }));
 
     const totalStreets = streetData.reduce((sum, st) => sum + st.coordinates.length, 0);
-    console.log(`Returning ${totalStreets} street segments, ${waterPolygons.length} water polygons, ${parkPolygons.length} park polygons`);
+    console.log(`Returning ${totalStreets} street segments, ${railwayLines.length} railways, ${waterPolygons.length} water, ${parkPolygons.length} parks`);
 
     const responseData = { 
       streets: streetData,
+      railways: railwayLines,
       water: waterPolygons,
       parks: parkPolygons,
     };
