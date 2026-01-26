@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, FontFamily, FontSize, AspectRatioId } from '@/types/poster';
 import { PosterPreview } from './PosterPreview';
+import { CanvasPosterPreview } from './CanvasPosterPreview';
 import { ThemeSelector } from './ThemeSelector';
 import { CitySearch } from './CitySearch';
 import { DistanceSlider } from './DistanceSlider';
@@ -18,6 +19,7 @@ import { Separator } from '@/components/ui/separator';
 export const PosterEditor = () => {
   const [config, setConfig] = useState<PosterConfig>(DEFAULT_CONFIG);
   const posterRef = useRef<HTMLDivElement>(null);
+  const exportCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const handleCitySelect = (city: string, country: string, lat: number, lon: number) => {
     setConfig((prev) => ({
@@ -90,7 +92,7 @@ export const PosterEditor = () => {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <ExportDialog config={config} posterRef={posterRef} />
+            <ExportDialog config={config} posterRef={posterRef} canvasRef={exportCanvasRef} />
           </div>
         </div>
       </header>
@@ -193,6 +195,16 @@ export const PosterEditor = () => {
               className="max-w-lg mx-auto"
             >
               <PosterPreview config={config} containerRef={posterRef} />
+              
+              {/* Hidden high-res canvas for export */}
+              <div className="absolute opacity-0 pointer-events-none" style={{ position: 'fixed', left: '-9999px', top: 0 }}>
+                <CanvasPosterPreview 
+                  config={config} 
+                  onExportReady={(canvas) => {
+                    (exportCanvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = canvas;
+                  }} 
+                />
+              </div>
             </motion.div>
             
             {/* AI Prompt Input - Below the poster */}
