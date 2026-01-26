@@ -5,14 +5,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Street types - dynamically filtered by distance to avoid memory issues
+// Street types - matching OSMnx network_type='all' for maximum detail
+// https://github.com/Chanathip999/maptoposter uses ox.graph_from_point with network_type='all'
 const ALL_STREET_TYPES = [
   { type: 'motorway', tags: ['motorway', 'motorway_link'] },
   { type: 'primary', tags: ['trunk', 'trunk_link', 'primary', 'primary_link'] },
   { type: 'secondary', tags: ['secondary', 'secondary_link'] },
   { type: 'tertiary', tags: ['tertiary', 'tertiary_link'] },
   { type: 'residential', tags: ['residential', 'living_street', 'unclassified'] },
-  { type: 'service', tags: ['service'] },
+  { type: 'service', tags: ['service', 'pedestrian', 'footway', 'path', 'cycleway', 'track', 'steps'] },
 ];
 
 // Simple in-memory cache for recent queries (TTL: 60 seconds)
@@ -73,15 +74,12 @@ Deno.serve(async (req) => {
 
     const distanceNum = Number(distance);
 
-    // Cap radius to keep Overpass response manageable and avoid memory crashes.
-    const radius = Math.min(12000, Math.max(2500, distanceNum));
+    // Use full radius for detailed street data (matching maptoposter)
+    const radius = Math.min(15000, Math.max(2500, distanceNum));
 
-    // Reduce detail for large areas to avoid memory limit exceeded.
-    const activeStreetTypes = distanceNum > 12000
-      ? ALL_STREET_TYPES.slice(0, 4)
-      : distanceNum > 8000
-        ? ALL_STREET_TYPES.slice(0, 5)
-        : ALL_STREET_TYPES;
+    // Always fetch all street types for maximum detail
+    // The service type now includes pedestrian/footway/path for fine detail
+    const activeStreetTypes = ALL_STREET_TYPES;
 
     // Only fetch water/parks for smaller areas to avoid memory crashes
     const includeWaterParks = distanceNum <= 10000;
