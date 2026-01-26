@@ -48,12 +48,14 @@ export const TRACKING_CLASSES = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vertical Positioning (relative to canvas height, 0 = top, 1 = bottom)
+// Python maptoposter uses bottom-up: city y=0.14, country y=0.10, coords y=0.07
+// We invert for SVG/Canvas (top-down): 1-0.14=0.86, 1-0.10=0.90, 1-0.07=0.93
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const TEXT_POSITIONS = {
-  title: 0.84,     // City name
-  subtitle: 0.88,  // Country name
-  coords: 0.91,    // Coordinates
+  title: 0.86,     // City name (Python y=0.14)
+  subtitle: 0.90,  // Country name (Python y=0.10)
+  coords: 0.93,    // Coordinates (Python y=0.07)
   attribution: 0.98, // OSM attribution
 } as const;
 

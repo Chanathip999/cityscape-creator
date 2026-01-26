@@ -42,9 +42,12 @@ interface StreetSegment {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Constants (ported from Python script)
+// Constants (ported from Python maptoposter script)
+// https://github.com/originalankur/maptoposter
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Street widths matching Python script lines 231-240
+// These values are scaled by (width / 1200) in generateSVG
 const STREET_WIDTHS: Record<string, number> = {
   motorway: 1.2,
   motorway_link: 1.0,
@@ -76,25 +79,29 @@ const ASPECT_RATIOS: Record<string, { width: number; height: number }> = {
   '19:6': { width: 19, height: 6 },
 };
 
-// Typography settings (matching posterTypography.ts)
+// Typography settings matching Python script lines 500-516
+// Text is positioned using normalized coordinates (y=0.14 for city, y=0.10 for country, y=0.07 for coords)
+// Python uses bottom-up positioning, we invert for SVG (top-down)
 const TRACKING = {
-  title: 0.3,
-  subtitle: 0.15,
-  coords: 0.05,
+  title: 0.3,      // Letter spacing for city name
+  subtitle: 0.15,  // Letter spacing for country
+  coords: 0.05,    // Letter spacing for coordinates
 };
 
+// Python positions from bottom (y=0.14 means 14% from bottom = 86% from top)
 const TEXT_POSITIONS = {
-  title: 0.84,
-  subtitle: 0.88,
-  coords: 0.91,
+  title: 0.86,     // City: Python y=0.14 → SVG 1-0.14 = 0.86
+  subtitle: 0.90,  // Country: Python y=0.10 → SVG 1-0.10 = 0.90
+  coords: 0.93,    // Coords: Python y=0.07 → SVG 1-0.07 = 0.93
 };
 
 const FONT_WEIGHTS = {
-  title: 700,
-  subtitle: 300,
-  coords: 400,
+  title: 700,      // Bold for city
+  subtitle: 300,   // Light for country
+  coords: 400,     // Regular for coordinates
 };
 
+// Base font sizes at 1000px height
 const BASE_FONT_SIZES = {
   title: 72,
   subtitle: 28,
