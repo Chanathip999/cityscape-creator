@@ -49,19 +49,24 @@ export const TRACKING_CLASSES = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Vertical Positioning (relative to canvas height, 0 = top, 1 = bottom)
 // From maptoposter Python script using ax.transAxes:
-// - City: y=0.14 → SVG: 1-0.14 = 0.86
-// - Decorative line: y=0.125 → SVG: 1-0.125 = 0.875
-// - Country: y=0.10 → SVG: 1-0.10 = 0.90
-// - Coordinates: y=0.07 → SVG: 1-0.07 = 0.93
-// IMPORTANT: These positions are spaced to prevent overlap at any font size
+// https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py
+//
+// Python y-coordinates (from bottom): Canvas y-coordinates (from top):
+// - City:       y=0.14  → 1-0.14  = 0.86
+// - Line:       y=0.125 → 1-0.125 = 0.875
+// - Country:    y=0.10  → 1-0.10  = 0.90
+// - Coords:     y=0.07  → 1-0.07  = 0.93
+// - Attribution: y=0.02 → 1-0.02  = 0.98
+//
+// IMPORTANT: These exact values match the Python script for visual parity
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const TEXT_POSITIONS = {
-  title: 0.82,           // City name (moved up from 0.86 to prevent overlap)
-  decorativeLine: 0.865, // Line between city and country
-  subtitle: 0.895,       // Country name
-  coords: 0.94,          // Coordinates
-  attribution: 0.98,     // OSM attribution
+  title: 0.86,           // City name: Python y=0.14
+  decorativeLine: 0.875, // Decorative line: Python y=0.125
+  subtitle: 0.90,        // Country name: Python y=0.10
+  coords: 0.93,          // Coordinates: Python y=0.07
+  attribution: 0.98,     // Attribution: Python y=0.02
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
