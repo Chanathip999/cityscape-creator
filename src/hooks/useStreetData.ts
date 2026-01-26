@@ -29,9 +29,8 @@ interface TileResult {
   parks: [number, number][][];
 }
 
-// Maximum radius per tile request to stay within edge function memory limits
-// 8km can still exceed memory in dense cities (lots of footways). Use 5km.
-const MAX_TILE_RADIUS = 5000;
+// Maximum radius per tile - reduced to 3km to prevent memory crashes
+const MAX_TILE_RADIUS = 3000;
 
 // Calculate tiles needed for a given area - prioritizes center coverage
 function calculateTiles(lat: number, lng: number, distance: number): { lat: number; lng: number; radius: number }[] {

@@ -5,15 +5,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Street types - matching OSMnx network_type='all' for maximum detail
-// https://github.com/Chanathip999/maptoposter uses ox.graph_from_point with network_type='all'
+// Street types - core roads only to reduce memory usage
+// footway/path/cycleway removed as they cause memory overflow in dense cities
 const ALL_STREET_TYPES = [
   { type: 'motorway', tags: ['motorway', 'motorway_link'] },
   { type: 'primary', tags: ['trunk', 'trunk_link', 'primary', 'primary_link'] },
   { type: 'secondary', tags: ['secondary', 'secondary_link'] },
   { type: 'tertiary', tags: ['tertiary', 'tertiary_link'] },
   { type: 'residential', tags: ['residential', 'living_street', 'unclassified'] },
-  { type: 'service', tags: ['service', 'pedestrian', 'footway', 'path', 'cycleway', 'track', 'steps'] },
+  { type: 'service', tags: ['service', 'pedestrian'] }, // Removed footway, path, cycleway, track, steps
 ];
 
 // Simple in-memory cache for recent queries (TTL: 60 seconds)
@@ -74,19 +74,16 @@ Deno.serve(async (req) => {
 
     const distanceNum = Number(distance);
 
-    // Keep radius within safe limits - client handles tiling for larger areas
-    // NOTE: 8km tiles can still exceed memory in dense cities when including footways.
-    // We cap to 5km per request and let the client request more tiles if needed.
-    const radius = Math.min(5000, Math.max(2500, distanceNum));
+    // Keep radius within safe limits - reduced to 3km to prevent memory crashes
+    const radius = Math.min(3000, Math.max(1500, distanceNum));
 
-    // ALWAYS use all street types for maximum detail
-    // Client handles large areas by splitting into multiple tile requests
+    // Use all street types (footway/path already removed from definition)
     const activeStreetTypes = ALL_STREET_TYPES;
-    console.log('Using full detail (all street types)');
+    console.log(`Using street types for ${radius}m radius`);
 
-    // Water/parks can explode the response size in some cities.
-    // Keep them only for small tiles where the Overpass payload stays manageable.
-    const includeWaterParks = radius <= 3000;
+    // Disable water/parks entirely - they cause too much memory usage
+    // Can be re-enabled later with a dedicated endpoint or smaller radius
+    const includeWaterParks = false;
 
     const latDelta = radius / 111320;
     const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));
