@@ -38,7 +38,7 @@ const formatCoordinates = (lat: number, lon: number): string => {
 };
 
 const spacedText = (text: string): string => {
-  return text.toUpperCase().split('').join('  ');
+  return text.toUpperCase().split('').join(' ');
 };
 
 const createGradientFade = (
@@ -410,7 +410,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   return (
     <div
       ref={containerRef}
-      className={`relative w-full ${getAspectClass()} rounded-lg shadow-2xl overflow-hidden`}
+      className={`relative w-full ${getAspectClass()} overflow-hidden`}
       style={{ backgroundColor: theme.bg }}
     >
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ objectFit: 'fill' }} />
