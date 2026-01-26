@@ -64,7 +64,7 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
 
       // Calculate scale factor - use higher scale for sharper output
       const currentWidth = element.offsetWidth;
-      const scale = (exportWidth / currentWidth) * 2.5; // Extra 2.5x for maximum sharpness
+      const scale = (exportWidth / currentWidth) * 4; // Extra 4x for ultra-sharp output
 
       // Use html2canvas to capture the element with maximum quality
       const canvas = await html2canvas(element, {
