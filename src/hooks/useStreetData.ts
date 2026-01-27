@@ -187,8 +187,9 @@ export const useStreetData = ({
       try {
         const tiles = calculateTiles(latitude, longitude, distance);
         
-        // Skip service roads for large areas (>8km) - they're 60% of data volume
-        const skipService = distance > 8000;
+        // Always fetch all street types including service for maximum detail
+        // The tile-based approach handles this efficiently
+        const skipService = false;
         console.log(`Fetching ${tiles.length} tile(s) for area (skipService: ${skipService})`);
 
         // Fetch tiles in small batches to avoid compute spikes
