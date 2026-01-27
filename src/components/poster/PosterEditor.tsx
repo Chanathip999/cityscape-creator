@@ -47,6 +47,15 @@ export const PosterEditor = ({ onConfigChange }: PosterEditorProps) => {
     });
   };
 
+  // Handle map center change when user pans the map
+  const handleMapCenterChange = (lat: number, lng: number) => {
+    setConfig((prev) => {
+      const newConfig = { ...prev, latitude: lat, longitude: lng };
+      onConfigChange?.(newConfig);
+      return newConfig;
+    });
+  };
+
   const handleConfigUpdate = (updates: Partial<PosterConfig>) => {
     setConfig((prev) => {
       const newConfig = { ...prev, ...updates };
@@ -153,7 +162,11 @@ export const PosterEditor = ({ onConfigChange }: PosterEditorProps) => {
               transition={{ delay: 0.2 }}
               className="max-w-lg mx-auto relative"
             >
-              <CanvasPosterPreview config={config} containerRef={posterRef} />
+              <CanvasPosterPreview 
+                config={config} 
+                containerRef={posterRef} 
+                onMapCenterChange={handleMapCenterChange}
+              />
               
               {/* Zoom Controls overlay */}
               <ZoomControls
