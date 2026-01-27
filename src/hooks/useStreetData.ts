@@ -50,8 +50,10 @@ const MAX_TILES_BUILDINGS = 64; // Reduced to prevent WORKER_LIMIT errors
 // Batch sizes for parallel fetching - STABLE FOR MEDIUM INSTANCE
 // Lower batch sizes prevent BOOT_ERROR by reducing cold start pressure.
 // Retry logic handles transient failures - prioritize stability over raw speed.
-const STREET_BATCH_SIZE = 12;
-const BUILDING_BATCH_SIZE = 8;
+// NOTE: WORKER_LIMIT is caused by too many concurrent function invocations.
+// Keep these conservative; overall throughput stays good thanks to caching.
+const STREET_BATCH_SIZE = 6;
+const BUILDING_BATCH_SIZE = 4;
 
 // Calculate tiles needed for a given area - ensures center is always included
 function calculateTiles(params: {
@@ -203,15 +205,17 @@ export const useStreetData = ({
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastParamsRef = useRef<string>('');
   const abortControllerRef = useRef<AbortController | null>(null);
+  const runIdRef = useRef(0);
 
   const fetchTileWithRetry = useCallback(async (
+    runId: number,
     tileLat: number,
     tileLng: number,
     tileRadius: number,
     skipService: boolean,
     fetchBuildings: boolean,
     buildingsOnly: boolean,
-    retries = 3 // Increased retries for BOOT_ERROR resilience
+    retries = 4 // Increased retries for BOOT_ERROR/WORKER_LIMIT resilience
   ): Promise<TileResult | null> => {
     const cacheKey =
       getTileCacheKey(tileLat, tileLng, tileRadius) +
@@ -224,6 +228,9 @@ export const useStreetData = ({
     }
     
     for (let attempt = 0; attempt <= retries; attempt++) {
+      // If a new run started (user panned/changed params), stop doing work.
+      if (runId !== runIdRef.current) return null;
+
       try {
         const { data, error: fnError } = await supabase.functions.invoke('fetch-streets', {
           body: {
@@ -239,12 +246,15 @@ export const useStreetData = ({
         if (fnError) {
           const errorStr = String(fnError.message || fnError);
           const isBootError = errorStr.includes('BOOT_ERROR') || errorStr.includes('503');
+          const isWorkerLimit = errorStr.includes('WORKER_LIMIT') || errorStr.includes('546');
           
           if (attempt < retries) {
-            // BOOT_ERROR needs longer wait for function to become available
-            const baseDelay = isBootError ? 500 : 150;
+            // BOOT_ERROR/WORKER_LIMIT need longer wait for capacity to free up.
+            const baseDelay = isWorkerLimit ? 900 : isBootError ? 550 : 180;
             const delay = baseDelay * Math.pow(2, attempt); // Exponential backoff
-            console.log(`Retry ${attempt + 1}/${retries} after ${delay}ms (${isBootError ? 'BOOT_ERROR' : 'error'})`);
+            console.log(
+              `Retry ${attempt + 1}/${retries} after ${delay}ms (${isWorkerLimit ? 'WORKER_LIMIT' : isBootError ? 'BOOT_ERROR' : 'error'})`
+            );
             await new Promise(r => setTimeout(r, delay));
             continue;
           }
@@ -270,9 +280,10 @@ export const useStreetData = ({
       } catch (err) {
         const errorStr = String(err);
         const isBootError = errorStr.includes('BOOT_ERROR') || errorStr.includes('503');
+        const isWorkerLimit = errorStr.includes('WORKER_LIMIT') || errorStr.includes('546');
         
         if (attempt < retries) {
-          const baseDelay = isBootError ? 500 : 150;
+          const baseDelay = isWorkerLimit ? 900 : isBootError ? 550 : 180;
           const delay = baseDelay * Math.pow(2, attempt);
           console.log(`Retry ${attempt + 1}/${retries} after ${delay}ms (exception)`);
           await new Promise(r => setTimeout(r, delay));
@@ -303,6 +314,9 @@ export const useStreetData = ({
     fetchTimeoutRef.current = setTimeout(async () => {
       setIsLoading(true);
       setError(null);
+
+      // New run token: used to cancel in-flight loops when params change quickly.
+      const runId = ++runIdRef.current;
       
       // Clean old cache entries periodically
       clearOldCache();
@@ -339,13 +353,19 @@ export const useStreetData = ({
         const streetFetchPromise = (async () => {
           const results: TileResult[] = [];
           for (let i = 0; i < streetTiles.length; i += STREET_BATCH_SIZE) {
+            if (runId !== runIdRef.current) break;
             const batch = streetTiles.slice(i, i + STREET_BATCH_SIZE);
             const batchResults = await Promise.all(
-              batch.map(tile => fetchTileWithRetry(tile.lat, tile.lng, tile.radius, skipService, false, false))
+              batch.map(tile =>
+                fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, false, false)
+              )
             );
             for (const result of batchResults) {
               if (result) results.push(result);
             }
+
+            // Small yield between batches reduces bursts that trigger WORKER_LIMIT.
+            await new Promise(r => setTimeout(r, 25));
           }
           return results;
         })();
@@ -358,10 +378,13 @@ export const useStreetData = ({
           let loadedCount = 0;
           
           for (let i = 0; i < buildingTiles.length; i += BUILDING_BATCH_SIZE) {
+            if (runId !== runIdRef.current) break;
             const batch = buildingTiles.slice(i, i + BUILDING_BATCH_SIZE);
             const batchResults = await Promise.all(
               // buildingsOnly=true prevents huge mixed responses that can trigger WORKER_LIMIT
-              batch.map(tile => fetchTileWithRetry(tile.lat, tile.lng, tile.radius, skipService, true, true))
+              batch.map(tile =>
+                fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, true, true)
+              )
             );
             
             // Process batch results
@@ -375,6 +398,8 @@ export const useStreetData = ({
               const progressiveMerge = mergeResults(allResults);
               setBuildings(progressiveMerge.buildings);
             }
+
+              await new Promise(r => setTimeout(r, 35));
           }
           
           console.log(`Progressive load complete: ${loadedCount} building tiles processed`);
@@ -386,6 +411,8 @@ export const useStreetData = ({
           streetFetchPromise,
           buildingFetchPromise
         ]);
+
+        if (runId !== runIdRef.current) return;
 
         if (streetResults.length === 0) {
           setError('Failed to fetch street data');
