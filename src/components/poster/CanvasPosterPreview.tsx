@@ -93,6 +93,10 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     fontSize,
     aspectRatio,
     layerVisibility,
+    customRoadColor,
+    customBackgroundColor,
+    showCoordinates,
+    showCountry,
   } = config;
 
   // Get aspect ratio dimensions
@@ -132,6 +136,12 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
 
   const getStreetColor = useCallback(
     (type: string): string => {
+      // Use custom road color if set
+      if (customRoadColor) {
+        // Return custom color with slight variations for hierarchy
+        return customRoadColor;
+      }
+      
       if (['motorway', 'motorway_link'].includes(type)) {
         return theme.roadMotorway;
       } else if (['trunk', 'trunk_link', 'primary', 'primary_link'].includes(type)) {
@@ -146,7 +156,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
         return theme.roadService || theme.roadResidential;
       }
     },
-    [theme]
+    [theme, customRoadColor]
   );
 
   const getStreetWidth = useCallback((type: string, canvasWidth: number): number => {
@@ -252,7 +262,8 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     // =========================================
 
     // z=0: Background
-    ctx.fillStyle = theme.bg;
+    const bgColor = customBackgroundColor || theme.bg;
+    ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, width, height);
 
     // z=0.5: Draw coastlines (land-water boundaries)
@@ -426,16 +437,17 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
 
     // z=10: Gradient fades (top & bottom)
     const fadeHeight = height * 0.25;
+    const gradientBgColor = customBackgroundColor || theme.bg;
     
     const topGradient = ctx.createLinearGradient(0, 0, 0, fadeHeight);
-    topGradient.addColorStop(0, theme.bg);
+    topGradient.addColorStop(0, gradientBgColor);
     topGradient.addColorStop(1, 'transparent');
     ctx.fillStyle = topGradient;
     ctx.fillRect(0, 0, width, fadeHeight);
     
     const bottomGradient = ctx.createLinearGradient(0, height - fadeHeight, 0, height);
     bottomGradient.addColorStop(0, 'transparent');
-    bottomGradient.addColorStop(1, theme.bg);
+    bottomGradient.addColorStop(1, gradientBgColor);
     ctx.fillStyle = bottomGradient;
     ctx.fillRect(0, height - fadeHeight, width, fadeHeight);
 
@@ -479,29 +491,33 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     ctx.stroke();
     ctx.globalAlpha = 1;
 
-    // Country
-    ctx.font = `${FONT_WEIGHTS.subtitle} ${scaledFonts.subtitle}px ${fontStack}`;
-    drawTextWithTracking(
-      ctx,
-      formatDisplayText(countryLabel || country),
-      width / 2,
-      height * TEXT_POSITIONS.subtitle,
-      TRACKING.subtitle,
-      scaledFonts.subtitle
-    );
+    // Country (only if showCountry is true)
+    if (showCountry) {
+      ctx.font = `${FONT_WEIGHTS.subtitle} ${scaledFonts.subtitle}px ${fontStack}`;
+      drawTextWithTracking(
+        ctx,
+        formatDisplayText(countryLabel || country),
+        width / 2,
+        height * TEXT_POSITIONS.subtitle,
+        TRACKING.subtitle,
+        scaledFonts.subtitle
+      );
+    }
 
-    // Coordinates
-    ctx.globalAlpha = 0.7;
-    ctx.font = `${FONT_WEIGHTS.coords} ${scaledFonts.coords}px ${fontStack}`;
-    drawTextWithTracking(
-      ctx,
-      formatCoordinates(latitude, longitude),
-      width / 2,
-      height * TEXT_POSITIONS.coords,
-      TRACKING.coords,
-      scaledFonts.coords
-    );
-    ctx.globalAlpha = 1;
+    // Coordinates (only if showCoordinates is true)
+    if (showCoordinates) {
+      ctx.globalAlpha = 0.7;
+      ctx.font = `${FONT_WEIGHTS.coords} ${scaledFonts.coords}px ${fontStack}`;
+      drawTextWithTracking(
+        ctx,
+        formatCoordinates(latitude, longitude),
+        width / 2,
+        height * TEXT_POSITIONS.coords,
+        TRACKING.coords,
+        scaledFonts.coords
+      );
+      ctx.globalAlpha = 1;
+    }
 
     if (onExportReady) {
       onExportReady(canvas);
@@ -523,6 +539,10 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     fontSize,
     fontFamily,
     config.customTextColor,
+    customRoadColor,
+    customBackgroundColor,
+    showCoordinates,
+    showCountry,
     layerVisibility,
     canvasWidth,
     canvasHeight,

@@ -1,16 +1,14 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, FontFamily, FontSize, AspectRatioId, RenderMode, LayerVisibility } from '@/types/poster';
+import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme } from '@/types/poster';
 import { PosterPreview } from './PosterPreview';
 import { CanvasPosterPreview } from './CanvasPosterPreview';
 import { ThemeSelector } from './ThemeSelector';
 import { CitySearch } from './CitySearch';
 import { ZoomControls } from './ZoomControls';
 import { AIPromptInput } from './AIPromptInput';
-import { FontSelector } from './FontSelector';
-import { AspectRatioSelector } from './AspectRatioSelector';
 import { RenderModeSelector } from './RenderModeSelector';
-import { LayerToggleSelector } from './LayerToggleSelector';
+import { SettingsTabs } from './SettingsTabs';
 import { ClearCacheButton } from './ClearCacheButton';
 import { ExportDialog } from './ExportDialog';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -45,30 +43,6 @@ export const PosterEditor = () => {
       ...prev,
       distance,
     }));
-  };
-
-  const handleFontFamilyChange = (fontFamily: FontFamily) => {
-    setConfig((prev) => ({ ...prev, fontFamily }));
-  };
-
-  const handleFontSizeChange = (fontSize: FontSize) => {
-    setConfig((prev) => ({ ...prev, fontSize }));
-  };
-
-  const handleTextColorChange = (customTextColor: string | undefined) => {
-    setConfig((prev) => ({ ...prev, customTextColor }));
-  };
-
-  const handleAspectRatioChange = (aspectRatio: AspectRatioId) => {
-    setConfig((prev) => ({ ...prev, aspectRatio }));
-  };
-
-  const handleRenderModeChange = (renderMode: RenderMode) => {
-    setConfig((prev) => ({ ...prev, renderMode }));
-  };
-
-  const handleLayerVisibilityChange = (layerVisibility: LayerVisibility) => {
-    setConfig((prev) => ({ ...prev, layerVisibility }));
   };
 
   const handleConfigUpdate = (updates: Partial<PosterConfig>) => {
@@ -131,6 +105,7 @@ export const PosterEditor = () => {
                       setConfig((prev) => ({ ...prev, city: e.target.value }))
                     }
                     placeholder="City name"
+                    className="h-12"
                   />
                 </div>
                 <div className="space-y-2">
@@ -142,20 +117,9 @@ export const PosterEditor = () => {
                       setConfig((prev) => ({ ...prev, country: e.target.value }))
                     }
                     placeholder="Country"
+                    className="h-12"
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="countryLabel">Alternativer Text (optional)</Label>
-                <Input
-                  id="countryLabel"
-                  value={config.countryLabel || ''}
-                  onChange={(e) =>
-                    setConfig((prev) => ({ ...prev, countryLabel: e.target.value }))
-                  }
-                  placeholder="z.B. Deutschland"
-                />
               </div>
 
               <Separator />
@@ -166,37 +130,18 @@ export const PosterEditor = () => {
                 onThemeChange={handleThemeChange}
               />
 
-              {/* Font Selector */}
-              <FontSelector
-                fontFamily={config.fontFamily}
-                fontSize={config.fontSize}
-                customTextColor={config.customTextColor}
-                onFontFamilyChange={handleFontFamilyChange}
-                onFontSizeChange={handleFontSizeChange}
-                onTextColorChange={handleTextColorChange}
-              />
-
               <Separator />
 
               {/* Render Mode Selector */}
               <RenderModeSelector
                 renderMode={config.renderMode}
-                onRenderModeChange={handleRenderModeChange}
+                onRenderModeChange={(mode) => handleConfigUpdate({ renderMode: mode })}
               />
 
-              {/* Layer Toggle Selector - Only for vector mode */}
+              {/* Settings Tabs - Only for vector mode */}
               {config.renderMode === 'vector' && (
-                <LayerToggleSelector
-                  layerVisibility={config.layerVisibility}
-                  onLayerVisibilityChange={handleLayerVisibilityChange}
-                />
+                <SettingsTabs config={config} onConfigUpdate={handleConfigUpdate} />
               )}
-
-              {/* Aspect Ratio Selector */}
-              <AspectRatioSelector
-                aspectRatio={config.aspectRatio}
-                onAspectRatioChange={handleAspectRatioChange}
-              />
 
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
