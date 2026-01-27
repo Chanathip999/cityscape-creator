@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme } from '@/types/poster';
 import { CanvasPosterPreview } from './CanvasPosterPreview';
@@ -69,11 +69,11 @@ export const PosterEditor = ({ onConfigChange }: PosterEditorProps) => {
   }, []);
 
   // Observe container size changes
-  useState(() => {
+  useEffect(() => {
     updateContainerSize();
     window.addEventListener('resize', updateContainerSize);
     return () => window.removeEventListener('resize', updateContainerSize);
-  });
+  }, [updateContainerSize]);
 
   const handleConfigUpdate = (updates: Partial<PosterConfig>) => {
     setConfig((prev) => {
