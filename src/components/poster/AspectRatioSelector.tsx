@@ -1,50 +1,50 @@
-import { AspectRatioId, ASPECT_RATIOS } from '@/types/poster';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { AspectRatioId, ASPECT_RATIOS } from '@/types/poster';
 
 interface AspectRatioSelectorProps {
   aspectRatio: AspectRatioId;
-  onAspectRatioChange: (aspectRatio: AspectRatioId) => void;
+  onAspectRatioChange: (ratio: AspectRatioId) => void;
 }
 
-export const AspectRatioSelector = ({
-  aspectRatio,
-  onAspectRatioChange,
-}: AspectRatioSelectorProps) => {
+const QUICK_RATIOS: AspectRatioId[] = ['3:4', '4:3', '9:16', '16:9', '1:1'];
+
+export const AspectRatioSelector = ({ aspectRatio, onAspectRatioChange }: AspectRatioSelectorProps) => {
   return (
-    <div className="space-y-2">
-      <Label>Seitenverhältnis</Label>
-      <Select
-        value={aspectRatio}
-        onValueChange={(value) => onAspectRatioChange(value as AspectRatioId)}
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Format wählen" />
-        </SelectTrigger>
-        <SelectContent>
-          {ASPECT_RATIOS.map((ratio) => (
-            <SelectItem key={ratio.id} value={ratio.id}>
-              <div className="flex items-center gap-3">
-                <div
-                  className="border border-muted-foreground/30 bg-muted/50"
-                  style={{
-                    width: ratio.width > ratio.height ? 24 : Math.round(24 * (ratio.width / ratio.height)),
-                    height: ratio.height > ratio.width ? 24 : Math.round(24 * (ratio.height / ratio.width)),
-                  }}
-                />
-                <span className="font-medium">{ratio.id}</span>
-                <span className="text-muted-foreground text-sm">({ratio.name})</span>
-              </div>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+    <div className="space-y-3">
+      <Label className="text-sm font-medium">Format</Label>
+      <div className="flex gap-2">
+        {QUICK_RATIOS.map((ratioId) => {
+          const ratio = ASPECT_RATIOS.find(r => r.id === ratioId);
+          if (!ratio) return null;
+          
+          return (
+            <button
+              key={ratioId}
+              onClick={() => onAspectRatioChange(ratioId)}
+              className={cn(
+                'relative flex-1 aspect-square rounded-lg border-2 flex flex-col items-center justify-center gap-1 transition-all',
+                aspectRatio === ratioId
+                  ? 'border-primary bg-primary/10'
+                  : 'border-border hover:border-primary/50'
+              )}
+            >
+              {aspectRatio === ratioId && (
+                <Check className="absolute top-1 right-1 w-3 h-3 text-primary" />
+              )}
+              <div 
+                className="bg-muted-foreground/30 rounded-sm"
+                style={{
+                  width: ratio.width > ratio.height ? '60%' : `${(ratio.width / ratio.height) * 60}%`,
+                  height: ratio.height > ratio.width ? '60%' : `${(ratio.height / ratio.width) * 60}%`,
+                }}
+              />
+              <span className="text-xs text-muted-foreground">{ratioId}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 };
