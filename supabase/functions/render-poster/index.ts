@@ -715,14 +715,14 @@ function generateSVG(request: RenderRequest, data: {
   // Background
   svg += `<rect width="${width}" height="${height}" fill="${theme.bg}"/>`;
   
-  // Default layer visibility (all enabled)
+  // Default layer visibility (matches frontend DEFAULT_LAYER_VISIBILITY)
   const layerVisibility = request.layerVisibility || {
     water: true,
-    forests: true,
-    parks: true,
+    forests: false, // Disabled by default for faster loading
+    parks: false, // Disabled by default for faster loading
     railways: true,
     aeroways: true,
-    coastlines: true,
+    coastlines: false, // Disabled by default for faster loading
     buildings: false,
   };
   

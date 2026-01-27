@@ -41,19 +41,19 @@ interface TileResult {
 }
 
 // ============================================================================
-// VERY AGGRESSIVE CONFIGURATION - leverages upgraded instance capacity
+// OPTIMIZED CONFIGURATION - faster loading with reduced default layers
 // ============================================================================
 // Tile radii - keep under backend's 3500m cap
 const MAX_STREET_TILE_RADIUS = 3500;
-const MAX_BUILDING_TILE_RADIUS = 2000; // Slightly larger for fewer tiles
+const MAX_BUILDING_TILE_RADIUS = 2000;
 
-// Maximum tiles for full coverage  
-const MAX_TILES_STREETS = 36;
-const MAX_TILES_BUILDINGS = 64;
+// Maximum tiles for full coverage - reduced for faster loading
+const MAX_TILES_STREETS = 25;
+const MAX_TILES_BUILDINGS = 49;
 
-// VERY AGGRESSIVE batch sizes - semaphore prevents overload
-const STREET_BATCH_SIZE = 20;
-const BUILDING_BATCH_SIZE = 14;
+// Larger batch sizes for faster parallel fetching
+const STREET_BATCH_SIZE = 25;
+const BUILDING_BATCH_SIZE = 16;
 
 // Calculate tiles needed for a given area - ensures center is always included
 function calculateTiles(params: {
