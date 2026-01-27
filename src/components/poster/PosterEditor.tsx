@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme } from '@/types/poster';
 import { CanvasPosterPreview } from './CanvasPosterPreview';
+import { TextOverlay } from './TextOverlay';
 import { ThemeSelector } from './ThemeSelector';
 import { CitySearch } from './CitySearch';
 import { ZoomControls } from './ZoomControls';
@@ -22,6 +23,7 @@ interface PosterEditorProps {
 export const PosterEditor = ({ onConfigChange }: PosterEditorProps) => {
   const [config, setConfig] = useState<PosterConfig>(DEFAULT_CONFIG);
   const posterRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 400, height: 533 });
 
   const handleCitySelect = (city: string, country: string, lat: number, lon: number) => {
     setConfig((prev) => {
@@ -55,6 +57,23 @@ export const PosterEditor = ({ onConfigChange }: PosterEditorProps) => {
       return newConfig;
     });
   };
+
+  // Update container size when poster ref changes
+  const updateContainerSize = useCallback(() => {
+    if (posterRef.current) {
+      setContainerSize({
+        width: posterRef.current.clientWidth,
+        height: posterRef.current.clientHeight,
+      });
+    }
+  }, []);
+
+  // Observe container size changes
+  useState(() => {
+    updateContainerSize();
+    window.addEventListener('resize', updateContainerSize);
+    return () => window.removeEventListener('resize', updateContainerSize);
+  });
 
   const handleConfigUpdate = (updates: Partial<PosterConfig>) => {
     setConfig((prev) => {
@@ -161,11 +180,26 @@ export const PosterEditor = ({ onConfigChange }: PosterEditorProps) => {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.2 }}
               className="max-w-lg mx-auto relative"
+              ref={(el) => {
+                if (el) {
+                  // @ts-ignore - using ref callback to update size
+                  posterRef.current = el;
+                  setTimeout(updateContainerSize, 100);
+                }
+              }}
             >
               <CanvasPosterPreview 
                 config={config} 
                 containerRef={posterRef} 
                 onMapCenterChange={handleMapCenterChange}
+              />
+              
+              {/* Text Overlay for interactive editing */}
+              <TextOverlay
+                config={config}
+                containerWidth={containerSize.width}
+                containerHeight={containerSize.height}
+                onConfigUpdate={handleConfigUpdate}
               />
               
               {/* Zoom Controls overlay */}

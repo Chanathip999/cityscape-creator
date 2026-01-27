@@ -75,6 +75,25 @@ export const DEFAULT_LAYER_COLORS: LayerColors = {};
 // Font size scale (0.5 to 2.0, 1.0 = medium)
 export type FontSizeScale = number;
 
+// Custom text position (normalized 0-1 coordinates)
+export interface TextPositionOffset {
+  x: number; // 0 = left, 0.5 = center, 1 = right
+  y: number; // 0 = top, 1 = bottom
+}
+
+// Individual text element override
+export interface TextElementConfig {
+  position?: TextPositionOffset;
+  scale?: number; // Size multiplier (1.0 = default)
+}
+
+// All text overrides
+export interface TextOverrides {
+  city?: TextElementConfig;
+  country?: TextElementConfig;
+  coordinates?: TextElementConfig;
+}
+
 export interface PosterConfig {
   city: string;
   country: string;
@@ -103,6 +122,7 @@ export interface PosterConfig {
   showCity: boolean;
   showGradients: boolean;
   textPosition: TextPosition;
+  textOverrides?: TextOverrides; // Custom text positions and sizes
 }
 
 export const TEXT_POSITIONS_OPTIONS: { id: TextPosition; name: string }[] = [
