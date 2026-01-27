@@ -154,10 +154,12 @@ function getAdaptiveTextPositions(position: TextPosition, opts: AdaptiveTextLayo
     coords: base.coords * fontSizeScale,
   };
 
-  // Spacing derived from font sizes (keeps consistent rhythm across formats)
-  const gapTitleToLine = Math.max(canvasHeight * 0.01, sizes.title * 0.22);
-  const gapLineToSubtitle = Math.max(canvasHeight * 0.01, sizes.subtitle * 0.55);
-  const gapSubtitleToCoords = Math.max(canvasHeight * 0.01, sizes.coords * 0.9);
+  // Spacing derived ONLY from font sizes (not canvas height).
+  // This keeps the *default* vertical rhythm consistent across aspect ratios.
+  const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+  const gapTitleToLine = clamp(sizes.title * 0.22, sizes.title * 0.18, sizes.title * 0.28);
+  const gapLineToSubtitle = clamp(sizes.subtitle * 0.55, sizes.subtitle * 0.45, sizes.subtitle * 0.70);
+  const gapSubtitleToCoords = clamp(sizes.coords * 0.90, sizes.coords * 0.75, sizes.coords * 1.20);
 
   // Anchor around the coords position (matches current visual intent)
   const coordsY = canvasHeight * anchor.coords;
