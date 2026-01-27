@@ -33,6 +33,8 @@ interface RenderRequest {
   fontFamily: string;
   fontSize: string;
   customTextColor?: string;
+  customMotorwayColor?: string;
+  customRoadColor?: string;
   width?: number;
   height?: number;
   showGradients?: boolean;
@@ -230,8 +232,13 @@ function toCanvasCoords(
   return { x, y };
 }
 
-function getStreetColor(type: string, theme: RenderRequest['theme']): string {
-  if (['motorway', 'motorway_link'].includes(type)) return theme.roadMotorway;
+function getStreetColor(type: string, theme: RenderRequest['theme'], customMotorwayColor?: string, customRoadColor?: string): string {
+  if (['motorway', 'motorway_link'].includes(type)) {
+    return customMotorwayColor || theme.roadMotorway;
+  }
+  if (customRoadColor) {
+    return customRoadColor;
+  }
   if (['trunk', 'trunk_link', 'primary', 'primary_link'].includes(type)) return theme.roadPrimary;
   if (['secondary', 'secondary_link'].includes(type)) return theme.roadSecondary;
   if (['tertiary', 'tertiary_link'].includes(type)) return theme.roadTertiary;
@@ -750,7 +757,7 @@ function generateSVG(request: RenderRequest, data: {
     const segment = data.streets.find((s) => s.type === streetType);
     if (!segment || segment.coordinates.length === 0) continue;
 
-    const color = getStreetColor(streetType, theme);
+    const color = getStreetColor(streetType, theme, request.customMotorwayColor, request.customRoadColor);
     const baseLineWidth = STREET_WIDTHS[streetType] || 0.4;
     const strokeWidth = baseLineWidth * scaleFactor;
 

@@ -94,6 +94,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     layerVisibility,
     layerColors = {},
     customRoadColor,
+    customMotorwayColor,
     customBackgroundColor,
     showCoordinates,
     showCountry,
@@ -143,15 +144,17 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
 
   const getStreetColor = useCallback(
     (type: string): string => {
-      // Use custom road color if set
+      // Motorways use custom motorway color if set
+      if (['motorway', 'motorway_link'].includes(type)) {
+        return customMotorwayColor || theme.roadMotorway;
+      }
+      
+      // Other roads use custom road color if set
       if (customRoadColor) {
-        // Return custom color with slight variations for hierarchy
         return customRoadColor;
       }
       
-      if (['motorway', 'motorway_link'].includes(type)) {
-        return theme.roadMotorway;
-      } else if (['trunk', 'trunk_link', 'primary', 'primary_link'].includes(type)) {
+      if (['trunk', 'trunk_link', 'primary', 'primary_link'].includes(type)) {
         return theme.roadPrimary;
       } else if (['secondary', 'secondary_link'].includes(type)) {
         return theme.roadSecondary;
@@ -163,7 +166,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
         return theme.roadService || theme.roadResidential;
       }
     },
-    [theme, customRoadColor]
+    [theme, customRoadColor, customMotorwayColor]
   );
 
   const getStreetWidth = useCallback((type: string, canvasWidth: number): number => {
