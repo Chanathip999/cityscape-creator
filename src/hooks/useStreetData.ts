@@ -328,7 +328,7 @@ export const useStreetData = ({
         // =========================================================================
         const previewRadius = Math.min(1200, Math.max(600, Math.floor(distance * 0.35)));
 
-        const previewEssential = await fetchTileWithRetry(
+        const previewFull = await fetchTileWithRetry(
           runId,
           latitude,
           longitude,
@@ -336,16 +336,16 @@ export const useStreetData = ({
           /* skipService */ false,
           /* fetchBuildings */ false,
           /* buildingsOnly */ false,
-          /* priority */ 1,
+          /* priority */ 0,
         );
 
         if (runId !== runIdRef.current) return;
 
-        if (previewEssential) {
-          setStreets(previewEssential.streets);
-          setWater(previewEssential.water);
-          setCoastlines(previewEssential.coastlines);
-          console.log(`⚡ PREVIEW priority=1 (r=${previewRadius}m) in ${(performance.now() - startTime).toFixed(0)}ms`);
+        if (previewFull) {
+          setStreets(previewFull.streets);
+          setWater(previewFull.water);
+          setCoastlines(previewFull.coastlines);
+          console.log(`⚡ PREVIEW full (r=${previewRadius}m) in ${(performance.now() - startTime).toFixed(0)}ms`);
         }
 
         // Calculate tiles for the full area
@@ -368,93 +368,59 @@ export const useStreetData = ({
           : [];
         
         const skipService = false;
-        console.log(
-          `🚀 PROGRESSIVE LOAD: ${streetTiles.length} tiles (Priority 1→2)`
-        );
+        console.log(`🚀 FULL DETAIL LOAD: ${streetTiles.length} tiles`);
 
-        // =========================================================================
-        // TWO-STAGE PROGRESSIVE LOADING STRATEGY:
-        // 1. PRIORITY 1: Essential features (motorways, primary, water) - FAST FIRST PAINT
-        // 2. PRIORITY 2: Detail features (secondary, tertiary, residential, parks) - LOAD AFTER
-        // =========================================================================
-
-        // PHASE 1A: Center tile with PRIORITY 1 (essential only) for INSTANT feedback
+        // PHASE 1A: Center tile FULL detail for INSTANT feedback
         const centerTile = streetTiles[0];
-        const centerEssentialResult = await fetchTileWithRetry(
-          runId, centerTile.lat, centerTile.lng, centerTile.radius, skipService, false, false, 1
+        const centerFullResult = await fetchTileWithRetry(
+          runId, centerTile.lat, centerTile.lng, centerTile.radius, skipService, false, false, 0
         );
         
         if (runId !== runIdRef.current) return;
         
-        if (centerEssentialResult) {
-          // Show essential features immediately!
-          setStreets(centerEssentialResult.streets);
-          setWater(centerEssentialResult.water);
-          setCoastlines(centerEssentialResult.coastlines);
-          console.log(`⚡ PRIORITY 1 center in ${(performance.now() - startTime).toFixed(0)}ms`);
+        if (centerFullResult) {
+          setStreets(centerFullResult.streets);
+          setWater(centerFullResult.water);
+          setCoastlines(centerFullResult.coastlines);
+          setRailways(centerFullResult.railways);
+          setAeroways(centerFullResult.aeroways);
+          setParks(centerFullResult.parks);
+          setForests(centerFullResult.forests);
+          console.log(`⚡ CENTER full in ${(performance.now() - startTime).toFixed(0)}ms`);
         }
 
-        // PHASE 1B: All tiles with PRIORITY 1 (essential) in parallel - FAST
+        // PHASE 1B: All tiles FULL detail in parallel
         const remainingTiles = streetTiles.slice(1);
-        const priority1Results: TileResult[] = centerEssentialResult ? [centerEssentialResult] : [];
+        const fullResults: TileResult[] = centerFullResult ? [centerFullResult] : [];
         
-        // Fetch ALL tiles with priority 1 first (much faster than full data)
-        const p1BatchSize = STREET_BATCH_SIZE * 2; // Can be more aggressive for smaller payloads
-        for (let i = 0; i < remainingTiles.length; i += p1BatchSize) {
+        for (let i = 0; i < remainingTiles.length; i += STREET_BATCH_SIZE) {
           if (runId !== runIdRef.current) break;
-          const batch = remainingTiles.slice(i, i + p1BatchSize);
+          const batch = remainingTiles.slice(i, i + STREET_BATCH_SIZE);
           const batchResults = await Promise.all(
             batch.map(tile =>
-              fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, false, false, 1)
+              fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, false, false, 0)
             )
           );
           
           for (const result of batchResults) {
-            if (result) priority1Results.push(result);
+            if (result) fullResults.push(result);
           }
           
           // Progressive update
-          const merged = mergeResults(priority1Results);
+          const merged = mergeResults(fullResults);
           setStreets(merged.streets);
+          setRailways(merged.railways);
+          setAeroways(merged.aeroways);
           setWater(merged.water);
           setCoastlines(merged.coastlines);
+          setParks(merged.parks);
+          setForests(merged.forests);
         }
         
-        const priority1Time = performance.now() - startTime;
-        console.log(`✅ PRIORITY 1 complete: ${priority1Results.length} tiles in ${priority1Time.toFixed(0)}ms`);
+        const fullTime = performance.now() - startTime;
+        console.log(`✅ FULL detail complete: ${fullResults.length} tiles in ${fullTime.toFixed(0)}ms`);
 
-        // PHASE 2: Load PRIORITY 2 (details) for all tiles - runs in background
-        const streetFetchPromise = (async () => {
-          const priority2Results: TileResult[] = [];
-          
-          for (let i = 0; i < streetTiles.length; i += STREET_BATCH_SIZE) {
-            if (runId !== runIdRef.current) break;
-            const batch = streetTiles.slice(i, i + STREET_BATCH_SIZE);
-            const batchResults = await Promise.all(
-              batch.map(tile =>
-                fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, false, false, 2)
-              )
-            );
-            
-            for (const result of batchResults) {
-              if (result) priority2Results.push(result);
-            }
-            
-            // Merge priority 1 + priority 2 results for complete picture
-            const allResults = [...priority1Results, ...priority2Results];
-            const merged = mergeResults(allResults);
-            setStreets(merged.streets);
-            setRailways(merged.railways);
-            setAeroways(merged.aeroways);
-            setCoastlines(merged.coastlines);
-            setWater(merged.water);
-            setParks(merged.parks);
-            setForests(merged.forests);
-          }
-          
-          console.log(`✅ PRIORITY 2 complete: ${priority2Results.length} detail tiles in ${(performance.now() - startTime).toFixed(0)}ms`);
-          return [...priority1Results, ...priority2Results];
-        })();
+        const streetFetchPromise = Promise.resolve(fullResults);
 
         // PROGRESSIVE BUILDING FETCH: Update UI after each batch
         const buildingFetchPromise = (async () => {
