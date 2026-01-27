@@ -36,7 +36,10 @@ interface RenderRequest {
   width?: number;
   height?: number;
   showGradients?: boolean;
-  showDecorativeLine?: boolean;
+  showCity?: boolean;
+  showCountry?: boolean;
+  showCoordinates?: boolean;
+  textPosition?: 'bottom' | 'center' | 'top';
 }
 
 interface StreetSegment {
@@ -91,15 +94,38 @@ const ASPECT_RATIOS: Record<string, { width: number; height: number }> = {
   '19:6': { width: 19, height: 6 },
 };
 
-// Typography positions - MUST match posterTypography.ts for visual parity
-// These are relative to canvas height (0 = top, 1 = bottom)
-const TEXT_POSITIONS = {
-  title: 0.82,           // City name: ABOVE the decorative line
-  decorativeLine: 0.86,  // Decorative line: between city and country
-  subtitle: 0.895,       // Country name: BELOW the decorative line
-  coords: 0.935,         // Coordinates: at the very bottom
-  attribution: 0.98,     // Attribution
+// Typography positions - position-dependent, MUST match posterTypography.ts
+const TEXT_POSITIONS_BOTTOM = {
+  title: 0.82,
+  decorativeLine: 0.86,
+  subtitle: 0.895,
+  coords: 0.935,
+  attribution: 0.98,
 };
+
+const TEXT_POSITIONS_CENTER = {
+  title: 0.46,
+  decorativeLine: 0.50,
+  subtitle: 0.535,
+  coords: 0.575,
+  attribution: 0.98,
+};
+
+const TEXT_POSITIONS_TOP = {
+  title: 0.08,
+  decorativeLine: 0.12,
+  subtitle: 0.155,
+  coords: 0.195,
+  attribution: 0.98,
+};
+
+function getTextPositions(position: 'bottom' | 'center' | 'top' | undefined) {
+  switch (position) {
+    case 'top': return TEXT_POSITIONS_TOP;
+    case 'center': return TEXT_POSITIONS_CENTER;
+    default: return TEXT_POSITIONS_BOTTOM;
+  }
+}
 
 // Letter spacing (tracking) in em units
 const TRACKING = {
@@ -737,37 +763,43 @@ function generateSVG(request: RenderRequest, data: {
     svg += `<rect x="0" y="${height - fadeHeight}" width="${width}" height="${fadeHeight}" fill="url(#bottomFade)"/>`;
   }
   
+  // Get text positions based on textPosition setting
+  const TEXT_POSITIONS = getTextPositions(request.textPosition);
+  
   // Layer 5: Typography (z-order 11 in Python)
   const cityText = request.city.toUpperCase();
   const countryText = request.country.toUpperCase();
   const coordsText = formatCoordinates(request.latitude, request.longitude);
   
-  // City name with letter spacing - auto-scale to fit width
-  // Estimate text width: each char ~0.6 * fontSize + letter-spacing
-  const charWidth = titleSize * 0.6;
-  const letterSpacing = TRACKING.title * titleSize;
-  const estimatedTextWidth = cityText.length * charWidth + (cityText.length - 1) * letterSpacing;
-  const maxTextWidth = width * 0.9; // Leave 5% margin on each side
-  
-  let adjustedTitleSize = titleSize;
-  if (estimatedTextWidth > maxTextWidth) {
-    const scaleFactor = maxTextWidth / estimatedTextWidth;
-    adjustedTitleSize = titleSize * scaleFactor;
-  }
-  const adjustedLetterSpacing = TRACKING.title * adjustedTitleSize;
-  
-  svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.title}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${adjustedTitleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.title}" letter-spacing="${adjustedLetterSpacing.toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif">${cityText}</text>`;
-  
-  // Decorative line between city and country (matching Python y=0.125)
-  if (request.showDecorativeLine !== false) {
+  // City name with letter spacing - auto-scale to fit width (only if showCity)
+  if (request.showCity !== false) {
+    const charWidth = titleSize * 0.6;
+    const letterSpacing = TRACKING.title * titleSize;
+    const estimatedTextWidth = cityText.length * charWidth + (cityText.length - 1) * letterSpacing;
+    const maxTextWidth = width * 0.9;
+    
+    let adjustedTitleSize = titleSize;
+    if (estimatedTextWidth > maxTextWidth) {
+      const scaleFactor = maxTextWidth / estimatedTextWidth;
+      adjustedTitleSize = titleSize * scaleFactor;
+    }
+    const adjustedLetterSpacing = TRACKING.title * adjustedTitleSize;
+    
+    svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.title}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${adjustedTitleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.title}" letter-spacing="${adjustedLetterSpacing.toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif">${cityText}</text>`;
+    
+    // Decorative line between city and country
     svg += `<line x1="${(width - lineLength) / 2}" y1="${height * TEXT_POSITIONS.decorativeLine}" x2="${(width + lineLength) / 2}" y2="${height * TEXT_POSITIONS.decorativeLine}" stroke="${textColor}" stroke-width="${lineWidth.toFixed(2)}" opacity="0.6"/>`;
   }
   
-  // Country
-  svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.subtitle}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${subtitleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.subtitle}" letter-spacing="${(TRACKING.subtitle * subtitleSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif">${countryText}</text>`;
+  // Country (only if showCountry)
+  if (request.showCountry !== false) {
+    svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.subtitle}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${subtitleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.subtitle}" letter-spacing="${(TRACKING.subtitle * subtitleSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif">${countryText}</text>`;
+  }
   
-  // Coordinates
-  svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.coords}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${coordsSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.coords}" letter-spacing="${(TRACKING.coords * coordsSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif" opacity="0.7">${coordsText}</text>`;
+  // Coordinates (only if showCoordinates)
+  if (request.showCoordinates !== false) {
+    svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.coords}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${coordsSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.coords}" letter-spacing="${(TRACKING.coords * coordsSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif" opacity="0.7">${coordsText}</text>`;
+  }
   
   // Attribution
   svg += `<text x="${width - 10}" y="${height - 10}" text-anchor="end" fill="${textColor}" font-size="${attrSize.toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif" opacity="0.5">© OpenStreetMap contributors</text>`;

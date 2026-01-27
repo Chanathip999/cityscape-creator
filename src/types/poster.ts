@@ -23,6 +23,7 @@ export type AspectRatioId = '1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4
 export type ExportFormat = 'png' | 'jpeg';
 export type ExportResolution = 'fullhd' | '4k' | '8k';
 export type RenderMode = 'vector';
+export type TextPosition = 'bottom' | 'center' | 'top';
 
 export interface AspectRatio {
   id: string;
@@ -78,8 +79,16 @@ export interface PosterConfig {
   layerVisibility: LayerVisibility;
   showCoordinates: boolean;
   showCountry: boolean;
+  showCity: boolean;
   showGradients: boolean;
+  textPosition: TextPosition;
 }
+
+export const TEXT_POSITIONS_OPTIONS: { id: TextPosition; name: string }[] = [
+  { id: 'bottom', name: 'Unten' },
+  { id: 'center', name: 'Mitte' },
+  { id: 'top', name: 'Oben' },
+];
 
 export const ASPECT_RATIOS: AspectRatio[] = [
   { id: '1:1', name: 'Quadrat', width: 1, height: 1 },
@@ -330,5 +339,7 @@ export const DEFAULT_CONFIG: PosterConfig = {
   layerVisibility: DEFAULT_LAYER_VISIBILITY,
   showCoordinates: true,
   showCountry: true,
+  showCity: true,
   showGradients: true,
+  textPosition: 'bottom',
 };

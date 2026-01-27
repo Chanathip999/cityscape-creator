@@ -4,7 +4,7 @@
  * the detailed (tile) and minimalist (vector/canvas) render modes.
  */
 
-import { FontFamily, FontSize } from '@/types/poster';
+import { FontFamily, FontSize, TextPosition } from '@/types/poster';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Font Families
@@ -48,26 +48,46 @@ export const TRACKING_CLASSES = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vertical Positioning (relative to canvas height, 0 = top, 1 = bottom)
-// From maptoposter Python script using ax.transAxes:
-// https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py
-//
-// Python y-coordinates (from bottom): Canvas y-coordinates (from top):
-// - City:       y=0.14  → 1-0.14  = 0.86
-// - Line:       y=0.125 → 1-0.125 = 0.875
-// - Country:    y=0.10  → 1-0.10  = 0.90
-// - Coords:     y=0.07  → 1-0.07  = 0.93
-// - Attribution: y=0.02 → 1-0.02  = 0.98
-//
-// IMPORTANT: These exact values match the Python script for visual parity
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const TEXT_POSITIONS = {
-  title: 0.82,           // City name: ABOVE the decorative line
-  decorativeLine: 0.86,  // Decorative line: between city and country
-  subtitle: 0.895,       // Country name: BELOW the decorative line
-  coords: 0.935,         // Coordinates: at the very bottom
-  attribution: 0.98,     // Attribution: Python y=0.02
+/** Text positions for 'bottom' placement (default) */
+export const TEXT_POSITIONS_BOTTOM = {
+  title: 0.82,
+  decorativeLine: 0.86,
+  subtitle: 0.895,
+  coords: 0.935,
+  attribution: 0.98,
 } as const;
+
+/** Text positions for 'center' placement */
+export const TEXT_POSITIONS_CENTER = {
+  title: 0.46,
+  decorativeLine: 0.50,
+  subtitle: 0.535,
+  coords: 0.575,
+  attribution: 0.98,
+} as const;
+
+/** Text positions for 'top' placement */
+export const TEXT_POSITIONS_TOP = {
+  title: 0.08,
+  decorativeLine: 0.12,
+  subtitle: 0.155,
+  coords: 0.195,
+  attribution: 0.98,
+} as const;
+
+/** Get text positions based on position setting */
+export const getTextPositions = (position: TextPosition) => {
+  switch (position) {
+    case 'top': return TEXT_POSITIONS_TOP;
+    case 'center': return TEXT_POSITIONS_CENTER;
+    default: return TEXT_POSITIONS_BOTTOM;
+  }
+};
+
+/** Legacy export for backward compatibility */
+export const TEXT_POSITIONS = TEXT_POSITIONS_BOTTOM;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Font Sizes

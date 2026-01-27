@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PosterConfig, FontFamily, FontSize, LayerVisibility, FONT_FAMILIES, FONT_SIZES, AspectRatioId, ASPECT_RATIOS } from '@/types/poster';
+import { PosterConfig, FontFamily, FontSize, LayerVisibility, FONT_FAMILIES, FONT_SIZES, AspectRatioId, ASPECT_RATIOS, TextPosition, TEXT_POSITIONS_OPTIONS } from '@/types/poster';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
@@ -110,13 +110,34 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
               </div>
             </div>
 
+            {/* Text Position */}
+            <div className="space-y-2">
+              <Label>Textposition</Label>
+              <div className="flex gap-2">
+                {TEXT_POSITIONS_OPTIONS.map((pos) => (
+                  <button
+                    key={pos.id}
+                    onClick={() => onConfigUpdate({ textPosition: pos.id as TextPosition })}
+                    className={cn(
+                      'flex-1 py-2 px-4 rounded-lg border-2 text-sm font-medium transition-all',
+                      config.textPosition === pos.id
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border text-muted-foreground hover:border-primary/50'
+                    )}
+                  >
+                    {pos.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Toggle Switches */}
             <div className="space-y-3">
               <div className="flex items-center justify-between py-2">
-                <Label className="font-normal">Koordinaten anzeigen</Label>
+                <Label className="font-normal">Stadtname anzeigen</Label>
                 <Switch
-                  checked={config.showCoordinates}
-                  onCheckedChange={(checked) => onConfigUpdate({ showCoordinates: checked })}
+                  checked={config.showCity}
+                  onCheckedChange={(checked) => onConfigUpdate({ showCity: checked })}
                 />
               </div>
               <div className="flex items-center justify-between py-2">
@@ -124,6 +145,13 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
                 <Switch
                   checked={config.showCountry}
                   onCheckedChange={(checked) => onConfigUpdate({ showCountry: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between py-2">
+                <Label className="font-normal">Koordinaten anzeigen</Label>
+                <Switch
+                  checked={config.showCoordinates}
+                  onCheckedChange={(checked) => onConfigUpdate({ showCoordinates: checked })}
                 />
               </div>
               <div className="flex items-center justify-between py-2">
