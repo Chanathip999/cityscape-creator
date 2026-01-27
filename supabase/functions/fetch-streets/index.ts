@@ -57,6 +57,9 @@ const MAX_ELEMENTS_TO_PROCESS = 50000;
 const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+  // Extra fallbacks (used via hedged requests below)
+  'https://overpass.nchc.org.tw/api/interpreter',
+  'https://overpass.openstreetmap.ru/api/interpreter',
 ];
 
 // Pick a random endpoint to distribute load
@@ -321,28 +324,92 @@ function buildPriorityQuery(params: {
 }
 
 async function fetchOverpass(query: string): Promise<any[] | null> {
-  // Shuffle endpoints to distribute load
+  // Hedged requests: fire multiple endpoints in parallel and take the first successful.
+  // This reduces tail latency dramatically (esp. when one endpoint is slow/timeouts).
   const endpoints = [...OVERPASS_URLS].sort(() => Math.random() - 0.5);
-  
-  for (const url of endpoints) {
+  const hedge = endpoints.slice(0, 2); // keep parallelism small to avoid extra load
+
+  const controllers = hedge.map(() => new AbortController());
+  const timeoutMs = 12000;
+  const timeoutIds = controllers.map((c) => setTimeout(() => c.abort(), timeoutMs));
+
+  const body = `data=${encodeURIComponent(query)}`;
+
+  const tasks = hedge.map((url, idx) =>
+    (async () => {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body,
+          signal: controllers[idx].signal,
+        });
+
+        // If not OK, consume and treat as failure.
+        if (!response.ok) {
+          if (response.status === 429 || response.status >= 500) {
+            console.log(`Error ${response.status} on ${url}`);
+          } else {
+            const errorText = await response.text();
+            console.error('Overpass error:', url, response.status, errorText.substring(0, 80));
+          }
+          await response.text().catch(() => undefined);
+          return null;
+        }
+
+        const data = await response.json();
+        const elements = data?.elements || [];
+        if (elements.length > MAX_ELEMENTS_TO_PROCESS) {
+          console.log(`Truncating ${elements.length} elements to ${MAX_ELEMENTS_TO_PROCESS}`);
+          return elements.slice(0, MAX_ELEMENTS_TO_PROCESS);
+        }
+        return elements as any[];
+      } catch (e) {
+        if (e instanceof Error && e.name === 'AbortError') {
+          console.log(`Timeout on ${url}`);
+          return null;
+        }
+        console.error('Overpass fetch failed:', url);
+        return null;
+      }
+    })()
+  );
+
+  // Wait for the first successful result; if both fail, fall back to sequential tries.
+  let winner: any[] | null = null;
+  try {
+    const results = await Promise.all(tasks);
+    winner = results.find((r) => Array.isArray(r)) ?? null;
+  } finally {
+    timeoutIds.forEach(clearTimeout);
+    // Abort outstanding requests (best-effort)
+    controllers.forEach((c) => {
+      try {
+        c.abort();
+      } catch {
+        // ignore
+      }
+    });
+  }
+
+  if (winner) return winner;
+
+  // Sequential fallback over remaining endpoints (keeps reliability)
+  for (const url of endpoints.slice(2)) {
     try {
       const controller = new AbortController();
-      // REDUCED timeout to prevent function timeout (was 25s)
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
-      
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `data=${encodeURIComponent(query)}`,
+        body,
         signal: controller.signal,
       });
-      
       clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
         const elements = data?.elements || [];
-        // MEMORY GUARD: Limit elements processed to prevent OOM
         if (elements.length > MAX_ELEMENTS_TO_PROCESS) {
           console.log(`Truncating ${elements.length} elements to ${MAX_ELEMENTS_TO_PROCESS}`);
           return elements.slice(0, MAX_ELEMENTS_TO_PROCESS);
@@ -350,10 +417,9 @@ async function fetchOverpass(query: string): Promise<any[] | null> {
         return elements;
       }
 
-      // Rate limited or server error - try next endpoint
       if (response.status === 429 || response.status >= 500) {
         console.log(`Error ${response.status} on ${url}, trying next...`);
-        await response.text(); // Consume body
+        await response.text();
         continue;
       }
 
@@ -368,8 +434,7 @@ async function fetchOverpass(query: string): Promise<any[] | null> {
     }
   }
 
-  // Return empty instead of null to prevent black gaps
-  return [];
+  return []; // empty instead of null to prevent black gaps
 }
 
 Deno.serve(async (req) => {
@@ -404,8 +469,9 @@ Deno.serve(async (req) => {
     );
 
     const distanceNum = Number(distance);
-    // Allow larger radius for full coverage - client tiling handles the rest
-    const radius = Math.min(4000, Math.max(1000, distanceNum));
+    // Keep server bbox aligned with client tile radius (client will choose tiling strategy).
+    // Larger bbox reduces the need for many tiles (fewer Overpass roundtrips).
+    const radius = Math.min(7500, Math.max(1000, distanceNum));
 
     const latDelta = radius / 111320;
     const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));
