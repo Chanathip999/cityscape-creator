@@ -193,12 +193,30 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
     setSnappedY(false);
   }, []);
 
-  // Deselect when clicking outside
-  const handleOverlayClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === overlayRef.current) {
-      setSelectedElement(null);
-      setEditingElement(null);
-    }
+  // Global click listener to deselect when clicking outside text elements
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Check if click is outside the overlay's text elements
+      if (overlayRef.current && !overlayRef.current.contains(target)) {
+        setSelectedElement(null);
+        setEditingElement(null);
+      }
+    };
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedElement(null);
+        setEditingElement(null);
+      }
+    };
+
+    document.addEventListener('click', handleGlobalClick);
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      document.removeEventListener('click', handleGlobalClick);
+      document.removeEventListener('keydown', handleGlobalKeyDown);
+    };
   }, []);
 
   useEffect(() => {
@@ -247,9 +265,8 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
   return (
     <div
       ref={overlayRef}
-      className="absolute inset-0 z-20"
+      className="absolute inset-0 z-20 pointer-events-none"
       style={{ fontFamily: fontStack }}
-      onClick={handleOverlayClick}
     >
       {/* Guides - shown while dragging */}
       {showGuides && (
@@ -311,14 +328,23 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
         return (
           <div
             key={element.id}
-            className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-move"
+            className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-move pointer-events-auto"
             style={{
               left: `${pos.x * 100}%`,
               top: `${pos.y * 100}%`,
             }}
-            onMouseDown={(e) => !isEditing && handleMouseDown(e, element.id)}
-            onClick={(e) => handleTextClick(e, element.id)}
-            onDoubleClick={(e) => handleDoubleClick(e, element.id, element.editable)}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              if (!isEditing) handleMouseDown(e, element.id);
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTextClick(e, element.id);
+            }}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              handleDoubleClick(e, element.id, element.editable);
+            }}
           >
             {isEditing && element.editable ? (
               (() => {
