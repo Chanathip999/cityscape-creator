@@ -388,7 +388,7 @@ async function fetchSingleTile(
   tileLng: number,
   radius: number,
   activeStreetTypes: typeof ALL_STREET_TYPES,
-  includeWaterParks: boolean
+  layerVisibility?: RenderRequest['layerVisibility']
 ): Promise<TileResult> {
   const latDelta = radius / 111320;
   const lngDelta = radius / (111320 * Math.cos(tileLat * Math.PI / 180));
@@ -401,30 +401,57 @@ async function fetchSingleTile(
   const highwayTags = activeStreetTypes.flatMap(st => st.tags);
   const bbox = `${south.toFixed(5)},${west.toFixed(5)},${north.toFixed(5)},${east.toFixed(5)}`;
   
-  // OPTIMIZED: Shorter timeout and simplified query to prevent CPU timeout
-  let overpassQuery: string;
+  // Build dynamic query based on layerVisibility
+  const queryParts: string[] = [];
   
-  if (includeWaterParks) {
-    overpassQuery = `
-      [out:json][timeout:25];
-      (
-        way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
-        way["railway"~"^(rail|light_rail)$"](${bbox});
-        way["natural"="water"](${bbox});
-        way["waterway"~"^(river|canal)$"](${bbox});
-      );
-      out geom;
-    `;
-  } else {
-    overpassQuery = `
-      [out:json][timeout:15];
-      (
-        way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
-        way["railway"~"^(rail|light_rail)$"](${bbox});
-      );
-      out geom;
-    `;
+  // Always include streets
+  queryParts.push(`way["highway"~"^(${highwayTags.join('|')})$"](${bbox});`);
+  
+  // Railways
+  if (layerVisibility?.railways !== false) {
+    queryParts.push(`way["railway"~"^(rail|light_rail)$"](${bbox});`);
   }
+  
+  // Aeroways
+  if (layerVisibility?.aeroways) {
+    queryParts.push(`way["aeroway"~"^(runway|taxiway)$"](${bbox});`);
+  }
+  
+  // Water
+  if (layerVisibility?.water !== false) {
+    queryParts.push(`way["natural"="water"](${bbox});`);
+    queryParts.push(`way["waterway"~"^(river|canal)$"](${bbox});`);
+  }
+  
+  // Coastlines
+  if (layerVisibility?.coastlines) {
+    queryParts.push(`way["natural"="coastline"](${bbox});`);
+  }
+  
+  // Parks
+  if (layerVisibility?.parks) {
+    queryParts.push(`way["leisure"="park"](${bbox});`);
+    queryParts.push(`way["landuse"~"^(grass|meadow)$"](${bbox});`);
+  }
+  
+  // Forests
+  if (layerVisibility?.forests) {
+    queryParts.push(`way["landuse"="forest"](${bbox});`);
+    queryParts.push(`way["natural"="wood"](${bbox});`);
+  }
+  
+  // Buildings (if enabled)
+  if (layerVisibility?.buildings) {
+    queryParts.push(`way["building"](${bbox});`);
+  }
+  
+  const overpassQuery = `
+    [out:json][timeout:30];
+    (
+      ${queryParts.join('\n      ')}
+    );
+    out geom;
+  `;
 
   const overpassUrls = [
     'https://overpass-api.de/api/interpreter',
@@ -457,7 +484,6 @@ async function fetchSingleTile(
   try {
     osmData = JSON.parse(responseText);
   } catch (parseError) {
-    // Log first 200 chars for debugging
     console.error('Failed to parse Overpass response as JSON. Response starts with:', responseText.substring(0, 200));
     return { streets: [], railways: [], aeroways: [], coastlines: [], water: [], forests: [], parks: [], buildings: [] };
   }
@@ -477,6 +503,7 @@ async function fetchSingleTile(
   const waterPolygons: [number, number][][] = [];
   const forestPolygons: [number, number][][] = [];
   const parkPolygons: [number, number][][] = [];
+  const buildingPolygons: [number, number][][] = [];
 
   for (const element of elements) {
     if (element.type !== 'way') continue;
@@ -500,7 +527,6 @@ async function fetchSingleTile(
         coordsByType.get(type)?.push(points);
       }
     } else if (tags.railway) {
-      // Parse railway lines
       const points: [number, number][] = [];
       for (const pt of geom) {
         if (pt && pt.lat !== undefined && pt.lon !== undefined) {
@@ -511,7 +537,6 @@ async function fetchSingleTile(
         railwayLines.push(points);
       }
     } else if (tags.aeroway) {
-      // Parse aeroway lines (runways, taxiways)
       const points: [number, number][] = [];
       for (const pt of geom) {
         if (pt && pt.lat !== undefined && pt.lon !== undefined) {
@@ -522,7 +547,6 @@ async function fetchSingleTile(
         aerowayLines.push(points);
       }
     } else if (tags.natural === 'coastline') {
-      // Parse coastlines
       const points: [number, number][] = [];
       for (const pt of geom) {
         if (pt && pt.lat !== undefined && pt.lon !== undefined) {
@@ -543,7 +567,6 @@ async function fetchSingleTile(
         waterPolygons.push(points);
       }
     } else if (tags.landuse === 'forest' || tags.natural === 'wood') {
-      // Parse forests
       const points: [number, number][] = [];
       for (const pt of geom) {
         if (pt && pt.lat !== undefined && pt.lon !== undefined) {
@@ -563,6 +586,16 @@ async function fetchSingleTile(
       if (points.length >= 3) {
         parkPolygons.push(points);
       }
+    } else if (tags.building) {
+      const points: [number, number][] = [];
+      for (const pt of geom) {
+        if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+          points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+        }
+      }
+      if (points.length >= 3) {
+        buildingPolygons.push(points);
+      }
     }
   }
 
@@ -579,7 +612,7 @@ async function fetchSingleTile(
     water: waterPolygons, 
     forests: forestPolygons,
     parks: parkPolygons,
-    buildings: []  // Buildings handled separately if needed
+    buildings: buildingPolygons
   };
 }
 
@@ -619,7 +652,12 @@ function mergeResults(results: TileResult[]): TileResult {
   return merged;
 }
 
-async function fetchStreetData(lat: number, lng: number, distance: number): Promise<{
+async function fetchStreetData(
+  lat: number, 
+  lng: number, 
+  distance: number,
+  layerVisibility?: RenderRequest['layerVisibility']
+): Promise<{
   streets: StreetSegment[];
   railways: [number, number][][];
   aeroways: [number, number][][];
@@ -636,19 +674,17 @@ async function fetchStreetData(lat: number, lng: number, distance: number): Prom
     ? ALL_STREET_TYPES.slice(0, 5) // motorway..residential (no service/path)
     : ALL_STREET_TYPES.slice(0, 4); // motorway..tertiary only for large areas
 
-  const includeWaterParks = distance <= 6000; // Reduced threshold
-
   const tiles = calculateTiles(lat, lng, distance);
-  console.log(`Fetching ${tiles.length} tiles for distance ${distance}m (minor=${includeMinorRoads}, water=${includeWaterParks})`);
+  console.log(`Fetching ${tiles.length} tiles for distance ${distance}m (minor=${includeMinorRoads}, layers=${JSON.stringify(layerVisibility)})`);
 
   // For single tile, fetch directly
   if (tiles.length === 1) {
-    return await fetchSingleTile(tiles[0].lat, tiles[0].lng, tiles[0].radius, activeStreetTypes, includeWaterParks);
+    return await fetchSingleTile(tiles[0].lat, tiles[0].lng, tiles[0].radius, activeStreetTypes, layerVisibility);
   }
 
   // For multiple tiles, fetch in parallel but limit concurrency
   const results = await Promise.all(
-    tiles.map(tile => fetchSingleTile(tile.lat, tile.lng, tile.radius, activeStreetTypes, includeWaterParks))
+    tiles.map(tile => fetchSingleTile(tile.lat, tile.lng, tile.radius, activeStreetTypes, layerVisibility))
   );
 
   return mergeResults(results);
@@ -666,6 +702,7 @@ function generateSVG(request: RenderRequest, data: {
   water: [number, number][][];
   forests: [number, number][][];
   parks: [number, number][][];
+  buildings: [number, number][][];
 }): string {
   const aspectConfig = ASPECT_RATIOS[request.aspectRatio] || ASPECT_RATIOS['3:4'];
   const aspectValue = aspectConfig.width / aspectConfig.height;
@@ -820,6 +857,19 @@ function generateSVG(request: RenderRequest, data: {
     }
     if (dParts.length) {
       svg += `<path d="${dParts.join(' ')}" stroke="${railwayColor}" stroke-width="${railwayStrokeWidth.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+    }
+  }
+  
+  // Layer 2.8: Buildings (between railways and streets)
+  if (layerVisibility.buildings && data.buildings.length > 0) {
+    const buildingColor = request.layerColors?.buildings || '#0098A0';
+    for (const polygon of data.buildings) {
+      if (polygon.length < 3) continue;
+      const points = polygon.map(([lat, lng]) => {
+        const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+      }).join(' ');
+      svg += `<polygon points="${points}" fill="${buildingColor}" opacity="0.7"/>`;
     }
   }
   
@@ -985,9 +1035,9 @@ Deno.serve(async (req) => {
     // Add 10% buffer to ensure edge coverage, cap to prevent memory issues
     const fetchDistance = Math.min(12000, Math.ceil(diagonalDistance * 1.1));
 
-    const data = await fetchStreetData(request.latitude, request.longitude, fetchDistance);
+    const data = await fetchStreetData(request.latitude, request.longitude, fetchDistance, request.layerVisibility);
     
-    console.log(`Fetched ${data.streets.reduce((sum, s) => sum + s.coordinates.length, 0)} streets, ${data.water.length} water, ${data.parks.length} parks`);
+    console.log(`Fetched ${data.streets.reduce((sum, s) => sum + s.coordinates.length, 0)} streets, ${data.water.length} water, ${data.parks.length} parks, ${data.buildings.length} buildings`);
 
     const svg = generateSVG(request, data);
 
