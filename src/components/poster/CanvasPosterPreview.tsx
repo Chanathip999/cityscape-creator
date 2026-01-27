@@ -29,8 +29,7 @@ interface CanvasPosterPreviewProps {
 }
 
 /**
- * Street widths - finer weights to match reference posters
- * Thinner lines create more detailed, elegant appearance
+ * Street widths - balanced for visibility and detail
  */
 const STREET_WIDTHS: Record<string, number> = {
   motorway: 1.0,
@@ -41,19 +40,19 @@ const STREET_WIDTHS: Record<string, number> = {
   primary_link: 0.6,
   secondary: 0.5,
   secondary_link: 0.45,
-  tertiary: 0.4,
-  tertiary_link: 0.35,
-  residential: 0.35,
-  living_street: 0.35,
-  unclassified: 0.35,
-  service: 0.3,
-  pedestrian: 0.25,
-  footway: 0.2,
-  path: 0.2,
-  cycleway: 0.2,
-  track: 0.2,
-  steps: 0.15,
-  bridleway: 0.2,
+  tertiary: 0.42,
+  tertiary_link: 0.38,
+  residential: 0.38,
+  living_street: 0.38,
+  unclassified: 0.38,
+  service: 0.32,
+  pedestrian: 0.28,
+  footway: 0.24,
+  path: 0.24,
+  cycleway: 0.24,
+  track: 0.24,
+  steps: 0.2,
+  bridleway: 0.24,
 };
 
 // Railway width (z-order 2.5 in Python, between parks and roads)
