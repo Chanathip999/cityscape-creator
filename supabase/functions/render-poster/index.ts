@@ -271,8 +271,8 @@ function adjustForestColor(hexColor: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MAX_TILE_RADIUS = 5000; // 5km per tile for stability
-// Keep this low to avoid memory limits during export renders
-const MAX_TILES = 3; // Reduced to prevent memory exceeded errors
+// Increased tile count for full coverage matching preview
+const MAX_TILES = 9; // More tiles for better coverage
 
 interface TileResult {
   streets: StreetSegment[];
@@ -282,15 +282,15 @@ interface TileResult {
   water: [number, number][][];
   forests: [number, number][][];
   parks: [number, number][][];
+  buildings: [number, number][][];
 }
 
 function calculateTiles(lat: number, lng: number, distance: number): { lat: number; lng: number; radius: number }[] {
-  // Always use single tile for memory efficiency - rely on radius expansion
-  if (distance <= MAX_TILE_RADIUS * 1.5) {
+  // Always use single tile for small areas
+  if (distance <= MAX_TILE_RADIUS * 1.2) {
     return [{ lat, lng, radius: Math.min(distance, MAX_TILE_RADIUS) }];
   }
 
-  // For larger areas, use center + minimal surrounding
   const tiles: { lat: number; lng: number; radius: number }[] = [];
   tiles.push({ lat, lng, radius: MAX_TILE_RADIUS });
 
@@ -300,12 +300,22 @@ function calculateTiles(lat: number, lng: number, distance: number): { lat: numb
   const latStep = tileSpacing / metersPerDegreeLat;
   const lngStep = tileSpacing / metersPerDegreeLng;
 
-  // Only add 2 more tiles to stay under memory limit
-  if (tiles.length < MAX_TILES) {
-    tiles.push({ lat: lat + latStep, lng, radius: MAX_TILE_RADIUS });
-  }
-  if (tiles.length < MAX_TILES) {
-    tiles.push({ lat: lat - latStep, lng, radius: MAX_TILE_RADIUS });
+  // Cardinal directions for better coverage
+  const offsets = [
+    { dLat: latStep, dLng: 0 },      // N
+    { dLat: -latStep, dLng: 0 },     // S
+    { dLat: 0, dLng: lngStep },      // E
+    { dLat: 0, dLng: -lngStep },     // W
+    { dLat: latStep, dLng: lngStep },    // NE
+    { dLat: latStep, dLng: -lngStep },   // NW
+    { dLat: -latStep, dLng: lngStep },   // SE
+    { dLat: -latStep, dLng: -lngStep },  // SW
+  ];
+
+  for (const offset of offsets) {
+    if (tiles.length < MAX_TILES) {
+      tiles.push({ lat: lat + offset.dLat, lng: lng + offset.dLng, radius: MAX_TILE_RADIUS });
+    }
   }
 
   console.log(`Created ${tiles.length} tiles for ${distance}m radius`);
@@ -383,7 +393,7 @@ async function fetchSingleTile(
 
   if (!response || !response.ok) {
     console.error('Tile fetch failed, returning empty');
-    return { streets: [], railways: [], aeroways: [], coastlines: [], water: [], forests: [], parks: [] };
+    return { streets: [], railways: [], aeroways: [], coastlines: [], water: [], forests: [], parks: [], buildings: [] };
   }
 
   const osmData = await response.json();
@@ -504,7 +514,8 @@ async function fetchSingleTile(
     coastlines: coastlineLines,
     water: waterPolygons, 
     forests: forestPolygons,
-    parks: parkPolygons 
+    parks: parkPolygons,
+    buildings: []  // Buildings handled separately if needed
   };
 }
 
@@ -516,7 +527,8 @@ function mergeResults(results: TileResult[]): TileResult {
     coastlines: [],
     water: [], 
     forests: [],
-    parks: [] 
+    parks: [],
+    buildings: []
   };
   const streetsByType = new Map<string, [number, number][][]>();
 
@@ -532,6 +544,7 @@ function mergeResults(results: TileResult[]): TileResult {
     merged.water.push(...result.water);
     merged.forests.push(...result.forests);
     merged.parks.push(...result.parks);
+    merged.buildings.push(...(result.buildings || []));
   }
 
   merged.streets = Array.from(streetsByType.entries()).map(([type, coordinates]) => ({
@@ -550,6 +563,7 @@ async function fetchStreetData(lat: number, lng: number, distance: number): Prom
   water: [number, number][][];
   forests: [number, number][][];
   parks: [number, number][][];
+  buildings: [number, number][][];
 }> {
   // Adaptive street type selection to stay within edge runtime CPU limits.
   // Dense areas (large cities) can exceed CPU when rendering thousands of small service/residential segments.
