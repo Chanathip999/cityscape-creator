@@ -320,6 +320,34 @@ export const useStreetData = ({
       clearOldCache();
 
       try {
+        // =========================================================================
+        // ULTRA-FAST FIRST PAINT:
+        // Before we even compute the full tile grid, fetch ONE small-radius center
+        // request (priority=1). This massively improves perceived performance when
+        // Overpass is slow for large bboxes.
+        // =========================================================================
+        const previewRadius = Math.min(1200, Math.max(600, Math.floor(distance * 0.35)));
+
+        const previewEssential = await fetchTileWithRetry(
+          runId,
+          latitude,
+          longitude,
+          previewRadius,
+          /* skipService */ false,
+          /* fetchBuildings */ false,
+          /* buildingsOnly */ false,
+          /* priority */ 1,
+        );
+
+        if (runId !== runIdRef.current) return;
+
+        if (previewEssential) {
+          setStreets(previewEssential.streets);
+          setWater(previewEssential.water);
+          setCoastlines(previewEssential.coastlines);
+          console.log(`⚡ PREVIEW priority=1 (r=${previewRadius}m) in ${(performance.now() - startTime).toFixed(0)}ms`);
+        }
+
         // Calculate tiles for the full area
         const streetTiles = calculateTiles({
           lat: latitude,

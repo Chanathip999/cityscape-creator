@@ -11,8 +11,6 @@ import { SettingsTabs } from './SettingsTabs';
 import { ClearCacheButton } from './ClearCacheButton';
 import { ExportDialog } from './ExportDialog';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Map } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
@@ -124,34 +122,6 @@ export const PosterEditor = ({ onConfigChange }: PosterEditorProps) => {
             >
               {/* City Search */}
               <CitySearch onCitySelect={handleCitySelect} />
-              
-              {/* City and Country Inputs */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="city">Stadtname</Label>
-                  <Input
-                    id="city"
-                    value={config.city}
-                    onChange={(e) =>
-                      setConfig((prev) => ({ ...prev, city: e.target.value }))
-                    }
-                    placeholder="City name"
-                    className="h-12"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="country">Land</Label>
-                  <Input
-                    id="country"
-                    value={config.country}
-                    onChange={(e) =>
-                      setConfig((prev) => ({ ...prev, country: e.target.value }))
-                    }
-                    placeholder="Country"
-                    className="h-12"
-                  />
-                </div>
-              </div>
 
               <Separator />
 
