@@ -235,9 +235,28 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
               </div>
             </div>
 
-            {/* Road Color */}
+            {/* Motorway Color */}
             <div className="space-y-2">
-              <Label>Straßenfarbe</Label>
+              <Label>Autobahnen / Hauptstraßen</Label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={config.customMotorwayColor || config.theme.roadMotorway}
+                  onChange={(e) => onConfigUpdate({ customMotorwayColor: e.target.value })}
+                  className="w-12 h-12 rounded-lg border border-border cursor-pointer"
+                />
+                <Input
+                  value={config.customMotorwayColor || config.theme.roadMotorway}
+                  onChange={(e) => onConfigUpdate({ customMotorwayColor: e.target.value })}
+                  placeholder="#FF00FF"
+                  className="h-12 flex-1 font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Other Roads Color */}
+            <div className="space-y-2">
+              <Label>Nebenstraßen</Label>
               <div className="flex items-center gap-3">
                 <input
                   type="color"
@@ -248,7 +267,7 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
                 <Input
                   value={config.customRoadColor || config.theme.roadPrimary}
                   onChange={(e) => onConfigUpdate({ customRoadColor: e.target.value })}
-                  placeholder="#FFFFFF"
+                  placeholder="#00FFFF"
                   className="h-12 flex-1 font-mono"
                 />
               </div>

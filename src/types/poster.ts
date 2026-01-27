@@ -91,7 +91,8 @@ export interface PosterConfig {
   orientation: PosterOrientation;
   aspectRatio: AspectRatioId;
   customTextColor?: string;
-  customRoadColor?: string;
+  customMotorwayColor?: string; // Separate color for motorways/highways
+  customRoadColor?: string; // Color for other roads
   customBackgroundColor?: string;
   coloredStreets?: boolean;
   renderMode: RenderMode;
