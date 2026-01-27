@@ -208,7 +208,8 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MAX_TILE_RADIUS = 5000; // 5km per tile for stability
-const MAX_TILES = 9; // Max 9 tiles (3x3 grid)
+// Keep this low to avoid CPU limits during export renders
+const MAX_TILES = 5; // center + 4 cardinal directions
 
 interface TileResult {
   streets: StreetSegment[];
@@ -234,13 +235,11 @@ function calculateTiles(lat: number, lng: number, distance: number): { lat: numb
   const latStep = tileSpacing / metersPerDegreeLat;
   const lngStep = tileSpacing / metersPerDegreeLng;
 
-  // Add surrounding tiles in a grid pattern
-  for (let row = -1; row <= 1 && tiles.length < MAX_TILES; row++) {
-    for (let col = -1; col <= 1 && tiles.length < MAX_TILES; col++) {
-      if (row === 0 && col === 0) continue; // Skip center (already added)
-      tiles.push({ lat: lat + row * latStep, lng: lng + col * lngStep, radius: MAX_TILE_RADIUS });
-    }
-  }
+  // Add surrounding tiles in a cross pattern (much cheaper than 3x3)
+  tiles.push({ lat: lat + latStep, lng, radius: MAX_TILE_RADIUS });
+  tiles.push({ lat: lat - latStep, lng, radius: MAX_TILE_RADIUS });
+  tiles.push({ lat, lng: lng + lngStep, radius: MAX_TILE_RADIUS });
+  tiles.push({ lat, lng: lng - lngStep, radius: MAX_TILE_RADIUS });
 
   console.log(`Created ${tiles.length} tiles for ${distance}m radius`);
   return tiles;
@@ -406,8 +405,11 @@ async function fetchStreetData(lat: number, lng: number, distance: number): Prom
   water: [number, number][][];
   parks: [number, number][][];
 }> {
-  // ALWAYS use all street types to ensure fine streets are visible in exports
-  const activeStreetTypes = ALL_STREET_TYPES;
+  // Keep exports stable: still render fine streets (residential/tertiary) but drop ultra-dense service
+  // for large radii to prevent CPU limits.
+  const activeStreetTypes = distance > 8000
+    ? ALL_STREET_TYPES.filter((t) => t.type !== 'service')
+    : ALL_STREET_TYPES;
   const includeWaterParks = distance <= 10000;
 
   const tiles = calculateTiles(lat, lng, distance);
@@ -589,10 +591,10 @@ Deno.serve(async (req) => {
 
     const aspectConfig = ASPECT_RATIOS[request.aspectRatio] || ASPECT_RATIOS['3:4'];
     const aspectValue = aspectConfig.width / aspectConfig.height;
-    const compensatedDistance = Math.ceil(
-      request.distance * (Math.max(aspectConfig.height, aspectConfig.width) / Math.min(aspectConfig.height, aspectConfig.width)) / 4
-    );
-    const fetchDistance = Math.max(request.distance, compensatedDistance) * 1.5;
+    // Fetch only slightly beyond the crop area. Too large here explodes street count and hits CPU limits.
+    const aspectCompensation = Math.max(aspectConfig.height, aspectConfig.width) / Math.min(aspectConfig.height, aspectConfig.width);
+    const compensatedDistance = Math.ceil(request.distance * aspectCompensation);
+    const fetchDistance = Math.min(12000, Math.ceil(Math.max(request.distance, compensatedDistance) * 1.15));
 
     const data = await fetchStreetData(request.latitude, request.longitude, fetchDistance);
     
