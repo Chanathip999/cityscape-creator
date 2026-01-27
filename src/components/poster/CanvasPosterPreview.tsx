@@ -146,8 +146,10 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     // We scale proportionally to match the reference output
     const baseWidth = STREET_WIDTHS[type] || 0.4;
     const scaleFactor = canvasWidth / 864;
-    // Minimum 0.5px for visibility, max 8px
-    return Math.max(0.5, Math.min(baseWidth * scaleFactor, 8));
+    // Boost fine streets for better visibility in preview
+    // residential/tertiary get a higher minimum (1px instead of 0.5px)
+    const minWidth = ['residential', 'tertiary', 'living_street', 'unclassified'].includes(type) ? 1.0 : 0.5;
+    return Math.max(minWidth, Math.min(baseWidth * scaleFactor, 8));
   }, []);
 
   const getCropLimits = useCallback(() => {
