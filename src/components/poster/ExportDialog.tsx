@@ -53,8 +53,11 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
 
   const currentResolution = RESOLUTION_OPTIONS.find((r) => r.id === resolution) || RESOLUTION_OPTIONS[0];
   
+  // Buildings only available for 4K and 8K
+  const buildingsAvailable = resolution === '4k' || resolution === '8k';
+  const hasBuildings = buildingsAvailable && (config.layerVisibility?.buildings || false);
+  
   // Calculate total price
-  const hasBuildings = config.layerVisibility?.buildings || false;
   const buildingSurcharge = hasBuildings ? BUILDING_PREMIUM : 0;
   const basePrice = quantity === 3 ? BUNDLE_PRICING[resolution] : currentResolution.price;
   const totalPrice = basePrice + buildingSurcharge;
@@ -279,6 +282,9 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
             <p>📐 Auflösung: {exportWidth} × {exportHeight} px</p>
             {hasBuildings && (
               <p className="text-primary font-medium">🏢 Gebäudedaten: +€{BUILDING_PREMIUM.toFixed(2)}</p>
+            )}
+            {config.layerVisibility?.buildings && !buildingsAvailable && (
+              <p className="text-destructive font-medium">⚠️ Gebäudedaten nur ab 4K verfügbar</p>
             )}
             <p>💾 Vektor-Modus: Poster wird serverseitig gerendert für perfekte Qualität.</p>
           </div>

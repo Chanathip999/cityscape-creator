@@ -28,7 +28,7 @@ const LAYER_OPTIONS: { id: keyof LayerVisibility; label: string; icon: React.Ele
   { id: 'railways', label: 'Zugstrecken', icon: Train, colorKey: 'railways' },
   { id: 'aeroways', label: 'Flughäfen', icon: Plane, colorKey: 'aeroways' },
   { id: 'coastlines', label: 'Küstenlinien', icon: MapPin, colorKey: 'coastlines' },
-  { id: 'buildings', label: 'Gebäude', icon: Building, colorKey: 'buildings', premium: true, premiumPrice: '+€1,99' },
+  { id: 'buildings', label: 'Gebäude', icon: Building, colorKey: 'buildings', premium: true, premiumPrice: '+€1,99 (ab 4K)' },
 ];
 
 // Common aspect ratios for quick selection
