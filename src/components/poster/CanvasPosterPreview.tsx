@@ -62,6 +62,12 @@ const RAILWAY_WIDTH = 0.5;
 const DPI = 300;
 const BASE_SIZE = 12; // Python uses 12 inches
 
+// Prevent right-click context menu to protect poster content
+const handleContextMenu = (e: React.MouseEvent) => {
+  e.preventDefault();
+  return false;
+};
+
 export const CanvasPosterPreview = ({ config, onExportReady, containerRef: externalContainerRef }: CanvasPosterPreviewProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const internalContainerRef = useRef<HTMLDivElement>(null);
@@ -610,13 +616,15 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   return (
     <div
       ref={containerRef}
-      className="relative w-full overflow-hidden cursor-grab active:cursor-grabbing"
+      className="relative w-full overflow-hidden cursor-grab active:cursor-grabbing select-none"
       style={aspectStyle}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
       onWheel={handleWheel}
+      onContextMenu={handleContextMenu}
+      onDragStart={(e) => e.preventDefault()}
     >
       <canvas 
         ref={canvasRef} 
