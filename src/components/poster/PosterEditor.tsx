@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, FontFamily, FontSize, AspectRatioId, RenderMode } from '@/types/poster';
+import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, FontFamily, FontSize, AspectRatioId, RenderMode, LayerVisibility } from '@/types/poster';
 import { PosterPreview } from './PosterPreview';
 import { CanvasPosterPreview } from './CanvasPosterPreview';
 import { ThemeSelector } from './ThemeSelector';
@@ -10,6 +10,7 @@ import { AIPromptInput } from './AIPromptInput';
 import { FontSelector } from './FontSelector';
 import { AspectRatioSelector } from './AspectRatioSelector';
 import { RenderModeSelector } from './RenderModeSelector';
+import { LayerToggleSelector } from './LayerToggleSelector';
 import { ExportDialog } from './ExportDialog';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
@@ -63,6 +64,10 @@ export const PosterEditor = () => {
 
   const handleRenderModeChange = (renderMode: RenderMode) => {
     setConfig((prev) => ({ ...prev, renderMode }));
+  };
+
+  const handleLayerVisibilityChange = (layerVisibility: LayerVisibility) => {
+    setConfig((prev) => ({ ...prev, layerVisibility }));
   };
 
   const handleConfigUpdate = (updates: Partial<PosterConfig>) => {
@@ -177,6 +182,14 @@ export const PosterEditor = () => {
                 renderMode={config.renderMode}
                 onRenderModeChange={handleRenderModeChange}
               />
+
+              {/* Layer Toggle Selector - Only for vector mode */}
+              {config.renderMode === 'vector' && (
+                <LayerToggleSelector
+                  layerVisibility={config.layerVisibility}
+                  onLayerVisibilityChange={handleLayerVisibilityChange}
+                />
+              )}
 
               {/* Aspect Ratio Selector */}
               <AspectRatioSelector

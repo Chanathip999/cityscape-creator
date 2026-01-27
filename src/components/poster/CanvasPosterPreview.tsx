@@ -92,6 +92,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     fontFamily,
     fontSize,
     aspectRatio,
+    layerVisibility,
   } = config;
 
   // Get aspect ratio dimensions
@@ -255,7 +256,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     ctx.fillRect(0, 0, width, height);
 
     // z=0.5: Draw coastlines (land-water boundaries)
-    if (coastlines && coastlines.length > 0) {
+    if (layerVisibility.coastlines && coastlines && coastlines.length > 0) {
       ctx.strokeStyle = theme.water;
       ctx.lineWidth = Math.max(2, 3 * (width / 864));
       ctx.lineCap = 'round';
@@ -277,7 +278,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     }
 
     // z=1: Draw water (below parks)
-    if (water && water.length > 0) {
+    if (layerVisibility.water && water && water.length > 0) {
       ctx.fillStyle = theme.water;
       ctx.strokeStyle = theme.water;
       ctx.lineWidth = Math.max(1, 2 * (width / 864));
@@ -305,7 +306,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     }
 
     // z=1.5: Draw forests (below parks, above water)
-    if (forests && forests.length > 0) {
+    if (layerVisibility.forests && forests && forests.length > 0) {
       // Slightly darker/greener than parks
       const forestColor = adjustColor(theme.parks, -20, 10);
       ctx.fillStyle = forestColor;
@@ -327,7 +328,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     }
 
     // z=2: Draw parks (above water/forests)
-    if (parks && parks.length > 0) {
+    if (layerVisibility.parks && parks && parks.length > 0) {
       ctx.fillStyle = theme.parks;
       for (const polygon of parks) {
         if (polygon.length < 3) continue;
@@ -346,7 +347,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     }
 
     // z=2.3: Draw aeroways (runways, taxiways)
-    if (aeroways && aeroways.length > 0) {
+    if (layerVisibility.aeroways && aeroways && aeroways.length > 0) {
       // Runways are typically gray/dark
       ctx.strokeStyle = theme.roadService || '#666666';
       ctx.lineWidth = Math.max(3, 6 * (width / 864));
@@ -369,7 +370,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     }
 
     // z=2.5: Draw railways (between parks and roads)
-    if (railways && railways.length > 0) {
+    if (layerVisibility.railways && railways && railways.length > 0) {
       const railwayColor = theme.railway || theme.text;
       const railwayWidth = Math.max(0.5, RAILWAY_WIDTH * (width / 864));
       
@@ -508,6 +509,9 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   }, [
     streets,
     railways,
+    aeroways,
+    coastlines,
+    forests,
     water,
     parks,
     theme,
@@ -519,12 +523,14 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     fontSize,
     fontFamily,
     config.customTextColor,
+    layerVisibility,
     canvasWidth,
     canvasHeight,
     getCropLimits,
     toCanvasCoords,
     getStreetColor,
     getStreetWidth,
+    adjustColor,
     onExportReady,
   ]);
 
