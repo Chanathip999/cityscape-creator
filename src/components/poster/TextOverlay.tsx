@@ -311,14 +311,12 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
         return (
           <div
             key={element.id}
-            className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-move transition-all ${
-              isSelected || isActive ? 'ring-2 ring-primary ring-offset-2 ring-offset-background/50 rounded-md' : ''
-            }`}
+            className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-move"
             style={{
               left: `${pos.x * 100}%`,
               top: `${pos.y * 100}%`,
             }}
-            onMouseDown={(e) => handleMouseDown(e, element.id)}
+            onMouseDown={(e) => !isEditing && handleMouseDown(e, element.id)}
             onClick={(e) => handleTextClick(e, element.id)}
             onDoubleClick={(e) => handleDoubleClick(e, element.id, element.editable)}
           >
@@ -330,19 +328,24 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
                 onBlur={handleTextBlur}
                 onKeyDown={handleKeyDown}
                 autoFocus
-                className="bg-transparent border-b-2 border-primary px-2 py-1 text-center outline-none"
+                className="bg-transparent border-none outline-none text-center caret-primary"
                 style={{
                   color: textColor,
                   fontSize: `${fontSize}px`,
                   fontWeight,
                   letterSpacing,
-                  minWidth: '100px',
                   textTransform: 'uppercase',
+                  width: `${Math.max(element.text.length, 3) * fontSize * 0.7}px`,
+                  minWidth: '40px',
+                  writingMode: isVertical ? 'vertical-rl' : 'horizontal-tb',
+                  textOrientation: isVertical ? 'mixed' : undefined,
                 }}
               />
             ) : (
               <span
-                className="select-none whitespace-nowrap px-2 py-1"
+                className={`select-none whitespace-nowrap px-1 py-0.5 rounded-sm transition-shadow ${
+                  isSelected ? 'ring-1 ring-primary/50' : ''
+                }`}
                 style={{
                   color: textColor,
                   fontSize: `${fontSize}px`,
