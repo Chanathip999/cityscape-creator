@@ -47,10 +47,11 @@ const MAX_BUILDING_TILE_RADIUS = 2000; // Smaller = faster individual loads, mor
 const MAX_TILES_STREETS = 25;
 const MAX_TILES_BUILDINGS = 64; // Reduced to prevent WORKER_LIMIT errors
 
-// Batch sizes for parallel fetching - BALANCED FOR MEDIUM INSTANCE
-// Too much parallelism triggers WORKER_LIMIT and makes loading slower overall.
-const STREET_BATCH_SIZE = 24;
-const BUILDING_BATCH_SIZE = 16;
+// Batch sizes for parallel fetching - STABLE FOR MEDIUM INSTANCE
+// Lower batch sizes prevent BOOT_ERROR by reducing cold start pressure.
+// Retry logic handles transient failures - prioritize stability over raw speed.
+const STREET_BATCH_SIZE = 12;
+const BUILDING_BATCH_SIZE = 8;
 
 // Calculate tiles needed for a given area - ensures center is always included
 function calculateTiles(params: {
@@ -210,7 +211,7 @@ export const useStreetData = ({
     skipService: boolean,
     fetchBuildings: boolean,
     buildingsOnly: boolean,
-    retries = 1
+    retries = 3 // Increased retries for BOOT_ERROR resilience
   ): Promise<TileResult | null> => {
     const cacheKey =
       getTileCacheKey(tileLat, tileLng, tileRadius) +
@@ -236,9 +237,15 @@ export const useStreetData = ({
         });
 
         if (fnError) {
+          const errorStr = String(fnError.message || fnError);
+          const isBootError = errorStr.includes('BOOT_ERROR') || errorStr.includes('503');
+          
           if (attempt < retries) {
-            // Wait before retry with exponential backoff
-            await new Promise(r => setTimeout(r, 100 * (attempt + 1)));
+            // BOOT_ERROR needs longer wait for function to become available
+            const baseDelay = isBootError ? 500 : 150;
+            const delay = baseDelay * Math.pow(2, attempt); // Exponential backoff
+            console.log(`Retry ${attempt + 1}/${retries} after ${delay}ms (${isBootError ? 'BOOT_ERROR' : 'error'})`);
+            await new Promise(r => setTimeout(r, delay));
             continue;
           }
           console.error('Tile fetch error after retries:', fnError);
@@ -261,8 +268,14 @@ export const useStreetData = ({
         
         return result;
       } catch (err) {
+        const errorStr = String(err);
+        const isBootError = errorStr.includes('BOOT_ERROR') || errorStr.includes('503');
+        
         if (attempt < retries) {
-          await new Promise(r => setTimeout(r, 100 * (attempt + 1)));
+          const baseDelay = isBootError ? 500 : 150;
+          const delay = baseDelay * Math.pow(2, attempt);
+          console.log(`Retry ${attempt + 1}/${retries} after ${delay}ms (exception)`);
+          await new Promise(r => setTimeout(r, delay));
           continue;
         }
         console.error('Tile fetch exception:', err);
