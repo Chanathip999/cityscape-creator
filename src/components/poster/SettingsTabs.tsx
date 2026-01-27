@@ -317,7 +317,7 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
                 
                 return (
                   <div key={id} className="space-y-2">
-                    <div className={`flex items-center justify-between py-2 px-2 rounded-lg ${premium ? 'bg-primary/5 border border-primary/20' : ''}`}>
+                    <div className={`flex items-center justify-between py-2 px-2 rounded-lg ${premium ? 'bg-primary/5' : ''}`}>
                       <div className="flex items-center gap-3">
                         <Icon className={`w-4 h-4 ${premium ? 'text-primary' : 'text-muted-foreground'}`} />
                         <Label className="font-normal">{label}</Label>
