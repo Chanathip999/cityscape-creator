@@ -58,16 +58,18 @@ interface UseStreetDataResult {
 }
 
 // Tile limits and batch sizes - balanced for speed and stability
-const MAX_TILES_STREETS = 16;
+// Fewer, larger tiles = dramatically fewer roundtrips while keeping full detail.
+const MAX_TILES_STREETS = 9;
 // More generous building tile limits for better coverage
 const MAX_TILES_BUILDINGS = 9;
-const STREET_BATCH_SIZE = 4;
+const STREET_BATCH_SIZE = 3;
 // Parallel building batches for faster loading
 const BUILDING_BATCH_SIZE = 3;
-const MAX_STREET_TILE_RADIUS = 5000;
+// Larger radius reduces number of Overpass calls; detail is unchanged.
+const MAX_STREET_TILE_RADIUS = 7500;
 // Larger building tiles for better coverage
 const MAX_BUILDING_TILE_RADIUS = 2500;
-const TILE_OVERLAP_FACTOR = 1.3;  // 30% overlap to cover gaps from failed tiles
+const TILE_OVERLAP_FACTOR = 1.15; // reduce redundant overlap while still covering gaps
 
 // Calculate tiles needed for a given area - ensures center is always included
 function calculateTiles(params: {
