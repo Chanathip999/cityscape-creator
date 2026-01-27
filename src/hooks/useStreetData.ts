@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { getCachedTile, setCachedTile, getTileCacheKey, clearOldCache } from '@/lib/streetDataCache';
 import { withConcurrencyLimit, getCurrentInFlight } from '@/lib/fetchSemaphore';
+import type { LayerVisibility } from '@/types/poster';
 
 export interface StreetSegment {
   type: 'motorway' | 'primary' | 'secondary' | 'tertiary' | 'residential' | 'service' | 'path';
@@ -14,6 +15,7 @@ interface UseStreetDataProps {
   distance: number;
   enabled?: boolean;
   includeBuildings?: boolean;
+  layerVisibility?: LayerVisibility;
 }
 
 interface UseStreetDataResult {
@@ -187,6 +189,7 @@ export const useStreetData = ({
   distance,
   enabled = true,
   includeBuildings = false,
+  layerVisibility,
 }: UseStreetDataProps): UseStreetDataResult => {
   const [streets, setStreets] = useState<StreetSegment[]>([]);
   const [railways, setRailways] = useState<[number, number][][]>([]);
@@ -214,12 +217,18 @@ export const useStreetData = ({
     fetchBuildings: boolean,
     buildingsOnly: boolean,
     priority: 0 | 1 | 2 = 0, // 0 = all, 1 = essential, 2 = details
+    tileLayerVisibility?: LayerVisibility,
     retries = 3
   ): Promise<TileResult | null> => {
+    const lv = tileLayerVisibility;
+    const lvKey = lv
+      ? `-lv${Number(!!lv.water)}${Number(!!lv.forests)}${Number(!!lv.parks)}${Number(!!lv.railways)}${Number(!!lv.aeroways)}${Number(!!lv.coastlines)}${Number(!!lv.buildings)}`
+      : '';
     const cacheKey =
       getTileCacheKey(tileLat, tileLng, tileRadius) +
       (fetchBuildings ? (buildingsOnly ? '-bld-only' : '-bld') : '') +
-      (priority > 0 ? `-p${priority}` : '');
+      (priority > 0 ? `-p${priority}` : '') +
+      lvKey;
     
     // Try IndexedDB cache first (24h TTL) - instant!
     const cached = await getCachedTile(cacheKey);
@@ -243,6 +252,7 @@ export const useStreetData = ({
               includeBuildings: fetchBuildings,
               buildingsOnly,
               priority, // NEW: Send priority to backend
+              layerVisibility: lv,
             },
           });
 
@@ -300,7 +310,10 @@ export const useStreetData = ({
   useEffect(() => {
     if (!enabled) return;
 
-    const paramsKey = `${latitude.toFixed(4)}-${longitude.toFixed(4)}-${distance}-${includeBuildings}`;
+    const lvKey = layerVisibility
+      ? `${Number(!!layerVisibility.water)}${Number(!!layerVisibility.forests)}${Number(!!layerVisibility.parks)}${Number(!!layerVisibility.railways)}${Number(!!layerVisibility.aeroways)}${Number(!!layerVisibility.coastlines)}${Number(!!layerVisibility.buildings)}`
+      : 'none';
+    const paramsKey = `${latitude.toFixed(4)}-${longitude.toFixed(4)}-${distance}-${includeBuildings}-${lvKey}`;
     
     if (paramsKey === lastParamsRef.current) return;
 
@@ -337,6 +350,7 @@ export const useStreetData = ({
           /* fetchBuildings */ false,
           /* buildingsOnly */ false,
           /* priority */ 0,
+          layerVisibility,
         );
 
         if (runId !== runIdRef.current) return;
@@ -373,7 +387,15 @@ export const useStreetData = ({
         // PHASE 1A: Center tile FULL detail for INSTANT feedback
         const centerTile = streetTiles[0];
         const centerFullResult = await fetchTileWithRetry(
-          runId, centerTile.lat, centerTile.lng, centerTile.radius, skipService, false, false, 0
+          runId,
+          centerTile.lat,
+          centerTile.lng,
+          centerTile.radius,
+          skipService,
+          false,
+          false,
+          0,
+          layerVisibility,
         );
         
         if (runId !== runIdRef.current) return;
@@ -398,7 +420,7 @@ export const useStreetData = ({
           const batch = remainingTiles.slice(i, i + STREET_BATCH_SIZE);
           const batchResults = await Promise.all(
             batch.map(tile =>
-              fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, false, false, 0)
+              fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, false, false, 0, layerVisibility)
             )
           );
           
@@ -432,7 +454,7 @@ export const useStreetData = ({
             const batch = buildingTiles.slice(i, i + BUILDING_BATCH_SIZE);
             const batchResults = await Promise.all(
               batch.map(tile =>
-                fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, true, true, 0)
+                 fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, true, true, 0, layerVisibility)
               )
             );
             
@@ -496,7 +518,7 @@ export const useStreetData = ({
         clearTimeout(fetchTimeoutRef.current);
       }
     };
-  }, [latitude, longitude, distance, enabled, includeBuildings, fetchTileWithRetry]);
+  }, [latitude, longitude, distance, enabled, includeBuildings, layerVisibility, fetchTileWithRetry]);
 
   return { streets, railways, aeroways, coastlines, water, parks, forests, buildings, isLoading, error };
 };

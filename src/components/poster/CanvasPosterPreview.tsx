@@ -157,6 +157,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     distance: fetchDistance,
     enabled: true,
     includeBuildings: layerVisibility.buildings,
+    layerVisibility,
   });
 
   // Reset pan/zoom when location or aspect ratio changes
