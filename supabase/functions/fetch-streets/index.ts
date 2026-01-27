@@ -43,14 +43,15 @@ interface StreetData {
 }
 
 // Round coordinate to reduce JSON size while maintaining good visual fidelity.
-// 3 decimals ~ 111m at equator - more aggressive compression to reduce memory
-const roundCoord = (n: number): number => Math.round(n * 1000) / 1000;
+// 5 decimals ~ 1.1m at equator - ensures smooth lines without visible staircase artifacts
+const roundCoord = (n: number): number => Math.round(n * 100000) / 100000;
 
-// AGGRESSIVE thresholds to prevent memory crashes in dense cities (Tokyo, NYC, etc.)
-const ELEMENT_COUNT_THRESHOLD = 25000;
-const ELEMENT_COUNT_THRESHOLD_WITH_BUILDINGS = 15000;
+// Thresholds to prevent memory crashes in dense cities (Tokyo, NYC, etc.)
+// More generous to allow proper rendering
+const ELEMENT_COUNT_THRESHOLD = 40000;
+const ELEMENT_COUNT_THRESHOLD_WITH_BUILDINGS = 30000;
 // Max elements to process before early termination
-const MAX_ELEMENTS_TO_PROCESS = 30000;
+const MAX_ELEMENTS_TO_PROCESS = 50000;
 
 // Overpass endpoints - fewer to reduce connection overhead
 const OVERPASS_URLS = [
@@ -403,9 +404,8 @@ Deno.serve(async (req) => {
     );
 
     const distanceNum = Number(distance);
-    // HARD CAP: Reduced max radius to prevent memory issues in dense cities
-    // Client tiling provides full coverage with smaller tiles
-    const radius = Math.min(2500, Math.max(1000, distanceNum));
+    // Allow larger radius for full coverage - client tiling handles the rest
+    const radius = Math.min(4000, Math.max(1000, distanceNum));
 
     const latDelta = radius / 111320;
     const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));
@@ -418,10 +418,10 @@ Deno.serve(async (req) => {
 
     // FAST PATH: buildings-only mode to avoid large mixed payloads & memory spikes
     if (buildingsOnly) {
-      // Density guard: skip buildings in extremely dense areas to prevent memory crashes
+      // Density guard: skip buildings only in EXTREMELY dense areas
       const buildingCount = await getBuildingCount(bbox);
-      // If count check failed (0), we still proceed, but we cap processing later.
-      if (buildingCount > 12000) {
+      // Higher threshold (25000) to allow more buildings - we'll stream/cap if needed
+      if (buildingCount > 25000) {
         console.log(`Buildings-only: SKIP (too dense: ${buildingCount} buildings in bbox)`);
         const responseData = {
           streets: [],
@@ -457,8 +457,8 @@ Deno.serve(async (req) => {
       }
 
       const buildingPolygons: [number, number][][] = [];
-      // Hard cap to avoid memory spikes while processing huge building responses.
-      const MAX_BUILDING_POLYGONS = 5000;
+      // Higher cap to allow more detailed building data
+      const MAX_BUILDING_POLYGONS = 15000;
       for (const element of elements) {
         if (buildingPolygons.length >= MAX_BUILDING_POLYGONS) break;
         if (element.type !== 'way') continue;
@@ -564,9 +564,9 @@ Deno.serve(async (req) => {
       includePolygons = !useReducedMode;
     }
     
-    // Allow buildings even in moderately dense areas - but be conservative
-    // VERY conservative threshold for buildings to prevent memory crashes
-    const actuallyIncludeBuildings = includeBuildings && estimatedCount < 10000;
+    // Allow buildings in moderately dense areas
+    // Higher threshold to enable building data for most cities
+    const actuallyIncludeBuildings = includeBuildings && estimatedCount < 25000;
 
     // For reduced mode, also use core streets only (no service/paths)
     const finalHighwayTags = useReducedMode 

@@ -57,17 +57,16 @@ interface UseStreetDataResult {
   error: string | null;
 }
 
-// REDUCED tile limits and batch sizes to prevent Overpass API overload
-// Use LARGER tiles with MORE overlap to ensure coverage even when some fail
+// Tile limits and batch sizes - balanced for speed and stability
 const MAX_TILES_STREETS = 16;
-// Buildings are the heaviest layer. Keep this extremely conservative to prevent WORKER_LIMIT.
-const MAX_TILES_BUILDINGS = 4;
-const STREET_BATCH_SIZE = 4;  // Smaller batches = more stable
-// Buildings must be fetched sequentially to avoid bursting the backend.
-const BUILDING_BATCH_SIZE = 1;
-const MAX_STREET_TILE_RADIUS = 5000;  // Larger tiles = fewer requests, more overlap
-// Smaller building tiles reduce the risk of huge Overpass responses in dense areas.
-const MAX_BUILDING_TILE_RADIUS = 1500;
+// More generous building tile limits for better coverage
+const MAX_TILES_BUILDINGS = 9;
+const STREET_BATCH_SIZE = 4;
+// Parallel building batches for faster loading
+const BUILDING_BATCH_SIZE = 3;
+const MAX_STREET_TILE_RADIUS = 5000;
+// Larger building tiles for better coverage
+const MAX_BUILDING_TILE_RADIUS = 2500;
 const TILE_OVERLAP_FACTOR = 1.3;  // 30% overlap to cover gaps from failed tiles
 
 // Calculate tiles needed for a given area - ensures center is always included
