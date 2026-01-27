@@ -405,11 +405,9 @@ async function fetchStreetData(lat: number, lng: number, distance: number): Prom
   water: [number, number][][];
   parks: [number, number][][];
 }> {
-  // Keep exports stable: still render fine streets (residential/tertiary) but drop ultra-dense service
-  // for large radii to prevent CPU limits.
-  const activeStreetTypes = distance > 8000
-    ? ALL_STREET_TYPES.filter((t) => t.type !== 'service')
-    : ALL_STREET_TYPES;
+  // Always use ALL street types including service for maximum detail
+  // The tile-based approach handles memory efficiently
+  const activeStreetTypes = ALL_STREET_TYPES;
   const includeWaterParks = distance <= 10000;
 
   const tiles = calculateTiles(lat, lng, distance);
@@ -545,9 +543,21 @@ function generateSVG(request: RenderRequest, data: {
   const countryText = request.country.toUpperCase();
   const coordsText = formatCoordinates(request.latitude, request.longitude);
   
-  // City name (spaced uppercase letters)
-  const spacedCity = cityText.split('').join(' ');
-  svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.title}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${titleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.title}" letter-spacing="${(TRACKING.title * titleSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif">${spacedCity}</text>`;
+  // City name with letter spacing - auto-scale to fit width
+  // Estimate text width: each char ~0.6 * fontSize + letter-spacing
+  const charWidth = titleSize * 0.6;
+  const letterSpacing = TRACKING.title * titleSize;
+  const estimatedTextWidth = cityText.length * charWidth + (cityText.length - 1) * letterSpacing;
+  const maxTextWidth = width * 0.9; // Leave 5% margin on each side
+  
+  let adjustedTitleSize = titleSize;
+  if (estimatedTextWidth > maxTextWidth) {
+    const scaleFactor = maxTextWidth / estimatedTextWidth;
+    adjustedTitleSize = titleSize * scaleFactor;
+  }
+  const adjustedLetterSpacing = TRACKING.title * adjustedTitleSize;
+  
+  svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.title}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${adjustedTitleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.title}" letter-spacing="${adjustedLetterSpacing.toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif">${cityText}</text>`;
   
   // Decorative line between city and country (matching Python y=0.125)
   if (request.showDecorativeLine !== false) {
