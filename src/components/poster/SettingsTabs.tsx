@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Type, Palette, Move, Check, Waves, Trees, TreeDeciduous, Train, Plane, MapPin } from 'lucide-react';
+import { Type, Palette, Move, Check, Waves, Trees, TreeDeciduous, Train, Plane, MapPin, Blend } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SettingsTabsProps {
@@ -124,6 +124,16 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
                 <Switch
                   checked={config.showCountry}
                   onCheckedChange={(checked) => onConfigUpdate({ showCountry: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-3">
+                  <Blend className="w-4 h-4 text-muted-foreground" />
+                  <Label className="font-normal">Farbverläufe oben/unten</Label>
+                </div>
+                <Switch
+                  checked={config.showGradients}
+                  onCheckedChange={(checked) => onConfigUpdate({ showGradients: checked })}
                 />
               </div>
             </div>

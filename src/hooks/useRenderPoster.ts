@@ -50,6 +50,7 @@ export const useRenderPoster = (): UseRenderPosterResult => {
           fontFamily: config.fontFamily,
           fontSize: config.fontSize,
           customTextColor: config.customTextColor,
+          showGradients: config.showGradients,
           width,
           height,
         },
