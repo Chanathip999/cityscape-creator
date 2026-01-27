@@ -216,8 +216,8 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MAX_TILE_RADIUS = 5000; // 5km per tile for stability
-// Keep this low to avoid CPU limits during export renders
-const MAX_TILES = 5; // center + 4 cardinal directions
+// Keep this low to avoid memory limits during export renders
+const MAX_TILES = 3; // Reduced to prevent memory exceeded errors
 
 interface TileResult {
   streets: StreetSegment[];
@@ -226,28 +226,28 @@ interface TileResult {
 }
 
 function calculateTiles(lat: number, lng: number, distance: number): { lat: number; lng: number; radius: number }[] {
-  if (distance <= MAX_TILE_RADIUS) {
-    return [{ lat, lng, radius: distance }];
+  // Always use single tile for memory efficiency - rely on radius expansion
+  if (distance <= MAX_TILE_RADIUS * 1.5) {
+    return [{ lat, lng, radius: Math.min(distance, MAX_TILE_RADIUS) }];
   }
 
+  // For larger areas, use center + minimal surrounding
   const tiles: { lat: number; lng: number; radius: number }[] = [];
   tiles.push({ lat, lng, radius: MAX_TILE_RADIUS });
 
-  const tileSpacing = MAX_TILE_RADIUS * 1.6;
-  const numTilesPerSide = Math.ceil(distance / tileSpacing);
-  
-  if (numTilesPerSide <= 1) return tiles;
-
+  const tileSpacing = MAX_TILE_RADIUS * 1.4;
   const metersPerDegreeLat = 111320;
   const metersPerDegreeLng = 111320 * Math.cos(lat * Math.PI / 180);
   const latStep = tileSpacing / metersPerDegreeLat;
   const lngStep = tileSpacing / metersPerDegreeLng;
 
-  // Add surrounding tiles in a cross pattern (much cheaper than 3x3)
-  tiles.push({ lat: lat + latStep, lng, radius: MAX_TILE_RADIUS });
-  tiles.push({ lat: lat - latStep, lng, radius: MAX_TILE_RADIUS });
-  tiles.push({ lat, lng: lng + lngStep, radius: MAX_TILE_RADIUS });
-  tiles.push({ lat, lng: lng - lngStep, radius: MAX_TILE_RADIUS });
+  // Only add 2 more tiles to stay under memory limit
+  if (tiles.length < MAX_TILES) {
+    tiles.push({ lat: lat + latStep, lng, radius: MAX_TILE_RADIUS });
+  }
+  if (tiles.length < MAX_TILES) {
+    tiles.push({ lat: lat - latStep, lng, radius: MAX_TILE_RADIUS });
+  }
 
   console.log(`Created ${tiles.length} tiles for ${distance}m radius`);
   return tiles;
@@ -413,24 +413,19 @@ async function fetchStreetData(lat: number, lng: number, distance: number): Prom
   water: [number, number][][];
   parks: [number, number][][];
 }> {
-  // Always use ALL street types including service for maximum detail
-  // The tile-based approach handles memory efficiently
-  const activeStreetTypes = ALL_STREET_TYPES;
-  const includeWaterParks = distance <= 10000;
+  // Use core street types only to reduce memory usage
+  const activeStreetTypes = ALL_STREET_TYPES.slice(0, 6); // Exclude 'path' type
+  const includeWaterParks = distance <= 8000; // Reduced threshold
 
   const tiles = calculateTiles(lat, lng, distance);
   console.log(`Fetching ${tiles.length} tiles for distance ${distance}m`);
 
-  // Fetch tiles in parallel (max 3 at a time to avoid rate limits)
+  // Fetch tiles SEQUENTIALLY to reduce peak memory usage
   const results: TileResult[] = [];
-  const BATCH_SIZE = 3;
 
-  for (let i = 0; i < tiles.length; i += BATCH_SIZE) {
-    const batch = tiles.slice(i, i + BATCH_SIZE);
-    const batchResults = await Promise.all(
-      batch.map(tile => fetchSingleTile(tile.lat, tile.lng, tile.radius, activeStreetTypes, includeWaterParks))
-    );
-    results.push(...batchResults);
+  for (const tile of tiles) {
+    const result = await fetchSingleTile(tile.lat, tile.lng, tile.radius, activeStreetTypes, includeWaterParks);
+    results.push(result);
   }
 
   return mergeResults(results);
@@ -609,10 +604,11 @@ Deno.serve(async (req) => {
 
     const aspectConfig = ASPECT_RATIOS[request.aspectRatio] || ASPECT_RATIOS['3:4'];
     const aspectValue = aspectConfig.width / aspectConfig.height;
-    // Fetch only slightly beyond the crop area. Too large here explodes street count and hits CPU limits.
+    // Fetch only slightly beyond the crop area. Too large here explodes street count and hits memory limits.
     const aspectCompensation = Math.max(aspectConfig.height, aspectConfig.width) / Math.min(aspectConfig.height, aspectConfig.width);
     const compensatedDistance = Math.ceil(request.distance * aspectCompensation);
-    const fetchDistance = Math.min(12000, Math.ceil(Math.max(request.distance, compensatedDistance) * 1.15));
+    // Limit fetch distance more aggressively to prevent memory exceeded errors
+    const fetchDistance = Math.min(8000, Math.ceil(Math.max(request.distance, compensatedDistance) * 1.1));
 
     const data = await fetchStreetData(request.latitude, request.longitude, fetchDistance);
     
