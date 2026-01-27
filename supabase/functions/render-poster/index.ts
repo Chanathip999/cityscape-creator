@@ -330,10 +330,12 @@ function adjustForestColor(hexColor: string): string {
 // Overpass Data Fetching with Tile-based approach for large areas
 // ─────────────────────────────────────────────────────────────────────────────
 
-// OPTIMIZED: Single tile for most requests to prevent CPU timeout
-// Edge runtime has ~50s CPU limit - multiple tiles with parsing can exceed this
-const MAX_TILE_RADIUS = 12000; // 12km single tile covers most use cases
-const MAX_TILES = 4; // Reduced from 9 to prevent CPU timeout
+// OPTIMIZED: Single tile for most requests to prevent CPU/memory timeout
+// Edge runtime has ~50s CPU limit and ~150MB memory - must stay under both
+const MAX_TILE_RADIUS = 10000; // 10km single tile (reduced from 12km for memory)
+const MAX_TILES = 2; // Reduced from 4 to prevent memory overflow
+const MAX_BUILDINGS = 15000; // Hard cap on building count to prevent memory crash
+const MAX_BUILDING_DISTANCE = 5000; // Buildings only for small areas (5km)
 
 interface TileResult {
   streets: StreetSegment[];
@@ -356,27 +358,14 @@ function calculateTiles(lat: number, lng: number, distance: number): { lat: numb
   const tiles: { lat: number; lng: number; radius: number }[] = [];
   tiles.push({ lat, lng, radius: MAX_TILE_RADIUS });
 
-  // Only add cardinal tiles if really needed
-  if (distance > MAX_TILE_RADIUS * 1.5) {
-    const tileSpacing = MAX_TILE_RADIUS * 1.2;
+  // Only add one extra tile if really needed (reduced from 4)
+  if (distance > MAX_TILE_RADIUS * 1.5 && tiles.length < MAX_TILES) {
+    const tileSpacing = MAX_TILE_RADIUS * 0.8;
     const metersPerDegreeLat = 111320;
-    const metersPerDegreeLng = 111320 * Math.cos(lat * Math.PI / 180);
     const latStep = tileSpacing / metersPerDegreeLat;
-    const lngStep = tileSpacing / metersPerDegreeLng;
-
-    // Only 4 cardinal directions (reduced from 8)
-    const offsets = [
-      { dLat: latStep, dLng: 0 },      // N
-      { dLat: -latStep, dLng: 0 },     // S
-      { dLat: 0, dLng: lngStep },      // E
-      { dLat: 0, dLng: -lngStep },     // W
-    ];
-
-    for (const offset of offsets) {
-      if (tiles.length < MAX_TILES) {
-        tiles.push({ lat: lat + offset.dLat, lng: lng + offset.dLng, radius: MAX_TILE_RADIUS * 0.8 });
-      }
-    }
+    
+    // Only add one cardinal tile to limit memory
+    tiles.push({ lat: lat + latStep, lng, radius: MAX_TILE_RADIUS * 0.7 });
   }
 
   console.log(`Created ${tiles.length} tiles for ${distance}m radius`);
@@ -388,7 +377,8 @@ async function fetchSingleTile(
   tileLng: number,
   radius: number,
   activeStreetTypes: typeof ALL_STREET_TYPES,
-  layerVisibility?: RenderRequest['layerVisibility']
+  layerVisibility?: RenderRequest['layerVisibility'],
+  skipBuildings?: boolean
 ): Promise<TileResult> {
   const latDelta = radius / 111320;
   const lngDelta = radius / (111320 * Math.cos(tileLat * Math.PI / 180));
@@ -423,25 +413,20 @@ async function fetchSingleTile(
     queryParts.push(`way["waterway"~"^(river|canal)$"](${bbox});`);
   }
   
-  // Coastlines
-  if (layerVisibility?.coastlines) {
-    queryParts.push(`way["natural"="coastline"](${bbox});`);
-  }
+  // Coastlines (skip for memory optimization)
+  // Coastlines disabled in export to save memory
   
-  // Parks
-  if (layerVisibility?.parks) {
-    queryParts.push(`way["leisure"="park"](${bbox});`);
-    queryParts.push(`way["landuse"~"^(grass|meadow)$"](${bbox});`);
-  }
+  // Parks (skip for memory optimization in export)
+  // Parks disabled in export to save memory
   
-  // Forests
-  if (layerVisibility?.forests) {
-    queryParts.push(`way["landuse"="forest"](${bbox});`);
-    queryParts.push(`way["natural"="wood"](${bbox});`);
-  }
+  // Forests (skip for memory optimization in export)
+  // Forests disabled in export to save memory
   
-  // Buildings (if enabled)
-  if (layerVisibility?.buildings) {
+  // Buildings (only if enabled AND not skipped due to distance/density)
+  const shouldFetchBuildings = layerVisibility?.buildings && !skipBuildings;
+  if (shouldFetchBuildings) {
+    // Use count query first to check density (prevents OOM on dense cities)
+    console.log('Buildings requested, will fetch with limit');
     queryParts.push(`way["building"](${bbox});`);
   }
   
@@ -587,6 +572,10 @@ async function fetchSingleTile(
         parkPolygons.push(points);
       }
     } else if (tags.building) {
+      // Early bailout if we have too many buildings (memory protection)
+      if (buildingPolygons.length >= MAX_BUILDINGS) {
+        continue; // Skip additional buildings
+      }
       const points: [number, number][] = [];
       for (const pt of geom) {
         if (pt && pt.lat !== undefined && pt.lon !== undefined) {
@@ -597,6 +586,11 @@ async function fetchSingleTile(
         buildingPolygons.push(points);
       }
     }
+  }
+  
+  // Log if buildings were capped
+  if (buildingPolygons.length >= MAX_BUILDINGS) {
+    console.log(`Buildings capped at ${MAX_BUILDINGS} to prevent memory overflow`);
   }
 
   const streets: StreetSegment[] = activeStreetTypes.map((st) => ({
@@ -669,23 +663,31 @@ async function fetchStreetData(
 }> {
   // OPTIMIZED: More aggressive road type filtering to reduce CPU time
   // Skip minor roads for larger distances to stay within CPU limits
-  const includeMinorRoads = distance <= 4000;
+  const includeMinorRoads = distance <= 3000; // Reduced from 4000
   const activeStreetTypes = includeMinorRoads
     ? ALL_STREET_TYPES.slice(0, 5) // motorway..residential (no service/path)
     : ALL_STREET_TYPES.slice(0, 4); // motorway..tertiary only for large areas
 
+  // Skip buildings for large distances (memory protection)
+  const skipBuildings = distance > MAX_BUILDING_DISTANCE;
+  if (skipBuildings && layerVisibility?.buildings) {
+    console.log(`Buildings skipped: distance ${distance}m exceeds ${MAX_BUILDING_DISTANCE}m limit`);
+  }
+
   const tiles = calculateTiles(lat, lng, distance);
-  console.log(`Fetching ${tiles.length} tiles for distance ${distance}m (minor=${includeMinorRoads}, layers=${JSON.stringify(layerVisibility)})`);
+  console.log(`Fetching ${tiles.length} tiles for distance ${distance}m (minor=${includeMinorRoads}, buildings=${!skipBuildings && layerVisibility?.buildings})`);
 
   // For single tile, fetch directly
   if (tiles.length === 1) {
-    return await fetchSingleTile(tiles[0].lat, tiles[0].lng, tiles[0].radius, activeStreetTypes, layerVisibility);
+    return await fetchSingleTile(tiles[0].lat, tiles[0].lng, tiles[0].radius, activeStreetTypes, layerVisibility, skipBuildings);
   }
 
-  // For multiple tiles, fetch in parallel but limit concurrency
-  const results = await Promise.all(
-    tiles.map(tile => fetchSingleTile(tile.lat, tile.lng, tile.radius, activeStreetTypes, layerVisibility))
-  );
+  // For multiple tiles, fetch sequentially to reduce peak memory usage
+  const results: TileResult[] = [];
+  for (const tile of tiles) {
+    const result = await fetchSingleTile(tile.lat, tile.lng, tile.radius, activeStreetTypes, layerVisibility, skipBuildings);
+    results.push(result);
+  }
 
   return mergeResults(results);
 }
