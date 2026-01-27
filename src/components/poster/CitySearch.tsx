@@ -1,6 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { Search, MapPin, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
@@ -25,30 +24,48 @@ export const CitySearch = ({ onCitySelect }: CitySearchProps) => {
   const [results, setResults] = useState<GeoNamesCity[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  const searchCity = useCallback(async () => {
-    if (!query.trim() || query.trim().length < 2) return;
-    
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('geonames-search', {
-        body: { query: query.trim() },
-      });
-
-      if (error) {
-        console.error('GeoNames search error:', error);
-        return;
-      }
-
-      if (data?.results) {
-        setResults(data.results);
-        setShowResults(true);
-      }
-    } catch (error) {
-      console.error('Search failed:', error);
-    } finally {
-      setIsLoading(false);
+  // Auto-search while typing with debounce
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
     }
+
+    if (!query.trim() || query.trim().length < 2) {
+      setResults([]);
+      setShowResults(false);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      setIsLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('geonames-search', {
+          body: { query: query.trim() },
+        });
+
+        if (error) {
+          console.error('GeoNames search error:', error);
+          return;
+        }
+
+        if (data?.results) {
+          setResults(data.results);
+          setShowResults(true);
+        }
+      } catch (error) {
+        console.error('Search failed:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 300); // 300ms debounce
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
   }, [query]);
 
   const handleSelect = (result: GeoNamesCity) => {
@@ -57,39 +74,21 @@ export const CitySearch = ({ onCitySelect }: CitySearchProps) => {
     setQuery(result.name);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      searchCity();
-    }
-  };
-
   return (
     <div className="space-y-3">
       <label className="text-sm font-medium text-foreground">Stadtsuche</label>
       <div className="relative">
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Stadt suchen..."
-              className="pl-9"
-            />
-          </div>
-          <Button 
-            onClick={searchCity} 
-            disabled={isLoading || query.trim().length < 2}
-            size="icon"
-            variant="secondary"
-          >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Search className="w-4 h-4" />
-            )}
-          </Button>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Stadt suchen..."
+            className="pl-9 pr-10"
+          />
+          {isLoading && (
+            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+          )}
         </div>
         
         <AnimatePresence>
