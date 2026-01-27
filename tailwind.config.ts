@@ -20,6 +20,10 @@ export default {
         display: ['Bebas Neue', 'Impact', 'sans-serif'],
         elegant: ['Playfair Display', 'Georgia', 'serif'],
         condensed: ['Oswald', 'Arial Narrow', 'sans-serif'],
+        script: ['Dancing Script', 'cursive'],
+        retro: ['Righteous', 'cursive'],
+        minimal: ['Raleway', 'sans-serif'],
+        brutalist: ['Space Grotesk', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",

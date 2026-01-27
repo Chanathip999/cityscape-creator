@@ -25,8 +25,12 @@ const FONTS = [
   { id: "sans", name: "Sans-Serif", keywords: ["sans", "modern", "clean", "schlicht", "minimalistisch"] },
   { id: "serif", name: "Serif", keywords: ["serif", "klassisch", "classic", "traditionell", "elegant"] },
   { id: "display", name: "Display", keywords: ["display", "headline", "bold", "stark", "auffällig"] },
-  { id: "elegant", name: "Elegant", keywords: ["elegant", "fancy", "cursive", "edel", "schön"] },
+  { id: "elegant", name: "Elegant", keywords: ["elegant", "fancy", "edel", "schön"] },
   { id: "condensed", name: "Condensed", keywords: ["condensed", "schmal", "narrow", "kompakt", "compact"] },
+  { id: "script", name: "Script", keywords: ["script", "handschrift", "cursive", "handwritten", "kalligraphie", "calligraphy"] },
+  { id: "retro", name: "Retro", keywords: ["retro", "vintage", "70er", "80er", "70s", "80s", "funky"] },
+  { id: "minimal", name: "Minimal", keywords: ["minimal", "thin", "dünn", "leicht", "light", "clean"] },
+  { id: "brutalist", name: "Brutalist", keywords: ["brutalist", "industrial", "industriell", "grotesk", "tech"] },
 ];
 
 // Aspect ratios
