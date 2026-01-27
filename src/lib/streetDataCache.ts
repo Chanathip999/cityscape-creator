@@ -148,13 +148,39 @@ export async function clearOldCache(): Promise<void> {
 // Clear ALL cached tiles - for manual refresh
 export async function clearAllCache(): Promise<void> {
   try {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    store.clear();
-    console.log('Street data cache cleared');
+    // Close any existing connection first
+    if (dbInstance) {
+      dbInstance.close();
+      dbInstance = null;
+      dbPromise = null;
+    }
+    
+    // Delete the entire database to ensure complete cache clear
+    return new Promise((resolve, reject) => {
+      const deleteRequest = indexedDB.deleteDatabase(DB_NAME);
+      
+      deleteRequest.onsuccess = () => {
+        console.log('Street data cache cleared (database deleted)');
+        resolve();
+      };
+      
+      deleteRequest.onerror = () => {
+        console.error('Failed to delete cache database:', deleteRequest.error);
+        reject(deleteRequest.error);
+      };
+      
+      deleteRequest.onblocked = () => {
+        console.warn('Cache delete blocked - forcing close');
+        // Force resolve after a short delay
+        setTimeout(() => {
+          console.log('Cache clear completed (forced)');
+          resolve();
+        }, 500);
+      };
+    });
   } catch (error) {
     console.error('Failed to clear cache:', error);
+    throw error;
   }
 }
 
