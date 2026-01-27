@@ -5,18 +5,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Street types - reduced set for dense cities
+// Street types - all types for maximum detail like reference
 const CORE_STREET_TYPES = [
   { type: 'motorway', tags: ['motorway', 'motorway_link'] },
   { type: 'primary', tags: ['trunk', 'trunk_link', 'primary', 'primary_link'] },
   { type: 'secondary', tags: ['secondary', 'secondary_link'] },
   { type: 'tertiary', tags: ['tertiary', 'tertiary_link'] },
   { type: 'residential', tags: ['residential', 'living_street', 'unclassified'] },
+  { type: 'service', tags: ['service', 'pedestrian'] },
 ];
 
-// Additional street types for less dense areas
+// Additional fine-detail street types
 const EXTRA_STREET_TYPES = [
-  { type: 'service', tags: ['service', 'pedestrian'] },
   { type: 'path', tags: ['footway', 'path', 'cycleway', 'track', 'steps', 'bridleway'] },
 ];
 
@@ -41,7 +41,8 @@ interface StreetData {
 const roundCoord = (n: number): number => Math.round(n * 100000) / 100000;
 
 // Threshold: if count query returns more than this, use reduced mode
-const ELEMENT_COUNT_THRESHOLD = 25000;
+// Higher threshold to allow more detail (like reference images)
+const ELEMENT_COUNT_THRESHOLD = 50000;
 
 const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',

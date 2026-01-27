@@ -29,38 +29,31 @@ interface CanvasPosterPreviewProps {
 }
 
 /**
- * Street widths from maptoposter Python script get_edge_widths_by_type()
- * https://github.com/Chanathip999/maptoposter/blob/main/create_map_poster.py#L217-L244
- * 
- * These values match the original Python script EXACTLY for visual parity.
- * motorway, motorway_link     → Thickest (1.2)
- * trunk, primary              → Thick (1.0)
- * secondary                   → Medium (0.8)
- * tertiary                    → Thin (0.6)
- * residential, living_street  → Thinnest (0.4)
+ * Street widths - finer weights to match reference posters
+ * Thinner lines create more detailed, elegant appearance
  */
 const STREET_WIDTHS: Record<string, number> = {
-  motorway: 1.2,
-  motorway_link: 1.0,
-  trunk: 1.0,
-  trunk_link: 0.9,
-  primary: 1.0,
-  primary_link: 0.9,
-  secondary: 0.8,
-  secondary_link: 0.7,
-  tertiary: 0.6,
-  tertiary_link: 0.5,
-  residential: 0.4,
-  living_street: 0.4,
-  unclassified: 0.4,
-  service: 0.3,
-  pedestrian: 0.25,
-  footway: 0.2,
-  path: 0.2,
-  cycleway: 0.2,
-  track: 0.2,
-  steps: 0.15,
-  bridleway: 0.2,
+  motorway: 1.0,
+  motorway_link: 0.8,
+  trunk: 0.8,
+  trunk_link: 0.7,
+  primary: 0.7,
+  primary_link: 0.6,
+  secondary: 0.5,
+  secondary_link: 0.4,
+  tertiary: 0.35,
+  tertiary_link: 0.3,
+  residential: 0.25,
+  living_street: 0.25,
+  unclassified: 0.25,
+  service: 0.2,
+  pedestrian: 0.15,
+  footway: 0.12,
+  path: 0.12,
+  cycleway: 0.12,
+  track: 0.12,
+  steps: 0.1,
+  bridleway: 0.12,
 };
 
 // Railway width (z-order 2.5 in Python, between parks and roads)
@@ -160,14 +153,12 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   );
 
   const getStreetWidth = useCallback((type: string, canvasWidth: number): number => {
-    // Scale factor: Python uses 12 inches at 72 DPI = 864px base
-    // We scale proportionally to match the reference output
-    const baseWidth = STREET_WIDTHS[type] || 0.4;
+    // Scale factor: base 864px (12 inches at 72 DPI)
+    const baseWidth = STREET_WIDTHS[type] || 0.25;
     const scaleFactor = canvasWidth / 864;
-    // Boost fine streets for better visibility in preview
-    // residential/tertiary get a higher minimum (1px instead of 0.5px)
-    const minWidth = ['residential', 'tertiary', 'living_street', 'unclassified'].includes(type) ? 1.0 : 0.5;
-    return Math.max(minWidth, Math.min(baseWidth * scaleFactor, 8));
+    // Finer minimum widths for more detail
+    const minWidth = ['motorway', 'primary', 'trunk'].includes(type) ? 0.8 : 0.3;
+    return Math.max(minWidth, Math.min(baseWidth * scaleFactor, 6));
   }, []);
 
   // Helper to adjust color brightness/saturation for forests
