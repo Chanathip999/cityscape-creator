@@ -4,7 +4,7 @@
  * Even with high batch sizes, we never exceed MAX_CONCURRENT requests at once.
  */
 
-const MAX_CONCURRENT = 18; // Aggressive but safe for upgraded instance
+const MAX_CONCURRENT = 30; // Very aggressive for maximum parallelism
 
 let inFlight = 0;
 const queue: Array<() => void> = [];

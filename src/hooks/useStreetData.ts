@@ -49,13 +49,13 @@ interface TileResult {
 const MAX_STREET_TILE_RADIUS = 3500;
 const MAX_BUILDING_TILE_RADIUS = 2000;
 
-// Maximum tiles for full coverage - reduced for faster loading
-const MAX_TILES_STREETS = 25;
-const MAX_TILES_BUILDINGS = 49;
+// Maximum tiles for full coverage
+const MAX_TILES_STREETS = 36;
+const MAX_TILES_BUILDINGS = 64;
 
-// Larger batch sizes for faster parallel fetching
-const STREET_BATCH_SIZE = 25;
-const BUILDING_BATCH_SIZE = 16;
+// Very aggressive batch sizes - semaphore prevents overload
+const STREET_BATCH_SIZE = 36;
+const BUILDING_BATCH_SIZE = 24;
 
 // Calculate tiles needed for a given area - ensures center is always included
 function calculateTiles(params: {
