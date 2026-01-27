@@ -4,7 +4,9 @@
  */
 
 const DB_NAME = 'poster-street-cache';
-const DB_VERSION = 1;
+// IMPORTANT: Increment version when data format changes (e.g., coordinate precision)
+// v2: Changed from 3 decimal places to 5 decimal places for smooth lines
+const DB_VERSION = 2;
 const STORE_NAME = 'tiles';
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
