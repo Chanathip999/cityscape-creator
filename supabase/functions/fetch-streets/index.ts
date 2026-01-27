@@ -223,7 +223,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { lat, lng, distance, skipService = false, includeBuildings = false } = await req.json();
+    const {
+      lat,
+      lng,
+      distance,
+      skipService = false,
+      includeBuildings = false,
+      buildingsOnly = false,
+    } = await req.json();
 
     if (!lat || !lng || !distance) {
       return new Response(
@@ -232,8 +239,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create cache key (include buildings flag)
-    const cacheKey = `${lat.toFixed(3)}-${lng.toFixed(3)}-${distance}-${skipService}-${includeBuildings}`;
+    // Create cache key (include buildings + mode)
+    const cacheKey = `${lat.toFixed(3)}-${lng.toFixed(3)}-${distance}-${skipService}-${includeBuildings}-${buildingsOnly}`;
     const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       console.log('Cache hit for:', cacheKey);
@@ -243,7 +250,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Fetching streets for lat=${lat}, lng=${lng}, distance=${distance}m, skipService=${skipService}, buildings=${includeBuildings}`);
+    console.log(
+      `Fetching streets for lat=${lat}, lng=${lng}, distance=${distance}m, skipService=${skipService}, buildings=${includeBuildings}, buildingsOnly=${buildingsOnly}`
+    );
 
     const distanceNum = Number(distance);
     const radius = Math.min(5000, Math.max(2000, distanceNum));
@@ -256,6 +265,66 @@ Deno.serve(async (req) => {
     const west = lng - lngDelta;
     const east = lng + lngDelta;
     const bbox = `${south.toFixed(5)},${west.toFixed(5)},${north.toFixed(5)},${east.toFixed(5)}`;
+
+    // FAST PATH: buildings-only mode to avoid large mixed payloads & memory spikes
+    if (buildingsOnly) {
+      const query = buildQuery({
+        bbox,
+        highwayTags: [],
+        includePolygons: false,
+        includeBuildings: true,
+        buildingsOnly: true,
+      });
+
+      const elements = await fetchOverpass(query);
+
+      if (elements === null) {
+        // Fallback to stale cache
+        if (cached) {
+          console.log('Overpass unavailable; serving stale cache (buildingsOnly)');
+          return new Response(JSON.stringify(cached.data), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'stale' },
+          });
+        }
+        return new Response(JSON.stringify({ error: 'Overpass API unavailable' }), {
+          status: 503,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const buildingPolygons: [number, number][][] = [];
+      for (const element of elements) {
+        if (element.type !== 'way') continue;
+        const geom = element.geometry;
+        if (!geom || geom.length < 3) continue;
+        const tags = element.tags || {};
+        if (!tags.building) continue;
+
+        const points: [number, number][] = [];
+        for (const pt of geom) {
+          if (pt?.lat !== undefined && pt?.lon !== undefined) {
+            points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+          }
+        }
+        if (points.length >= 3) buildingPolygons.push(points);
+      }
+
+      const responseData = {
+        streets: [],
+        railways: [],
+        aeroways: [],
+        coastlines: [],
+        water: [],
+        parks: [],
+        forests: [],
+        buildings: buildingPolygons,
+      };
+
+      cache.set(cacheKey, { data: responseData, timestamp: Date.now() });
+      return new Response(JSON.stringify(responseData), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Determine which street types to use
     const activeStreetTypes = skipService 

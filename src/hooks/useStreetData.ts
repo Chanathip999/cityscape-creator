@@ -195,9 +195,12 @@ export const useStreetData = ({
     tileRadius: number,
     skipService: boolean,
     fetchBuildings: boolean,
+    buildingsOnly: boolean,
     retries = 1
   ): Promise<TileResult | null> => {
-    const cacheKey = getTileCacheKey(tileLat, tileLng, tileRadius) + (fetchBuildings ? '-bld' : '');
+    const cacheKey =
+      getTileCacheKey(tileLat, tileLng, tileRadius) +
+      (fetchBuildings ? (buildingsOnly ? '-bld-only' : '-bld') : '');
     
     // Try IndexedDB cache first (24h TTL) - instant!
     const cached = await getCachedTile(cacheKey);
@@ -208,7 +211,14 @@ export const useStreetData = ({
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         const { data, error: fnError } = await supabase.functions.invoke('fetch-streets', {
-          body: { lat: tileLat, lng: tileLng, distance: tileRadius, skipService, includeBuildings: fetchBuildings },
+          body: {
+            lat: tileLat,
+            lng: tileLng,
+            distance: tileRadius,
+            skipService,
+            includeBuildings: fetchBuildings,
+            buildingsOnly,
+          },
         });
 
         if (fnError) {
@@ -286,7 +296,7 @@ export const useStreetData = ({
           for (let i = 0; i < tiles.length; i += STREET_BATCH_SIZE) {
             const batch = tiles.slice(i, i + STREET_BATCH_SIZE);
             const batchResults = await Promise.all(
-              batch.map(tile => fetchTileWithRetry(tile.lat, tile.lng, tile.radius, skipService, false))
+              batch.map(tile => fetchTileWithRetry(tile.lat, tile.lng, tile.radius, skipService, false, false))
             );
             for (const result of batchResults) {
               if (result) results.push(result);
@@ -302,7 +312,8 @@ export const useStreetData = ({
           for (let i = 0; i < tiles.length; i += BUILDING_BATCH_SIZE) {
             const batch = tiles.slice(i, i + BUILDING_BATCH_SIZE);
             const batchResults = await Promise.all(
-              batch.map(tile => fetchTileWithRetry(tile.lat, tile.lng, tile.radius, true, true))
+              // buildingsOnly=true prevents huge mixed responses that can trigger WORKER_LIMIT
+              batch.map(tile => fetchTileWithRetry(tile.lat, tile.lng, tile.radius, skipService, true, true))
             );
             for (const result of batchResults) {
               if (result) results.push(result);
