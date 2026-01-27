@@ -47,10 +47,10 @@ const MAX_BUILDING_TILE_RADIUS = 2000; // Smaller = faster individual loads, mor
 const MAX_TILES_STREETS = 25;
 const MAX_TILES_BUILDINGS = 64; // Reduced to prevent WORKER_LIMIT errors
 
-// Batch sizes for parallel fetching - CONSERVATIVE FOR STABILITY
-// Too many parallel requests cause WORKER_LIMIT errors
-const STREET_BATCH_SIZE = 4;
-const BUILDING_BATCH_SIZE = 3;
+// Batch sizes for parallel fetching - OPTIMIZED FOR PERFORMANCE
+// Requires upgraded instance size to avoid WORKER_LIMIT errors
+const STREET_BATCH_SIZE = 18;
+const BUILDING_BATCH_SIZE = 12;
 
 // Calculate tiles needed for a given area - ensures center is always included
 function calculateTiles(params: {
