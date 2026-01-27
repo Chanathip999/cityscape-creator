@@ -58,13 +58,14 @@ interface UseStreetDataResult {
 }
 
 // REDUCED tile limits and batch sizes to prevent Overpass API overload
-// 40 concurrent requests was causing 504 timeouts and BOOT_ERRORs
-const MAX_TILES_STREETS = 25;
-const MAX_TILES_BUILDINGS = 16;
-const STREET_BATCH_SIZE = 6;  // Much smaller batches to reduce API pressure
-const BUILDING_BATCH_SIZE = 4;
-const MAX_STREET_TILE_RADIUS = 3500;
-const MAX_BUILDING_TILE_RADIUS = 2000;
+// Use LARGER tiles with MORE overlap to ensure coverage even when some fail
+const MAX_TILES_STREETS = 16;
+const MAX_TILES_BUILDINGS = 12;
+const STREET_BATCH_SIZE = 4;  // Smaller batches = more stable
+const BUILDING_BATCH_SIZE = 3;
+const MAX_STREET_TILE_RADIUS = 5000;  // Larger tiles = fewer requests, more overlap
+const MAX_BUILDING_TILE_RADIUS = 2500;
+const TILE_OVERLAP_FACTOR = 1.3;  // 30% overlap to cover gaps from failed tiles
 
 // Calculate tiles needed for a given area - ensures center is always included
 function calculateTiles(params: {
@@ -86,8 +87,8 @@ function calculateTiles(params: {
   // CRITICAL: Always start with exact center tile at the user's coordinates
   tiles.push({ lat, lng, radius: tileRadius });
 
-  // Tile spacing with overlap for seamless coverage
-  const tileSpacing = tileRadius * 1.6;
+  // Tile spacing with MORE overlap to cover gaps from failed tiles
+  const tileSpacing = tileRadius * TILE_OVERLAP_FACTOR;  // More overlap = better coverage
   const numTilesPerSide = Math.ceil(distance / tileSpacing);
   
   if (numTilesPerSide <= 1) {
@@ -269,16 +270,20 @@ export const useStreetData = ({
             const isBootError = errorStr.includes('BOOT_ERROR') || errorStr.includes('503');
             const isWorkerLimit = errorStr.includes('WORKER_LIMIT') || errorStr.includes('546');
             
-            if (attempt < retries) {
-              // Longer delays to give Overpass API time to recover
-              const baseDelay = isWorkerLimit ? 800 : isBootError ? 600 : 300;
-              const delay = baseDelay * Math.pow(1.5, attempt);
-              console.log(`Retry ${attempt + 1}/${retries} after ${delay}ms (in-flight: ${getCurrentInFlight()})`);
-              await new Promise(r => setTimeout(r, delay));
-              continue;
-            }
-            console.error('Tile fetch error after retries:', fnError);
-            return null;
+          if (attempt < retries) {
+            // Longer delays to give Overpass API time to recover
+            const baseDelay = isWorkerLimit ? 1200 : isBootError ? 900 : 500;
+            const delay = baseDelay * Math.pow(2, attempt);  // More aggressive backoff
+            console.log(`Retry ${attempt + 1}/${retries} after ${delay}ms (in-flight: ${getCurrentInFlight()})`);
+            await new Promise(r => setTimeout(r, delay));
+            continue;
+          }
+          console.warn('Tile fetch failed after retries, returning empty (not null):', fnError);
+          // Return EMPTY result instead of null - prevents black gaps
+          return {
+            streets: [], railways: [], aeroways: [], coastlines: [],
+            water: [], parks: [], forests: [], buildings: [],
+          };
           }
 
           const result: TileResult = {
@@ -302,17 +307,25 @@ export const useStreetData = ({
           const isWorkerLimit = errorStr.includes('WORKER_LIMIT') || errorStr.includes('546');
           
           if (attempt < retries) {
-            const baseDelay = isWorkerLimit ? 800 : isBootError ? 600 : 300;
-            const delay = baseDelay * Math.pow(1.5, attempt);
+            const baseDelay = isWorkerLimit ? 1200 : isBootError ? 900 : 500;
+            const delay = baseDelay * Math.pow(2, attempt);
             console.log(`Retry ${attempt + 1}/${retries} after ${delay}ms (exception)`);
             await new Promise(r => setTimeout(r, delay));
             continue;
           }
-          console.error('Tile fetch exception:', err);
-          return null;
+          console.warn('Tile fetch exception after retries, returning empty:', err);
+          // Return EMPTY result instead of null - prevents black gaps
+          return {
+            streets: [], railways: [], aeroways: [], coastlines: [],
+            water: [], parks: [], forests: [], buildings: [],
+          };
         }
       }
-      return null;
+      // Fallback: return empty instead of null to prevent black gaps
+      return {
+        streets: [], railways: [], aeroways: [], coastlines: [],
+        water: [], parks: [], forests: [], buildings: [],
+      };
     });
   }, []);
 
