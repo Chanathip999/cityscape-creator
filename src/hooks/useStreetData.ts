@@ -38,30 +38,42 @@ interface TileResult {
   buildings: [number, number][][];
 }
 
-// Maximum radius per tile - use 5km for efficiency
-const MAX_TILE_RADIUS = 5000;
+// Tile radii
+// Streets can be larger; buildings must be smaller to avoid backend memory spikes in dense areas.
+const MAX_STREET_TILE_RADIUS = 5000;
+const MAX_BUILDING_TILE_RADIUS = 2500;
 
 // Maximum tiles to prevent excessive requests
-const MAX_TILES = 36; // Increased for better coverage
+const MAX_TILES_STREETS = 36; // good coverage for large areas
+const MAX_TILES_BUILDINGS = 64; // buildings use smaller tiles, so need more for full coverage
 
-// Batch sizes for parallel fetching - higher = faster
+// Batch sizes for parallel fetching
+// NOTE: Too high concurrency can increase backend memory pressure; keep buildings slightly lower.
 const STREET_BATCH_SIZE = 15;
-const BUILDING_BATCH_SIZE = 8;
+const BUILDING_BATCH_SIZE = 6;
 
 // Calculate tiles needed for a given area - ensures center is always included
-function calculateTiles(lat: number, lng: number, distance: number): { lat: number; lng: number; radius: number }[] {
+function calculateTiles(params: {
+  lat: number;
+  lng: number;
+  distance: number;
+  tileRadius: number;
+  maxTiles: number;
+}): { lat: number; lng: number; radius: number }[] {
+  const { lat, lng, distance, tileRadius, maxTiles } = params;
+
   // For small areas, single tile is enough
-  if (distance <= MAX_TILE_RADIUS) {
+  if (distance <= tileRadius) {
     return [{ lat, lng, radius: distance }];
   }
 
   const tiles: { lat: number; lng: number; radius: number }[] = [];
-  
+
   // CRITICAL: Always start with exact center tile at the user's coordinates
-  tiles.push({ lat, lng, radius: MAX_TILE_RADIUS });
+  tiles.push({ lat, lng, radius: tileRadius });
 
   // Tile spacing with overlap for seamless coverage
-  const tileSpacing = MAX_TILE_RADIUS * 1.6;
+  const tileSpacing = tileRadius * 1.6;
   const numTilesPerSide = Math.ceil(distance / tileSpacing);
   
   if (numTilesPerSide <= 1) {
@@ -83,8 +95,8 @@ function calculateTiles(lat: number, lng: number, distance: number): { lat: numb
   ];
   
   for (const offset of cardinalOffsets) {
-    if (tiles.length < MAX_TILES) {
-      tiles.push({ lat: lat + offset.dLat, lng: lng + offset.dLng, radius: MAX_TILE_RADIUS });
+    if (tiles.length < maxTiles) {
+      tiles.push({ lat: lat + offset.dLat, lng: lng + offset.dLng, radius: tileRadius });
     }
   }
 
@@ -97,30 +109,32 @@ function calculateTiles(lat: number, lng: number, distance: number): { lat: numb
   ];
   
   for (const offset of diagonalOffsets) {
-    if (tiles.length < MAX_TILES) {
-      tiles.push({ lat: lat + offset.dLat, lng: lng + offset.dLng, radius: MAX_TILE_RADIUS });
+    if (tiles.length < maxTiles) {
+      tiles.push({ lat: lat + offset.dLat, lng: lng + offset.dLng, radius: tileRadius });
     }
   }
 
   // Add outer ring tiles for larger areas
-  for (let ring = 2; ring <= numTilesPerSide && tiles.length < MAX_TILES; ring++) {
+  for (let ring = 2; ring <= numTilesPerSide && tiles.length < maxTiles; ring++) {
     // Top and bottom rows of this ring
-    for (let col = -ring; col <= ring && tiles.length < MAX_TILES; col++) {
-      tiles.push({ lat: lat + ring * latStep, lng: lng + col * lngStep, radius: MAX_TILE_RADIUS });
-      if (tiles.length < MAX_TILES) {
-        tiles.push({ lat: lat - ring * latStep, lng: lng + col * lngStep, radius: MAX_TILE_RADIUS });
+    for (let col = -ring; col <= ring && tiles.length < maxTiles; col++) {
+      tiles.push({ lat: lat + ring * latStep, lng: lng + col * lngStep, radius: tileRadius });
+      if (tiles.length < maxTiles) {
+        tiles.push({ lat: lat - ring * latStep, lng: lng + col * lngStep, radius: tileRadius });
       }
     }
     // Left and right columns (excluding corners already added)
-    for (let row = -ring + 1; row <= ring - 1 && tiles.length < MAX_TILES; row++) {
-      tiles.push({ lat: lat + row * latStep, lng: lng + ring * lngStep, radius: MAX_TILE_RADIUS });
-      if (tiles.length < MAX_TILES) {
-        tiles.push({ lat: lat + row * latStep, lng: lng - ring * lngStep, radius: MAX_TILE_RADIUS });
+    for (let row = -ring + 1; row <= ring - 1 && tiles.length < maxTiles; row++) {
+      tiles.push({ lat: lat + row * latStep, lng: lng + ring * lngStep, radius: tileRadius });
+      if (tiles.length < maxTiles) {
+        tiles.push({ lat: lat + row * latStep, lng: lng - ring * lngStep, radius: tileRadius });
       }
     }
   }
 
-  console.log(`Created ${tiles.length} tiles for ${distance}m radius (center: ${lat.toFixed(3)}, ${lng.toFixed(3)})`);
+  console.log(
+    `Created ${tiles.length} tiles for ${distance}m radius (tileRadius=${tileRadius}m, center: ${lat.toFixed(3)}, ${lng.toFixed(3)})`
+  );
   return tiles;
 }
 
@@ -284,17 +298,35 @@ export const useStreetData = ({
 
       try {
         // Calculate tiles for the full area
-        const tiles = calculateTiles(latitude, longitude, distance);
+        const streetTiles = calculateTiles({
+          lat: latitude,
+          lng: longitude,
+          distance,
+          tileRadius: MAX_STREET_TILE_RADIUS,
+          maxTiles: MAX_TILES_STREETS,
+        });
+
+        const buildingTiles = includeBuildings
+          ? calculateTiles({
+              lat: latitude,
+              lng: longitude,
+              distance,
+              tileRadius: MAX_BUILDING_TILE_RADIUS,
+              maxTiles: MAX_TILES_BUILDINGS,
+            })
+          : [];
         
         const skipService = false;
-        console.log(`Fetching ${tiles.length} tiles (streets + buildings in parallel)`);
+        console.log(
+          `Fetching ${streetTiles.length} street tiles + ${buildingTiles.length} building tiles (parallel)`
+        );
 
         // PARALLEL FETCH: Streets and buildings use SAME tiles for full coverage
         // Both fetch simultaneously for 2x speed
         const streetFetchPromise = (async () => {
           const results: TileResult[] = [];
-          for (let i = 0; i < tiles.length; i += STREET_BATCH_SIZE) {
-            const batch = tiles.slice(i, i + STREET_BATCH_SIZE);
+          for (let i = 0; i < streetTiles.length; i += STREET_BATCH_SIZE) {
+            const batch = streetTiles.slice(i, i + STREET_BATCH_SIZE);
             const batchResults = await Promise.all(
               batch.map(tile => fetchTileWithRetry(tile.lat, tile.lng, tile.radius, skipService, false, false))
             );
@@ -308,9 +340,9 @@ export const useStreetData = ({
         const buildingFetchPromise = (async () => {
           if (!includeBuildings) return [];
           const results: TileResult[] = [];
-          // Use SAME tiles as streets for consistent coverage
-          for (let i = 0; i < tiles.length; i += BUILDING_BATCH_SIZE) {
-            const batch = tiles.slice(i, i + BUILDING_BATCH_SIZE);
+          // Buildings use smaller tiles for stability, but cover the full area
+          for (let i = 0; i < buildingTiles.length; i += BUILDING_BATCH_SIZE) {
+            const batch = buildingTiles.slice(i, i + BUILDING_BATCH_SIZE);
             const batchResults = await Promise.all(
               // buildingsOnly=true prevents huge mixed responses that can trigger WORKER_LIMIT
               batch.map(tile => fetchTileWithRetry(tile.lat, tile.lng, tile.radius, skipService, true, true))
@@ -346,7 +378,7 @@ export const useStreetData = ({
         console.log('Merged data:', {
           streets: merged.streets.reduce((sum, s) => sum + s.coordinates.length, 0),
           buildings: merged.buildings.length,
-          tiles: tiles.length
+          tiles: streetTiles.length,
         });
 
         setStreets(merged.streets);
