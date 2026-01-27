@@ -36,8 +36,10 @@ interface StreetData {
   coordinates: [number, number][][];
 }
 
-// Round coordinate to reduce JSON size while maintaining ~1m precision
-const roundCoord = (n: number): number => Math.round(n * 100000) / 100000;
+// Round coordinate to reduce JSON size while maintaining good visual fidelity.
+// 4 decimals ~ 11m at equator; for poster-style vector lines this is typically sufficient
+// and reduces payload + memory pressure significantly.
+const roundCoord = (n: number): number => Math.round(n * 10000) / 10000;
 
 // Threshold: if count query returns more than this, use reduced mode
 // CONSERVATIVE thresholds to prevent memory crashes (WORKER_LIMIT/BOOT_ERROR)
@@ -246,7 +248,9 @@ Deno.serve(async (req) => {
     );
 
     const distanceNum = Number(distance);
-    const radius = Math.min(5000, Math.max(2000, distanceNum));
+    // HARD CAP: large 5km Overpass queries can return 50k+ ways in dense cities and
+    // exceed the function memory limit. Client tiling handles coverage.
+    const radius = Math.min(3500, Math.max(1500, distanceNum));
 
     const latDelta = radius / 111320;
     const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));
