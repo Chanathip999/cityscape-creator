@@ -95,6 +95,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     customBackgroundColor,
     showCoordinates,
     showCountry,
+    showGradients,
   } = config;
 
   // Get aspect ratio dimensions
@@ -443,21 +444,23 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       }
     }
 
-    // z=10: Gradient fades (top & bottom)
-    const fadeHeight = height * 0.25;
-    const gradientBgColor = customBackgroundColor || theme.bg;
-    
-    const topGradient = ctx.createLinearGradient(0, 0, 0, fadeHeight);
-    topGradient.addColorStop(0, gradientBgColor);
-    topGradient.addColorStop(1, 'transparent');
-    ctx.fillStyle = topGradient;
-    ctx.fillRect(0, 0, width, fadeHeight);
-    
-    const bottomGradient = ctx.createLinearGradient(0, height - fadeHeight, 0, height);
-    bottomGradient.addColorStop(0, 'transparent');
-    bottomGradient.addColorStop(1, gradientBgColor);
-    ctx.fillStyle = bottomGradient;
-    ctx.fillRect(0, height - fadeHeight, width, fadeHeight);
+    // z=10: Gradient fades (top & bottom) - conditional
+    if (showGradients) {
+      const fadeHeight = height * 0.25;
+      const gradientBgColor = customBackgroundColor || theme.bg;
+      
+      const topGradient = ctx.createLinearGradient(0, 0, 0, fadeHeight);
+      topGradient.addColorStop(0, gradientBgColor);
+      topGradient.addColorStop(1, 'transparent');
+      ctx.fillStyle = topGradient;
+      ctx.fillRect(0, 0, width, fadeHeight);
+      
+      const bottomGradient = ctx.createLinearGradient(0, height - fadeHeight, 0, height);
+      bottomGradient.addColorStop(0, 'transparent');
+      bottomGradient.addColorStop(1, gradientBgColor);
+      ctx.fillStyle = bottomGradient;
+      ctx.fillRect(0, height - fadeHeight, width, fadeHeight);
+    }
 
     // z=11: Typography (text labels)
     const textColor = config.customTextColor || theme.text;

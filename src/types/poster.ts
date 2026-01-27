@@ -78,6 +78,7 @@ export interface PosterConfig {
   layerVisibility: LayerVisibility;
   showCoordinates: boolean;
   showCountry: boolean;
+  showGradients: boolean;
 }
 
 export const ASPECT_RATIOS: AspectRatio[] = [
@@ -329,4 +330,5 @@ export const DEFAULT_CONFIG: PosterConfig = {
   layerVisibility: DEFAULT_LAYER_VISIBILITY,
   showCoordinates: true,
   showCountry: true,
+  showGradients: true,
 };

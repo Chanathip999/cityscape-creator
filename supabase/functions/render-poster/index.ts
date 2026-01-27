@@ -800,12 +800,19 @@ Deno.serve(async (req) => {
 
     const aspectConfig = ASPECT_RATIOS[request.aspectRatio] || ASPECT_RATIOS['3:4'];
     const aspectValue = aspectConfig.width / aspectConfig.height;
-    // Fetch only slightly beyond the crop area. Too large here explodes street count and hits memory limits.
-    const aspectCompensation = Math.max(aspectConfig.height, aspectConfig.width) / Math.min(aspectConfig.height, aspectConfig.width);
-    const compensatedDistance = Math.ceil(request.distance * aspectCompensation);
-    // Limit fetch distance more aggressively to prevent CPU/memory exceeded errors.
-    // Large radii in dense cities can exceed edge runtime limits, especially at 4K+ exports.
-    const fetchDistance = Math.min(6500, Math.ceil(Math.max(request.distance, compensatedDistance) * 1.05));
+    
+    // Calculate the fetch distance to fully cover the visible area.
+    // The getCropLimits function uses `distance` as the half-width/height in meters,
+    // adjusted by aspect ratio. We need to fetch data for the FULL visible bounds.
+    // For tall posters (aspect < 1), the width is `distance * aspect`, height is `distance`.
+    // For wide posters (aspect > 1), the width is `distance`, height is `distance / aspect`.
+    // The diagonal of the visible area determines the minimum fetch radius.
+    const visibleHalfWidth = aspectValue >= 1 ? request.distance : request.distance * aspectValue;
+    const visibleHalfHeight = aspectValue >= 1 ? request.distance / aspectValue : request.distance;
+    const diagonalDistance = Math.sqrt(visibleHalfWidth ** 2 + visibleHalfHeight ** 2);
+    
+    // Add 10% buffer to ensure edge coverage, cap to prevent memory issues
+    const fetchDistance = Math.min(12000, Math.ceil(diagonalDistance * 1.1));
 
     const data = await fetchStreetData(request.latitude, request.longitude, fetchDistance);
     
