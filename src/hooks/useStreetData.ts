@@ -65,11 +65,11 @@ const MAX_TILES_BUILDINGS = 9;
 const STREET_BATCH_SIZE = 3;
 // Parallel building batches for faster loading
 const BUILDING_BATCH_SIZE = 3;
-// Larger radius reduces number of Overpass calls; detail is unchanged.
-const MAX_STREET_TILE_RADIUS = 7500;
+// Keep tile size within backend compute limits; use fewer tiles instead of huge tiles.
+const MAX_STREET_TILE_RADIUS = 5000;
 // Larger building tiles for better coverage
 const MAX_BUILDING_TILE_RADIUS = 2500;
-const TILE_OVERLAP_FACTOR = 1.15; // reduce redundant overlap while still covering gaps
+const TILE_OVERLAP_FACTOR = 1.25; // more overlap to avoid gaps when some tiles return empty
 
 // Calculate tiles needed for a given area - ensures center is always included
 function calculateTiles(params: {

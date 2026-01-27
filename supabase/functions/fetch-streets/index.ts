@@ -53,12 +53,10 @@ const ELEMENT_COUNT_THRESHOLD_WITH_BUILDINGS = 30000;
 // Max elements to process before early termination
 const MAX_ELEMENTS_TO_PROCESS = 50000;
 
-// Overpass endpoints - fewer to reduce connection overhead
+// Overpass endpoints (keep list moderate; too many retries/parallel calls increase runtime)
 const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
-  // Extra fallbacks (used via hedged requests below)
-  'https://overpass.nchc.org.tw/api/interpreter',
   'https://overpass.openstreetmap.ru/api/interpreter',
 ];
 
@@ -324,87 +322,23 @@ function buildPriorityQuery(params: {
 }
 
 async function fetchOverpass(query: string): Promise<any[] | null> {
-  // Hedged requests: fire multiple endpoints in parallel and take the first successful.
-  // This reduces tail latency dramatically (esp. when one endpoint is slow/timeouts).
+  // Sequential retry: parallel hedging increased compute usage and triggered WORKER_LIMIT.
   const endpoints = [...OVERPASS_URLS].sort(() => Math.random() - 0.5);
-  const hedge = endpoints.slice(0, 2); // keep parallelism small to avoid extra load
-
-  const controllers = hedge.map(() => new AbortController());
-  const timeoutMs = 12000;
-  const timeoutIds = controllers.map((c) => setTimeout(() => c.abort(), timeoutMs));
-
+  const timeoutMs = 11000;
   const body = `data=${encodeURIComponent(query)}`;
 
-  const tasks = hedge.map((url, idx) =>
-    (async () => {
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body,
-          signal: controllers[idx].signal,
-        });
-
-        // If not OK, consume and treat as failure.
-        if (!response.ok) {
-          if (response.status === 429 || response.status >= 500) {
-            console.log(`Error ${response.status} on ${url}`);
-          } else {
-            const errorText = await response.text();
-            console.error('Overpass error:', url, response.status, errorText.substring(0, 80));
-          }
-          await response.text().catch(() => undefined);
-          return null;
-        }
-
-        const data = await response.json();
-        const elements = data?.elements || [];
-        if (elements.length > MAX_ELEMENTS_TO_PROCESS) {
-          console.log(`Truncating ${elements.length} elements to ${MAX_ELEMENTS_TO_PROCESS}`);
-          return elements.slice(0, MAX_ELEMENTS_TO_PROCESS);
-        }
-        return elements as any[];
-      } catch (e) {
-        if (e instanceof Error && e.name === 'AbortError') {
-          console.log(`Timeout on ${url}`);
-          return null;
-        }
-        console.error('Overpass fetch failed:', url);
-        return null;
-      }
-    })()
-  );
-
-  // Wait for the first successful result; if both fail, fall back to sequential tries.
-  let winner: any[] | null = null;
-  try {
-    const results = await Promise.all(tasks);
-    winner = results.find((r) => Array.isArray(r)) ?? null;
-  } finally {
-    timeoutIds.forEach(clearTimeout);
-    // Abort outstanding requests (best-effort)
-    controllers.forEach((c) => {
-      try {
-        c.abort();
-      } catch {
-        // ignore
-      }
-    });
-  }
-
-  if (winner) return winner;
-
-  // Sequential fallback over remaining endpoints (keeps reliability)
-  for (const url of endpoints.slice(2)) {
+  for (const url of endpoints) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body,
         signal: controller.signal,
       });
+
       clearTimeout(timeoutId);
 
       if (response.ok) {
@@ -469,9 +403,9 @@ Deno.serve(async (req) => {
     );
 
     const distanceNum = Number(distance);
-    // Keep server bbox aligned with client tile radius (client will choose tiling strategy).
-    // Larger bbox reduces the need for many tiles (fewer Overpass roundtrips).
-    const radius = Math.min(7500, Math.max(1000, distanceNum));
+    // IMPORTANT: Keep bbox small enough to avoid memory/timeouts in dense cities.
+    // Client tiling provides coverage; server must stay within compute limits.
+    const radius = Math.min(4000, Math.max(1000, distanceNum));
 
     const latDelta = radius / 111320;
     const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));
