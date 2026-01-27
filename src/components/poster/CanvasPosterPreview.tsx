@@ -59,9 +59,8 @@ const STREET_WIDTHS: Record<string, number> = {
 // Railway width (z-order 2.5 in Python, between parks and roads)
 const RAILWAY_WIDTH = 0.5;
 
-// DPI and base size for high resolution output
-const DPI = 300;
-const BASE_SIZE = 12; // Python uses 12 inches
+// NOTE: Export is rendered server-side (render-poster). The interactive preview should be
+// FAST, so we render at the container's pixel size (with devicePixelRatio) instead of 300DPI.
 
 // Prevent right-click context menu to protect poster content
 const handleContextMenu = (e: React.MouseEvent) => {
@@ -73,6 +72,9 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const internalContainerRef = useRef<HTMLDivElement>(null);
   const containerRef = externalContainerRef || internalContainerRef;
+
+  // Container pixel size (drives preview canvas resolution)
+  const [containerPx, setContainerPx] = useState({ width: 800, height: 1000 });
 
   // Pan/Zoom state
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
@@ -113,13 +115,32 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   const ratioHeight = aspectRatioConfig.height;
   const aspectValue = ratioWidth / ratioHeight;
 
-  // Calculate canvas dimensions based on aspect ratio
-  const canvasWidth = aspectValue >= 1 
-    ? BASE_SIZE * DPI 
-    : Math.round(BASE_SIZE * DPI * aspectValue);
-  const canvasHeight = aspectValue >= 1 
-    ? Math.round(BASE_SIZE * DPI / aspectValue)
-    : BASE_SIZE * DPI;
+  // Track container size (ResizeObserver) so preview renders at screen resolution.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      const w = Math.max(1, Math.round(rect.width));
+      const h = Math.max(1, Math.round(rect.height));
+      setContainerPx((prev) => (prev.width === w && prev.height === h ? prev : { width: w, height: h }));
+    };
+
+    update();
+
+    const ro = new ResizeObserver(() => update());
+    ro.observe(el);
+    window.addEventListener('resize', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [containerRef]);
+
+  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+  const canvasWidth = Math.max(1, Math.round(containerPx.width * dpr));
+  const canvasHeight = Math.max(1, Math.round(containerPx.height * dpr));
 
   // Calculate compensated distance for data fetching
   const compensatedDistance = Math.ceil(
@@ -127,7 +148,8 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   );
   // Fetch a bit beyond the crop to allow panning without constantly re-fetching.
   // Too high increases tile count and backend load.
-  const fetchDistance = Math.max(distance, compensatedDistance) * 1.5;
+  // Keep some margin for panning, but avoid over-fetching (tile explosion = slow).
+  const fetchDistance = Math.max(distance, compensatedDistance) * 1.2;
 
   const { streets, railways, aeroways, coastlines, water, parks, forests, buildings, isLoading, error } = useStreetData({
     latitude,
@@ -263,6 +285,8 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     const width = canvasWidth;
     const height = canvasHeight;
 
+    // Ensure the internal buffer matches current container size.
+    // (CSS size is handled by w-full/h-full on the canvas element.)
     canvas.width = width;
     canvas.height = height;
 
@@ -604,8 +628,8 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     showCoordinates,
     showCountry,
     layerVisibility,
-    canvasWidth,
-    canvasHeight,
+     canvasWidth,
+     canvasHeight,
     getCropLimits,
     toCanvasCoords,
     getStreetColor,
