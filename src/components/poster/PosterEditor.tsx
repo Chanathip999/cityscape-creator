@@ -15,11 +15,12 @@ import { Map } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 interface PosterEditorProps {
+  initialConfig?: PosterConfig;
   onConfigChange?: (config: PosterConfig) => void;
 }
 
-export const PosterEditor = ({ onConfigChange }: PosterEditorProps) => {
-  const [config, setConfig] = useState<PosterConfig>(DEFAULT_CONFIG);
+export const PosterEditor = ({ initialConfig, onConfigChange }: PosterEditorProps) => {
+  const [config, setConfig] = useState<PosterConfig>(initialConfig || DEFAULT_CONFIG);
   const posterRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 400, height: 533 });
 
