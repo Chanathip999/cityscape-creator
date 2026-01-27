@@ -38,19 +38,19 @@ interface TileResult {
   buildings: [number, number][][];
 }
 
-// Tile radii - OPTIMIZED FOR SPEED
+// Tile radii - OPTIMIZED FOR MAX SPEED
 // Streets can be larger; buildings use smaller tiles for stability
 const MAX_STREET_TILE_RADIUS = 5000;
-const MAX_BUILDING_TILE_RADIUS = 2000; // Smaller = more tiles but faster individual loads
+const MAX_BUILDING_TILE_RADIUS = 1500; // Smaller = faster individual requests
 
-// Maximum tiles to prevent excessive requests
+// Maximum tiles to prevent excessive requests  
 const MAX_TILES_STREETS = 36;
-const MAX_TILES_BUILDINGS = 100; // More tiles = full coverage with smaller radius
+const MAX_TILES_BUILDINGS = 150; // More tiles for full coverage with smaller radius
 
-// Batch sizes for parallel fetching - DOUBLED FOR 2X SPEED
-// Building batches are now higher since each tile is smaller (less memory per request)
-const STREET_BATCH_SIZE = 15;
-const BUILDING_BATCH_SIZE = 12; // Doubled from 6 for 2x speed
+// Batch sizes for parallel fetching - MAXIMIZED FOR SPEED
+// Higher concurrency = faster total load time
+const STREET_BATCH_SIZE = 20; // Increased from 15
+const BUILDING_BATCH_SIZE = 18; // Tripled from 6 for 3x speed
 
 // Calculate tiles needed for a given area - ensures center is always included
 function calculateTiles(params: {

@@ -21,14 +21,14 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'layers', label: 'Ebenen', icon: Move },
 ];
 
-const LAYER_OPTIONS: { id: keyof LayerVisibility; label: string; icon: React.ElementType; colorKey: keyof LayerColors }[] = [
+const LAYER_OPTIONS: { id: keyof LayerVisibility; label: string; icon: React.ElementType; colorKey: keyof LayerColors; premium?: boolean; premiumPrice?: string }[] = [
   { id: 'water', label: 'Wasser', icon: Waves, colorKey: 'water' },
   { id: 'forests', label: 'Wälder', icon: Trees, colorKey: 'forests' },
   { id: 'parks', label: 'Parks', icon: TreeDeciduous, colorKey: 'parks' },
   { id: 'railways', label: 'Zugstrecken', icon: Train, colorKey: 'railways' },
   { id: 'aeroways', label: 'Flughäfen', icon: Plane, colorKey: 'aeroways' },
   { id: 'coastlines', label: 'Küstenlinien', icon: MapPin, colorKey: 'coastlines' },
-  { id: 'buildings', label: 'Gebäude', icon: Building, colorKey: 'buildings' },
+  { id: 'buildings', label: 'Gebäude', icon: Building, colorKey: 'buildings', premium: true, premiumPrice: '+€1,99' },
 ];
 
 // Common aspect ratios for quick selection
@@ -310,17 +310,22 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
           <>
             {/* Layer Toggles with Color Pickers */}
             <div className="space-y-3">
-              {LAYER_OPTIONS.map(({ id, label, icon: Icon, colorKey }) => {
+              {LAYER_OPTIONS.map(({ id, label, icon: Icon, colorKey, premium, premiumPrice }) => {
                 const isEnabled = config.layerVisibility[id];
                 const customColor = config.layerColors?.[colorKey];
                 const defaultColor = getLayerDefaultColor(colorKey);
                 
                 return (
                   <div key={id} className="space-y-2">
-                    <div className="flex items-center justify-between py-2">
+                    <div className={`flex items-center justify-between py-2 px-2 rounded-lg ${premium ? 'bg-primary/5 border border-primary/20' : ''}`}>
                       <div className="flex items-center gap-3">
-                        <Icon className="w-4 h-4 text-muted-foreground" />
+                        <Icon className={`w-4 h-4 ${premium ? 'text-primary' : 'text-muted-foreground'}`} />
                         <Label className="font-normal">{label}</Label>
+                        {premium && premiumPrice && (
+                          <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                            {premiumPrice}
+                          </span>
+                        )}
                       </div>
                       <Switch
                         checked={isEnabled}
