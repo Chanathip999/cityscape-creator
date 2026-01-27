@@ -52,7 +52,7 @@ export interface LayerVisibility {
 export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
   water: true,
   forests: false, // Disabled by default for faster loading
-  parks: true,
+  parks: false, // Disabled by default for faster loading
   railways: true,
   aeroways: true,
   coastlines: false, // Disabled by default for faster loading

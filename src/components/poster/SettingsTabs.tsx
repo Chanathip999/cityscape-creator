@@ -24,10 +24,10 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
 const LAYER_OPTIONS: { id: keyof LayerVisibility; label: string; icon: React.ElementType; colorKey: keyof LayerColors; premium?: boolean; premiumPrice?: string }[] = [
   // Default ON layers first
   { id: 'water', label: 'Wasser', icon: Waves, colorKey: 'water' },
-  { id: 'parks', label: 'Parks', icon: TreeDeciduous, colorKey: 'parks' },
   { id: 'railways', label: 'Zugstrecken', icon: Train, colorKey: 'railways' },
   { id: 'aeroways', label: 'Flughäfen', icon: Plane, colorKey: 'aeroways' },
   // Default OFF layers at bottom
+  { id: 'parks', label: 'Parks', icon: TreeDeciduous, colorKey: 'parks' },
   { id: 'forests', label: 'Wälder', icon: Trees, colorKey: 'forests' },
   { id: 'coastlines', label: 'Küstenlinien', icon: MapPin, colorKey: 'coastlines' },
   { id: 'buildings', label: 'Gebäude', icon: Building, colorKey: 'buildings', premium: true, premiumPrice: '+€1,99 (ab 4K)' },
