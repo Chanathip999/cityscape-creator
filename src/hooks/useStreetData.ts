@@ -66,10 +66,13 @@ const STREET_BATCH_SIZE = 3;
 // Parallel building batches for faster loading
 const BUILDING_BATCH_SIZE = 3;
 // Keep tile size within backend compute limits; use fewer tiles instead of huge tiles.
-const MAX_STREET_TILE_RADIUS = 5000;
+// Backend caps per-request radius to 4000m to avoid WORKER_LIMIT in dense cities.
+// Keep frontend tile radius in sync to avoid coverage gaps.
+const MAX_STREET_TILE_RADIUS = 4000;
 // Larger building tiles for better coverage
 const MAX_BUILDING_TILE_RADIUS = 2500;
-const TILE_OVERLAP_FACTOR = 1.25; // more overlap to avoid gaps when some tiles return empty
+// Higher value = MORE overlap (i.e. smaller spacing between tile centers)
+const TILE_OVERLAP_FACTOR = 1.25;
 
 // Calculate tiles needed for a given area - ensures center is always included
 function calculateTiles(params: {
@@ -92,7 +95,9 @@ function calculateTiles(params: {
   tiles.push({ lat, lng, radius: tileRadius });
 
   // Tile spacing with MORE overlap to cover gaps from failed tiles
-  const tileSpacing = tileRadius * TILE_OVERLAP_FACTOR;  // More overlap = better coverage
+  // IMPORTANT: Spacing must be SMALLER than radius to create overlap.
+  // Previous implementation multiplied which created gaps and missing streets.
+  const tileSpacing = tileRadius / TILE_OVERLAP_FACTOR;
   const numTilesPerSide = Math.ceil(distance / tileSpacing);
   
   if (numTilesPerSide <= 1) {
