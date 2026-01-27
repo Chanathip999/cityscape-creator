@@ -328,6 +328,7 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
                 onBlur={handleTextBlur}
                 onKeyDown={handleKeyDown}
                 autoFocus
+                size={(element.id === 'city' ? config.city.length : (config.countryLabel || config.country).length) + 2}
                 className="bg-transparent border-none outline-none text-center caret-primary"
                 style={{
                   color: textColor,
@@ -335,8 +336,6 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
                   fontWeight,
                   letterSpacing,
                   textTransform: 'uppercase',
-                  width: `${Math.max(element.text.length, 3) * fontSize * 0.7}px`,
-                  minWidth: '40px',
                   writingMode: isVertical ? 'vertical-rl' : 'horizontal-tb',
                   textOrientation: isVertical ? 'mixed' : undefined,
                 }}
