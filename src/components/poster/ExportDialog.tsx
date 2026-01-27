@@ -10,30 +10,41 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Download, Loader2, FileImage, Image, CreditCard, Euro } from 'lucide-react';
+import { Download, Loader2, FileImage, Image } from 'lucide-react';
 import {
   ExportFormat,
   ExportResolution,
   EXPORT_FORMATS,
-  EXPORT_RESOLUTIONS,
   PosterConfig,
   ASPECT_RATIOS,
 } from '@/types/poster';
 import { toast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 
 interface ExportDialogProps {
   config: PosterConfig;
   posterRef: React.RefObject<HTMLDivElement>;
 }
 
-const POSTER_PRICE = 9.99;
+// Pricing per resolution
+const RESOLUTION_PRICES: Record<ExportResolution, number> = {
+  fullhd: 9.99,
+  '4k': 14.99,
+  '8k': 24.99,
+};
+
+const RESOLUTION_OPTIONS = [
+  { id: 'fullhd' as ExportResolution, name: 'Full HD', description: '1920px', price: 9.99 },
+  { id: '4k' as ExportResolution, name: '4K', description: '3840px', price: 14.99 },
+  { id: '8k' as ExportResolution, name: '8K', description: '7680px', price: 24.99 },
+];
 
 export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [format, setFormat] = useState<ExportFormat>('png');
-  const [resolution, setResolution] = useState<ExportResolution>('4k');
+  const [resolution, setResolution] = useState<ExportResolution>('fullhd');
   const [open, setOpen] = useState(false);
+
+  const currentPrice = RESOLUTION_PRICES[resolution];
 
   const handlePurchase = async () => {
     if (isLoading) return;
@@ -41,31 +52,17 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
     setIsLoading(true);
 
     try {
+      // TODO: Stripe integration - currently disabled
       toast({
-        title: 'Weiterleitung zu Stripe...',
-        description: 'Du wirst zur sicheren Zahlungsseite weitergeleitet.',
+        title: 'Zahlung noch nicht aktiviert',
+        description: 'Die Stripe-Integration wird noch eingerichtet. Bitte versuche es später erneut.',
       });
-
-      const { data, error } = await supabase.functions.invoke('create-checkout', {
-        body: {
-          city: config.city,
-          aspectRatio: config.aspectRatio,
-          successUrl: `${window.location.origin}/?payment=success&session_id={CHECKOUT_SESSION_ID}&format=${format}&resolution=${resolution}`,
-          cancelUrl: `${window.location.origin}/?payment=cancelled`,
-        },
-      });
-
-      if (error) {
-        throw new Error(error.message || 'Fehler beim Erstellen der Zahlungssitzung');
-      }
-
-      if (data?.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error('Keine Checkout-URL erhalten');
-      }
+      
+      // Stripe redirect is disabled for now
+      // The integration will be enabled once the API key is configured
+      
     } catch (error) {
-      console.error('Checkout failed:', error);
+      console.error('Export failed:', error);
       toast({
         title: 'Fehler',
         description: error instanceof Error ? error.message : 'Bitte versuche es erneut.',
@@ -80,8 +77,8 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
   const aspectRatioConfig = ASPECT_RATIOS.find((r) => r.id === config.aspectRatio);
   const ratioWidth = aspectRatioConfig?.width || 3;
   const ratioHeight = aspectRatioConfig?.height || 4;
-  const resolutionConfig = EXPORT_RESOLUTIONS.find((r) => r.id === resolution);
-  const multiplier = resolutionConfig?.multiplier || 1;
+  const resolutionConfig = RESOLUTION_OPTIONS.find((r) => r.id === resolution);
+  const multiplier = resolution === 'fullhd' ? 1 : resolution === '4k' ? 2 : 4;
   const exportWidth = 1920 * multiplier;
   const exportHeight = Math.round(exportWidth * (ratioHeight / ratioWidth));
 
@@ -90,33 +87,18 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
       <DialogTrigger asChild>
         <Button variant="default" className="gap-2">
           <Download className="w-4 h-4" />
-          <span>Poster kaufen</span>
-          <span className="font-bold">€{POSTER_PRICE.toFixed(2)}</span>
+          <span>Export Poster</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CreditCard className="w-5 h-5" />
-            Poster kaufen & herunterladen
-          </DialogTitle>
+          <DialogTitle>Poster exportieren</DialogTitle>
           <DialogDescription>
-            Wähle Format und Auflösung. Nach der Zahlung wird dein Poster automatisch heruntergeladen.
+            Wähle Format und Auflösung für deinen Download.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Price Display */}
-          <div className="bg-primary/10 rounded-lg p-4 text-center">
-            <div className="flex items-center justify-center gap-2 text-2xl font-bold text-primary">
-              <Euro className="w-6 h-6" />
-              <span>{POSTER_PRICE.toFixed(2)}</span>
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">
-              Einmaliger Kauf • Sofortiger Download
-            </p>
-          </div>
-
           {/* Format Selection */}
           <div className="space-y-3">
             <Label className="text-base font-medium">Dateiformat</Label>
@@ -158,7 +140,7 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
             </RadioGroup>
           </div>
 
-          {/* Resolution Selection */}
+          {/* Resolution Selection with Prices */}
           <div className="space-y-3">
             <Label className="text-base font-medium">Auflösung</Label>
             <RadioGroup
@@ -166,7 +148,7 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
               onValueChange={(value) => setResolution(value as ExportResolution)}
               className="grid grid-cols-3 gap-3"
             >
-              {EXPORT_RESOLUTIONS.map((res) => (
+              {RESOLUTION_OPTIONS.map((res) => (
                 <div key={res.id}>
                   <RadioGroupItem
                     value={res.id}
@@ -179,6 +161,7 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
                   >
                     <span className="font-medium">{res.name}</span>
                     <span className="text-xs text-muted-foreground">{res.description}</span>
+                    <span className="text-sm font-bold text-primary mt-1">€{res.price.toFixed(2)}</span>
                   </Label>
                 </div>
               ))}
@@ -186,10 +169,10 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
           </div>
 
           {/* Summary */}
-          <div className="text-xs text-muted-foreground space-y-1">
+          <div className="text-xs text-muted-foreground space-y-1 bg-muted/50 rounded-lg p-3">
             <p>📍 <strong>{config.city}</strong> • Format {config.aspectRatio}</p>
             <p>📐 Auflösung: {exportWidth} × {exportHeight} px</p>
-            <p>🔒 Sichere Zahlung über Stripe</p>
+            <p>💾 Vektor-Modus: Poster wird serverseitig gerendert für perfekte Qualität.</p>
           </div>
 
           {/* Purchase Button */}
@@ -202,12 +185,12 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
             {isLoading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Wird weitergeleitet...
+                Wird vorbereitet...
               </>
             ) : (
               <>
-                <CreditCard className="w-4 h-4" />
-                Jetzt kaufen für €{POSTER_PRICE.toFixed(2)}
+                <Download className="w-4 h-4" />
+                Download {format.toUpperCase()} ({resolution.toUpperCase()}) – €{currentPrice.toFixed(2)}
               </>
             )}
           </Button>
