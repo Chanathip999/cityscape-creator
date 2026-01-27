@@ -147,41 +147,62 @@ export async function clearOldCache(): Promise<void> {
 
 // Clear ALL cached tiles - for manual refresh
 export async function clearAllCache(): Promise<void> {
+  // IMPORTANT: This must never be a no-op from the user's point of view.
+  // If deleteDatabase is blocked (open handles), fall back to store.clear().
+
+  // Close any existing connection first
   try {
-    // Close any existing connection first
     if (dbInstance) {
       dbInstance.close();
-      dbInstance = null;
-      dbPromise = null;
     }
-    
-    // Delete the entire database to ensure complete cache clear
-    return new Promise((resolve, reject) => {
-      const deleteRequest = indexedDB.deleteDatabase(DB_NAME);
-      
-      deleteRequest.onsuccess = () => {
-        console.log('Street data cache cleared (database deleted)');
-        resolve();
-      };
-      
-      deleteRequest.onerror = () => {
-        console.error('Failed to delete cache database:', deleteRequest.error);
-        reject(deleteRequest.error);
-      };
-      
-      deleteRequest.onblocked = () => {
-        console.warn('Cache delete blocked - forcing close');
-        // Force resolve after a short delay
-        setTimeout(() => {
-          console.log('Cache clear completed (forced)');
-          resolve();
-        }, 500);
-      };
-    });
-  } catch (error) {
-    console.error('Failed to clear cache:', error);
-    throw error;
+  } catch {
+    // ignore
+  } finally {
+    dbInstance = null;
+    dbPromise = null;
   }
+
+  const fallbackClearStore = async () => {
+    try {
+      const db = await openDB();
+      await new Promise<void>((resolve) => {
+        try {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          store.clear();
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+        } catch {
+          resolve();
+        }
+      });
+      console.log('Street data cache cleared (store cleared)');
+    } catch (e) {
+      console.error('Fallback store.clear failed:', e);
+    }
+  };
+
+  // Try deleting the entire database
+  await new Promise<void>((resolve) => {
+    const deleteRequest = indexedDB.deleteDatabase(DB_NAME);
+
+    deleteRequest.onsuccess = () => {
+      console.log('Street data cache cleared (database deleted)');
+      resolve();
+    };
+
+    deleteRequest.onerror = async () => {
+      console.error('Failed to delete cache database:', deleteRequest.error);
+      await fallbackClearStore();
+      resolve();
+    };
+
+    deleteRequest.onblocked = async () => {
+      console.warn('Cache delete blocked - using fallback clear');
+      await fallbackClearStore();
+      resolve();
+    };
+  });
 }
 
 // Generate cache key from tile parameters
