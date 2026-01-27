@@ -16,9 +16,12 @@ const ALL_STREET_TYPES = [
   { type: 'path', tags: ['footway', 'path', 'cycleway', 'track', 'steps', 'bridleway'] },
 ];
 
-// Simple in-memory cache for recent queries (TTL: 60 seconds)
+// Simple in-memory cache for recent queries (TTL: 10 minutes for stability)
 const cache = new Map<string, { data: unknown; timestamp: number }>();
-const CACHE_TTL = 60000;
+const CACHE_TTL = 600000; // 10 minutes
+
+// All railway types for maximum detail
+const RAILWAY_TYPES = ['rail', 'tram', 'subway', 'light_rail', 'monorail', 'narrow_gauge'];
 
 interface StreetData {
   type: string;
@@ -99,6 +102,7 @@ Deno.serve(async (req) => {
     
     // Build query conditionally - include water/parks/railways for smaller radii
     // z-order from maptoposter: z=3 roads, z=2.5 railways, z=2 parks, z=1 water, z=0 bg
+    const railwayRegex = RAILWAY_TYPES.join('|');
     let overpassQuery: string;
     
     if (includeWaterParks) {
@@ -106,7 +110,7 @@ Deno.serve(async (req) => {
         [out:json][timeout:30];
         (
           way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
-          way["railway"="rail"](${bbox});
+          way["railway"~"^(${railwayRegex})$"](${bbox});
           way["natural"="water"](${bbox});
           way["waterway"~"^(river|canal|riverbank)$"](${bbox});
           way["leisure"="park"](${bbox});
@@ -115,12 +119,12 @@ Deno.serve(async (req) => {
         out geom;
       `;
     } else {
-      // Large areas: streets and railways only
+      // Large areas: streets and railways only (all railway types)
       overpassQuery = `
         [out:json][timeout:20];
         (
           way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
-          way["railway"="rail"](${bbox});
+          way["railway"~"^(${railwayRegex})$"](${bbox});
         );
         out geom;
       `;
@@ -214,8 +218,8 @@ Deno.serve(async (req) => {
           coordsByType.get(type)?.push(points);
         }
       }
-      // Check if it's a railway (z-order 2.5)
-      else if (tags.railway === 'rail') {
+      // Check if it's a railway (any type - rail, tram, subway, etc.)
+      else if (tags.railway && RAILWAY_TYPES.includes(tags.railway)) {
         const points: [number, number][] = [];
         for (const pt of geom) {
           if (pt && pt.lat !== undefined && pt.lon !== undefined) {

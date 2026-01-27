@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-
+import { getCachedTile, setCachedTile, getTileCacheKey, clearOldCache } from '@/lib/streetDataCache';
 export interface StreetSegment {
   type: 'motorway' | 'primary' | 'secondary' | 'tertiary' | 'residential' | 'service' | 'path';
   coordinates: [number, number][][]; // Array of polylines
@@ -141,6 +141,15 @@ export const useStreetData = ({
     tileRadius: number,
     skipService: boolean
   ): Promise<TileResult | null> => {
+    const cacheKey = getTileCacheKey(tileLat, tileLng, tileRadius);
+    
+    // Try IndexedDB cache first (24h TTL)
+    const cached = await getCachedTile(cacheKey);
+    if (cached) {
+      console.log('IndexedDB cache hit:', cacheKey);
+      return cached as TileResult;
+    }
+    
     try {
       const { data, error: fnError } = await supabase.functions.invoke('fetch-streets', {
         body: { lat: tileLat, lng: tileLng, distance: tileRadius, skipService },
@@ -151,12 +160,17 @@ export const useStreetData = ({
         return null;
       }
 
-      return {
+      const result: TileResult = {
         streets: data?.streets || [],
         railways: data?.railways || [],
         water: data?.water || [],
         parks: data?.parks || [],
       };
+      
+      // Cache in IndexedDB for future use
+      await setCachedTile(cacheKey, result);
+      
+      return result;
     } catch (err) {
       console.error('Tile fetch exception:', err);
       return null;
@@ -181,6 +195,9 @@ export const useStreetData = ({
     fetchTimeoutRef.current = setTimeout(async () => {
       setIsLoading(true);
       setError(null);
+      
+      // Clean old cache entries periodically
+      clearOldCache();
 
       abortControllerRef.current = new AbortController();
 
