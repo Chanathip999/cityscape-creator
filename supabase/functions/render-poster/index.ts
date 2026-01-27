@@ -620,6 +620,95 @@ async function fetchSingleTile(
   };
 }
 
+/**
+ * Buildings are memory-heavy and in the preview they are fetched via a separate, capped request.
+ * To keep export parity, we do the same: fetch buildings separately with their own radius.
+ */
+async function fetchBuildingsOnly(
+  tileLat: number,
+  tileLng: number,
+  radius: number
+): Promise<[number, number][][]> {
+  const latDelta = radius / 111320;
+  const lngDelta = radius / (111320 * Math.cos(tileLat * Math.PI / 180));
+
+  const south = tileLat - latDelta;
+  const north = tileLat + latDelta;
+  const west = tileLng - lngDelta;
+  const east = tileLng + lngDelta;
+
+  const bbox = `${south.toFixed(5)},${west.toFixed(5)},${north.toFixed(5)},${east.toFixed(5)}`;
+  const overpassQuery = `
+    [out:json][timeout:30];
+    (
+      way["building"](${bbox});
+    );
+    out geom;
+  `;
+
+  const overpassUrls = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+  ];
+
+  let response: Response | null = null;
+  for (const overpassUrl of overpassUrls) {
+    try {
+      response = await fetch(overpassUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(overpassQuery)}`,
+      });
+      if (response.ok) break;
+    } catch (e) {
+      console.error('Overpass buildings fetch failed:', overpassUrl, e);
+    }
+  }
+
+  if (!response || !response.ok) {
+    console.error('Buildings-only fetch failed, returning empty');
+    return [];
+  }
+
+  const responseText = await response.text();
+  let osmData;
+  try {
+    osmData = JSON.parse(responseText);
+  } catch (parseError) {
+    console.error('Failed to parse buildings Overpass response as JSON. Response starts with:', responseText.substring(0, 200));
+    return [];
+  }
+
+  const elements = osmData.elements || [];
+  const buildingPolygons: [number, number][][] = [];
+
+  for (const element of elements) {
+    if (element.type !== 'way') continue;
+    const tags = element.tags || {};
+    if (!tags.building) continue;
+
+    const geom = element.geometry;
+    if (!geom || geom.length < 3) continue;
+
+    if (buildingPolygons.length >= MAX_BUILDINGS) continue;
+
+    const points: [number, number][] = [];
+    for (const pt of geom) {
+      if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+        points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+      }
+    }
+
+    if (points.length >= 3) buildingPolygons.push(points);
+  }
+
+  if (buildingPolygons.length >= MAX_BUILDINGS) {
+    console.log(`Buildings capped at ${MAX_BUILDINGS} in buildings-only fetch`);
+  }
+
+  return buildingPolygons;
+}
+
 function mergeResults(results: TileResult[]): TileResult {
   const merged: TileResult = { 
     streets: [], 
@@ -660,7 +749,8 @@ async function fetchStreetData(
   lat: number, 
   lng: number, 
   distance: number,
-  layerVisibility?: RenderRequest['layerVisibility']
+  layerVisibility?: RenderRequest['layerVisibility'],
+  buildingsDistance?: number
 ): Promise<{
   streets: StreetSegment[];
   railways: [number, number][][];
@@ -678,28 +768,60 @@ async function fetchStreetData(
     ? ALL_STREET_TYPES.slice(0, 5) // motorway..residential (no service/path)
     : ALL_STREET_TYPES.slice(0, 4); // motorway..tertiary only for large areas
 
-  // Skip buildings for large distances (memory protection)
-  const skipBuildings = distance > MAX_BUILDING_DISTANCE;
-  if (skipBuildings && layerVisibility?.buildings) {
-    console.log(`Buildings skipped: distance ${distance}m exceeds ${MAX_BUILDING_DISTANCE}m limit`);
-  }
+  // IMPORTANT: Buildings are fetched separately with their own distance (like preview),
+  // so we always skip buildings in the main data fetch to avoid OOM.
+  const buildingsEnabled = !!layerVisibility?.buildings;
+  const layerVisibilityNoBuildings = buildingsEnabled
+    ? { ...layerVisibility, buildings: false }
+    : layerVisibility;
 
   const tiles = calculateTiles(lat, lng, distance);
-  console.log(`Fetching ${tiles.length} tiles for distance ${distance}m (minor=${includeMinorRoads}, buildings=${!skipBuildings && layerVisibility?.buildings})`);
+  console.log(`Fetching ${tiles.length} tiles for distance ${distance}m (minor=${includeMinorRoads}, buildings=${false})`);
 
   // For single tile, fetch directly
   if (tiles.length === 1) {
-    return await fetchSingleTile(tiles[0].lat, tiles[0].lng, tiles[0].radius, activeStreetTypes, layerVisibility, skipBuildings);
+    const base = await fetchSingleTile(
+      tiles[0].lat,
+      tiles[0].lng,
+      tiles[0].radius,
+      activeStreetTypes,
+      layerVisibilityNoBuildings,
+      true
+    );
+
+    if (buildingsEnabled) {
+      const bd = Math.min(MAX_BUILDING_DISTANCE, Math.max(0, buildingsDistance ?? 0));
+      if (bd > 0) {
+        console.log(`Fetching buildings separately with radius ${bd}m`);
+        base.buildings = await fetchBuildingsOnly(lat, lng, bd);
+      } else {
+        console.log('Buildings enabled but buildingsDistance is 0; skipping buildings fetch');
+      }
+    }
+
+    return base;
   }
 
   // For multiple tiles, fetch sequentially to reduce peak memory usage
   const results: TileResult[] = [];
   for (const tile of tiles) {
-    const result = await fetchSingleTile(tile.lat, tile.lng, tile.radius, activeStreetTypes, layerVisibility, skipBuildings);
+    const result = await fetchSingleTile(tile.lat, tile.lng, tile.radius, activeStreetTypes, layerVisibilityNoBuildings, true);
     results.push(result);
   }
 
-  return mergeResults(results);
+  const merged = mergeResults(results);
+
+  if (buildingsEnabled) {
+    const bd = Math.min(MAX_BUILDING_DISTANCE, Math.max(0, buildingsDistance ?? 0));
+    if (bd > 0) {
+      console.log(`Fetching buildings separately with radius ${bd}m`);
+      merged.buildings = await fetchBuildingsOnly(lat, lng, bd);
+    } else {
+      console.log('Buildings enabled but buildingsDistance is 0; skipping buildings fetch');
+    }
+  }
+
+  return merged;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1047,7 +1169,17 @@ Deno.serve(async (req) => {
     // Add 10% buffer to ensure edge coverage, cap to prevent memory issues
     const fetchDistance = Math.min(12000, Math.ceil(diagonalDistance * 1.1));
 
-    const data = await fetchStreetData(request.latitude, request.longitude, fetchDistance, request.layerVisibility);
+    // Buildings should match preview behavior: fetch separately with a capped, visibility-based radius.
+    // Use the visible diagonal (not fetchDistance) so we don't accidentally disable buildings.
+    const buildingsFetchDistance = Math.min(MAX_BUILDING_DISTANCE, Math.ceil(diagonalDistance * 1.02));
+
+    const data = await fetchStreetData(
+      request.latitude,
+      request.longitude,
+      fetchDistance,
+      request.layerVisibility,
+      buildingsFetchDistance
+    );
     
     console.log(`Fetched ${data.streets.reduce((sum, s) => sum + s.coordinates.length, 0)} streets, ${data.water.length} water, ${data.parks.length} parks, ${data.buildings.length} buildings`);
 
