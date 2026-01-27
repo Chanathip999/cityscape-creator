@@ -255,24 +255,15 @@ export const useStreetData = ({
         const skipService = false;
         console.log(`Fetching ${tiles.length} tile(s) for area (skipService: ${skipService})`);
 
-        // Fetch tiles in small batches to avoid compute spikes
-        const BATCH_SIZE = 3;
+        // OPTIMIZATION: Fetch ALL tiles in parallel for maximum speed
+        // IndexedDB cache hits are instant, only uncached tiles go to network
         const results: TileResult[] = [];
-
-        for (let i = 0; i < tiles.length; i += BATCH_SIZE) {
-          const batch = tiles.slice(i, i + BATCH_SIZE);
-          const batchResults = await Promise.all(
-            batch.map(tile => fetchTile(tile.lat, tile.lng, tile.radius, skipService))
-          );
-          
-          for (const result of batchResults) {
-            if (result) results.push(result);
-          }
-
-          // Small delay between batches
-          if (i + BATCH_SIZE < tiles.length) {
-            await new Promise(resolve => setTimeout(resolve, 50));
-          }
+        const batchResults = await Promise.all(
+          tiles.map(tile => fetchTile(tile.lat, tile.lng, tile.radius, skipService))
+        );
+        
+        for (const result of batchResults) {
+          if (result) results.push(result);
         }
 
         if (results.length === 0) {
@@ -303,7 +294,7 @@ export const useStreetData = ({
       } finally {
         setIsLoading(false);
       }
-    }, 500);
+    }, 200); // Reduced debounce for faster response
 
     return () => {
       if (fetchTimeoutRef.current) {
