@@ -21,6 +21,9 @@ interface TextElement {
   editable: boolean;
 }
 
+// Snap threshold - how close to center before snapping (in normalized units 0-1)
+const SNAP_THRESHOLD = 0.03; // 3% of container dimension
+
 export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigUpdate }: TextOverlayProps) => {
   const [dragTarget, setDragTarget] = useState<DragTarget>(null);
   const [resizeTarget, setResizeTarget] = useState<DragTarget>(null);
@@ -28,6 +31,8 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
   const [editingElement, setEditingElement] = useState<'city' | 'country' | null>(null);
   const [selectedElement, setSelectedElement] = useState<DragTarget>(null);
   const [showGuides, setShowGuides] = useState(false);
+  const [snappedX, setSnappedX] = useState(false);
+  const [snappedY, setSnappedY] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
   const dragStartPos = useRef({ x: 0, y: 0 });
   const initialPos = useRef<TextPositionOffset>({ x: 0.5, y: 0 });
@@ -78,7 +83,10 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
   ];
 
   // Toggle orientation for an element
-  const toggleOrientation = useCallback((elementId: 'city' | 'country' | 'coordinates') => {
+  const toggleOrientation = useCallback((elementId: 'city' | 'country' | 'coordinates', e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     const currentOrientation = getOrientation(elementId);
     const newOrientation: TextOrientation = currentOrientation === 'horizontal' ? 'vertical' : 'horizontal';
     
@@ -99,6 +107,8 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
 
     // Select the element
     setSelectedElement(elementId);
+    // Clear editing mode when starting to drag
+    setEditingElement(null);
 
     if (isResize) {
       setResizeTarget(elementId);
@@ -112,6 +122,8 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
     
     dragStartPos.current = { x: e.clientX, y: e.clientY };
     setShowGuides(true);
+    setSnappedX(false);
+    setSnappedY(false);
   }, [getPosition, getScale, textElements]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -121,10 +133,28 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
       const dx = (e.clientX - dragStartPos.current.x) / containerWidth;
       const dy = (e.clientY - dragStartPos.current.y) / containerHeight;
 
-      const newPos: TextPositionOffset = {
-        x: Math.max(0.1, Math.min(0.9, initialPos.current.x + dx)),
-        y: Math.max(0.05, Math.min(0.95, initialPos.current.y + dy)),
-      };
+      let newX = Math.max(0.1, Math.min(0.9, initialPos.current.x + dx));
+      let newY = Math.max(0.05, Math.min(0.95, initialPos.current.y + dy));
+
+      // Snap to center horizontally
+      const isNearCenterX = Math.abs(newX - 0.5) < SNAP_THRESHOLD;
+      if (isNearCenterX) {
+        newX = 0.5;
+        setSnappedX(true);
+      } else {
+        setSnappedX(false);
+      }
+
+      // Snap to center vertically
+      const isNearCenterY = Math.abs(newY - 0.5) < SNAP_THRESHOLD;
+      if (isNearCenterY) {
+        newY = 0.5;
+        setSnappedY(true);
+      } else {
+        setSnappedY(false);
+      }
+
+      const newPos: TextPositionOffset = { x: newX, y: newY };
 
       const newOverrides: TextOverrides = {
         ...config.textOverrides,
@@ -159,6 +189,8 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
     setResizeTarget(null);
     setResizeHandle(null);
     setShowGuides(false);
+    setSnappedX(false);
+    setSnappedY(false);
   }, []);
 
   // Deselect when clicking outside
@@ -180,18 +212,19 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
     }
   }, [dragTarget, resizeTarget, handleMouseMove, handleMouseUp]);
 
-  // Single click to start editing (instead of double-click)
-  const handleTextClick = useCallback((e: React.MouseEvent, elementId: 'city' | 'country' | 'coordinates', isEditable: boolean) => {
+  // Double-click to start editing text
+  const handleDoubleClick = useCallback((e: React.MouseEvent, elementId: 'city' | 'country' | 'coordinates', isEditable: boolean) => {
     e.stopPropagation();
-    
-    // If already selected, start editing on next click
-    if (selectedElement === elementId && isEditable && !editingElement) {
+    if (isEditable) {
       setEditingElement(elementId as 'city' | 'country');
-    } else {
-      setSelectedElement(elementId);
-      setEditingElement(null);
     }
-  }, [selectedElement, editingElement]);
+  }, []);
+
+  // Single click to select
+  const handleTextClick = useCallback((e: React.MouseEvent, elementId: 'city' | 'country' | 'coordinates') => {
+    e.stopPropagation();
+    setSelectedElement(elementId);
+  }, []);
 
   const handleTextChange = useCallback((e: React.ChangeEvent<HTMLInputElement>, elementId: 'city' | 'country') => {
     if (elementId === 'city') {
@@ -221,14 +254,18 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
       {/* Guides - shown while dragging */}
       {showGuides && (
         <>
-          {/* Vertical center line */}
+          {/* Vertical center line - highlight when snapped */}
           <div
-            className="absolute top-0 bottom-0 w-px bg-primary/50 pointer-events-none"
+            className={`absolute top-0 bottom-0 w-px pointer-events-none transition-colors ${
+              snappedX ? 'bg-primary w-0.5' : 'bg-primary/50'
+            }`}
             style={{ left: '50%' }}
           />
-          {/* Horizontal center line */}
+          {/* Horizontal center line - highlight when snapped */}
           <div
-            className="absolute left-0 right-0 h-px bg-primary/50 pointer-events-none"
+            className={`absolute left-0 right-0 h-px pointer-events-none transition-colors ${
+              snappedY ? 'bg-primary h-0.5' : 'bg-primary/50'
+            }`}
             style={{ top: '50%' }}
           />
           {/* Thirds guides */}
@@ -282,7 +319,8 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
               top: `${pos.y * 100}%`,
             }}
             onMouseDown={(e) => handleMouseDown(e, element.id)}
-            onClick={(e) => handleTextClick(e, element.id, element.editable)}
+            onClick={(e) => handleTextClick(e, element.id)}
+            onDoubleClick={(e) => handleDoubleClick(e, element.id, element.editable)}
           >
             {isEditing && element.editable ? (
               <input
@@ -292,13 +330,14 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
                 onBlur={handleTextBlur}
                 onKeyDown={handleKeyDown}
                 autoFocus
-                className="bg-background/80 backdrop-blur-sm border border-primary rounded px-2 py-1 text-center outline-none"
+                className="bg-transparent border-b-2 border-primary px-2 py-1 text-center outline-none"
                 style={{
                   color: textColor,
                   fontSize: `${fontSize}px`,
                   fontWeight,
                   letterSpacing,
                   minWidth: '100px',
+                  textTransform: 'uppercase',
                 }}
               />
             ) : (
@@ -319,19 +358,17 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
               </span>
             )}
 
-            {/* Controls - only show when selected */}
+            {/* Controls - show when selected (not editing) */}
             {isSelected && !isEditing && (
               <>
-                {/* Orientation toggle button */}
+                {/* Orientation toggle button - always visible when selected */}
                 <button
-                  className="absolute -top-8 left-1/2 -translate-x-1/2 w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleOrientation(element.id);
-                  }}
-                  title={isVertical ? 'Horizontal' : 'Vertikal'}
+                  className="absolute -top-8 left-1/2 -translate-x-1/2 w-7 h-7 bg-primary text-primary-foreground rounded-full flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors z-30"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => toggleOrientation(element.id, e)}
+                  title={isVertical ? 'Horizontal ausrichten' : 'Vertikal ausrichten'}
                 >
-                  <RotateCw className="w-3 h-3" />
+                  <RotateCw className="w-4 h-4" />
                 </button>
 
                 {/* Corner resize handles */}
