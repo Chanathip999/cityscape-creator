@@ -54,6 +54,13 @@ const STREET_WIDTHS: Record<string, number> = {
   living_street: 0.4,
   unclassified: 0.4,
   service: 0.3,
+  pedestrian: 0.25,
+  footway: 0.2,
+  path: 0.2,
+  cycleway: 0.2,
+  track: 0.2,
+  steps: 0.15,
+  bridleway: 0.2,
 };
 
 // Railway width (z-order 2.5 in Python, between parks and roads)

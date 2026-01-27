@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface StreetSegment {
-  type: 'motorway' | 'primary' | 'secondary' | 'tertiary' | 'residential' | 'service';
+  type: 'motorway' | 'primary' | 'secondary' | 'tertiary' | 'residential' | 'service' | 'path';
   coordinates: [number, number][][]; // Array of polylines
 }
 
