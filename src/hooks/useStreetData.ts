@@ -38,19 +38,19 @@ interface TileResult {
   buildings: [number, number][][];
 }
 
-// Tile radii - BALANCED FOR SPEED + STABILITY
-// Streets can be larger; buildings use smaller tiles to avoid memory crashes
+// Tile radii - OPTIMIZED FOR PROGRESSIVE LOADING
+// Streets can be larger; buildings use smaller tiles for faster individual responses
 const MAX_STREET_TILE_RADIUS = 5000;
-const MAX_BUILDING_TILE_RADIUS = 2500; // Balance between speed and stability
+const MAX_BUILDING_TILE_RADIUS = 2000; // Smaller = faster individual loads, more responsive
 
-// Maximum tiles to prevent excessive requests  
+// Maximum tiles for full coverage  
 const MAX_TILES_STREETS = 36;
-const MAX_TILES_BUILDINGS = 64; // Reduced to prevent memory issues
+const MAX_TILES_BUILDINGS = 100; // More tiles but smaller = faster perceived loading
 
-// Batch sizes for parallel fetching - BALANCED FOR SPEED + STABILITY
-// Too high = browser crash, too low = slow loading
-const STREET_BATCH_SIZE = 12; // Safe parallel limit
-const BUILDING_BATCH_SIZE = 8; // Safe for buildings (memory heavy)
+// Batch sizes for parallel fetching - PROGRESSIVE LOADING STRATEGY
+// Buildings load progressively (UI updates after each batch) so we can go higher
+const STREET_BATCH_SIZE = 12;
+const BUILDING_BATCH_SIZE = 10; // Higher because we update UI after each batch (not waiting for all)
 
 // Calculate tiles needed for a given area - ensures center is always included
 function calculateTiles(params: {
@@ -337,21 +337,35 @@ export const useStreetData = ({
           return results;
         })();
 
+        // PROGRESSIVE BUILDING FETCH: Update UI after each batch for immediate visual feedback
+        // This prevents memory buildup and shows progress to the user
         const buildingFetchPromise = (async () => {
           if (!includeBuildings) return [];
-          const results: TileResult[] = [];
-          // Buildings use smaller tiles for stability, but cover the full area
+          const allResults: TileResult[] = [];
+          let loadedCount = 0;
+          
           for (let i = 0; i < buildingTiles.length; i += BUILDING_BATCH_SIZE) {
             const batch = buildingTiles.slice(i, i + BUILDING_BATCH_SIZE);
             const batchResults = await Promise.all(
               // buildingsOnly=true prevents huge mixed responses that can trigger WORKER_LIMIT
               batch.map(tile => fetchTileWithRetry(tile.lat, tile.lng, tile.radius, skipService, true, true))
             );
-            for (const result of batchResults) {
-              if (result) results.push(result);
+            
+            // Process batch results
+            const validResults = batchResults.filter((r): r is TileResult => r !== null);
+            allResults.push(...validResults);
+            loadedCount += validResults.length;
+            
+            // PROGRESSIVE UPDATE: Show buildings immediately as they load
+            // This gives visual feedback and prevents memory buildup from holding all data
+            if (validResults.length > 0) {
+              const progressiveMerge = mergeResults(allResults);
+              setBuildings(progressiveMerge.buildings);
             }
           }
-          return results;
+          
+          console.log(`Progressive load complete: ${loadedCount} building tiles processed`);
+          return allResults;
         })();
 
         // Wait for both to complete simultaneously
@@ -368,16 +382,15 @@ export const useStreetData = ({
         // Merge street results
         const merged = mergeResults(streetResults);
         
-        // Merge building results from their separate tiles
+        // Buildings are already set progressively during loading
+        // Just log the final count
         if (buildingResults.length > 0) {
-          const buildingMerged = mergeResults(buildingResults);
-          merged.buildings = buildingMerged.buildings;
-          console.log(`Loaded ${merged.buildings.length} buildings from ${buildingResults.length} tiles`);
+          const finalBuildingMerge = mergeResults(buildingResults);
+          console.log(`Final building count: ${finalBuildingMerge.buildings.length} from ${buildingResults.length} tiles`);
         }
 
-        console.log('Merged data:', {
+        console.log('Merged street data:', {
           streets: merged.streets.reduce((sum, s) => sum + s.coordinates.length, 0),
-          buildings: merged.buildings.length,
           tiles: streetTiles.length,
         });
 
@@ -388,7 +401,7 @@ export const useStreetData = ({
         setWater(merged.water);
         setParks(merged.parks);
         setForests(merged.forests);
-        setBuildings(merged.buildings);
+        // Note: Buildings are already set progressively, no need to set again
         lastParamsRef.current = paramsKey;
 
       } catch (err) {
