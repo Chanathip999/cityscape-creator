@@ -6,6 +6,23 @@
 
 import { FontFamily, FontSize, TextPosition } from '@/types/poster';
 
+export type TextPositions = {
+  title: number;
+  decorativeLine: number;
+  subtitle: number;
+  coords: number;
+  attribution: number;
+};
+
+export type AdaptiveTextLayoutOptions = {
+  canvasHeight: number;
+  fontSize: FontSize;
+  fontSizeScale?: number;
+  showCity?: boolean;
+  showCountry?: boolean;
+  showCoordinates?: boolean;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Font Families
 // ─────────────────────────────────────────────────────────────────────────────
@@ -59,7 +76,7 @@ export const TRACKING_CLASSES = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Text positions for 'bottom' placement (default) */
-export const TEXT_POSITIONS_BOTTOM = {
+export const TEXT_POSITIONS_BOTTOM: TextPositions = {
   title: 0.82,
   decorativeLine: 0.86,
   subtitle: 0.895,
@@ -68,7 +85,7 @@ export const TEXT_POSITIONS_BOTTOM = {
 } as const;
 
 /** Text positions for 'center' placement */
-export const TEXT_POSITIONS_CENTER = {
+export const TEXT_POSITIONS_CENTER: TextPositions = {
   title: 0.46,
   decorativeLine: 0.50,
   subtitle: 0.535,
@@ -77,7 +94,7 @@ export const TEXT_POSITIONS_CENTER = {
 } as const;
 
 /** Text positions for 'top' placement */
-export const TEXT_POSITIONS_TOP = {
+export const TEXT_POSITIONS_TOP: TextPositions = {
   title: 0.08,
   decorativeLine: 0.12,
   subtitle: 0.155,
@@ -85,8 +102,14 @@ export const TEXT_POSITIONS_TOP = {
   attribution: 0.98,
 } as const;
 
-/** Get text positions based on position setting */
-export const getTextPositions = (position: TextPosition) => {
+/**
+ * Get text positions.
+ *
+ * If `opts` is provided, we compute an adaptive layout that keeps consistent
+ * spacing across aspect ratios and avoids overlap.
+ */
+export const getTextPositions = (position: TextPosition, opts?: AdaptiveTextLayoutOptions): TextPositions => {
+  if (opts) return getAdaptiveTextPositions(position, opts);
   switch (position) {
     case 'top': return TEXT_POSITIONS_TOP;
     case 'center': return TEXT_POSITIONS_CENTER;
@@ -96,6 +119,87 @@ export const getTextPositions = (position: TextPosition) => {
 
 /** Legacy export for backward compatibility */
 export const TEXT_POSITIONS = TEXT_POSITIONS_BOTTOM;
+
+function clamp01(v: number, min = 0.02, max = 0.98) {
+  return Math.max(min, Math.min(max, v));
+}
+
+function getAnchor(position: TextPosition): TextPositions {
+  switch (position) {
+    case 'top':
+      return TEXT_POSITIONS_TOP;
+    case 'center':
+      return TEXT_POSITIONS_CENTER;
+    default:
+      return TEXT_POSITIONS_BOTTOM;
+  }
+}
+
+function getAdaptiveTextPositions(position: TextPosition, opts: AdaptiveTextLayoutOptions): TextPositions {
+  const {
+    canvasHeight,
+    fontSize,
+    fontSizeScale = 1,
+    showCity = true,
+    showCountry = true,
+    showCoordinates = true,
+  } = opts;
+
+  const anchor = getAnchor(position);
+  const base = getScaledFontSizes(canvasHeight, fontSize);
+
+  const sizes = {
+    title: base.title * fontSizeScale,
+    subtitle: base.subtitle * fontSizeScale,
+    coords: base.coords * fontSizeScale,
+  };
+
+  // Spacing derived from font sizes (keeps consistent rhythm across formats)
+  const gapTitleToLine = Math.max(canvasHeight * 0.01, sizes.title * 0.22);
+  const gapLineToSubtitle = Math.max(canvasHeight * 0.01, sizes.subtitle * 0.55);
+  const gapSubtitleToCoords = Math.max(canvasHeight * 0.01, sizes.coords * 0.9);
+
+  // Anchor around the coords position (matches current visual intent)
+  const coordsY = canvasHeight * anchor.coords;
+
+  let subtitleY = canvasHeight * anchor.subtitle;
+  let titleY = canvasHeight * anchor.title;
+  let decorativeLineY = canvasHeight * anchor.decorativeLine;
+
+  // Build from bottom-up so the block stays stable and never overlaps
+  let cursorY = coordsY;
+  if (showCoordinates) {
+    cursorY = coordsY - sizes.coords / 2;
+  }
+
+  if (showCountry) {
+    const subtitleCenter = cursorY - gapSubtitleToCoords - sizes.subtitle / 2;
+    subtitleY = subtitleCenter;
+    cursorY = subtitleCenter - sizes.subtitle / 2;
+  }
+
+  if (showCity) {
+    // Decorative line sits between title and subtitle
+    const lineCenter = cursorY - gapLineToSubtitle - (gapTitleToLine * 0.45);
+    decorativeLineY = lineCenter;
+    const titleCenter = lineCenter - gapTitleToLine - sizes.title / 2;
+    titleY = titleCenter;
+  }
+
+  // Normalize
+  const title = clamp01(titleY / canvasHeight);
+  const decorativeLine = clamp01(decorativeLineY / canvasHeight);
+  const subtitle = clamp01(subtitleY / canvasHeight);
+  const coords = clamp01(coordsY / canvasHeight);
+
+  return {
+    title,
+    decorativeLine,
+    subtitle,
+    coords,
+    attribution: anchor.attribution,
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Font Sizes

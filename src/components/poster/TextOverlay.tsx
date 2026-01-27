@@ -38,7 +38,14 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
   const initialPos = useRef<TextPositionOffset>({ x: 0.5, y: 0 });
   const initialScale = useRef(1);
 
-  const TEXT_POSITIONS = getTextPositions(config.textPosition);
+  const TEXT_POSITIONS = getTextPositions(config.textPosition, {
+    canvasHeight: containerHeight,
+    fontSize: config.fontSize,
+    fontSizeScale: config.fontSizeScale || 1,
+    showCity: config.showCity,
+    showCountry: config.showCountry,
+    showCoordinates: config.showCoordinates,
+  });
   const textColor = config.customTextColor || config.theme.text;
   const fontStack = FONT_STACKS[config.fontFamily];
   const baseFonts = getScaledFontSizes(containerHeight, config.fontSize);
@@ -46,16 +53,31 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
 
   // Initialize textOverrides if not present
   useEffect(() => {
+    // Initialize once, but recompute defaults when format/typography changes
+    // (only if the user hasn't started customizing yet).
     if (!config.textOverrides) {
       onConfigUpdate({
         textOverrides: {
           city: { position: { x: 0.5, y: TEXT_POSITIONS.title } },
           country: { position: { x: 0.5, y: TEXT_POSITIONS.subtitle } },
           coordinates: { position: { x: 0.5, y: TEXT_POSITIONS.coords } },
-        }
+        },
       });
     }
-  }, []);
+  }, [
+    config.textOverrides,
+    config.textPosition,
+    containerHeight,
+    config.fontSize,
+    config.fontSizeScale,
+    config.showCity,
+    config.showCountry,
+    config.showCoordinates,
+    TEXT_POSITIONS.title,
+    TEXT_POSITIONS.subtitle,
+    TEXT_POSITIONS.coords,
+    onConfigUpdate,
+  ]);
 
   const getElementConfig = useCallback((elementId: 'city' | 'country' | 'coordinates'): TextElementConfig => {
     return config.textOverrides?.[elementId] || {};
