@@ -319,10 +319,9 @@ export const useStreetData = ({
   useEffect(() => {
     if (!enabled) return;
 
-    const lvKey = layerVisibility
-      ? `${Number(!!layerVisibility.water)}${Number(!!layerVisibility.forests)}${Number(!!layerVisibility.parks)}${Number(!!layerVisibility.railways)}${Number(!!layerVisibility.aeroways)}${Number(!!layerVisibility.coastlines)}${Number(!!layerVisibility.buildings)}`
-      : 'none';
-    const paramsKey = `${latitude.toFixed(4)}-${longitude.toFixed(4)}-${distance}-${includeBuildings}-${lvKey}`;
+    // Only include ENABLED layers in the cache key - we'll fetch disabled layers separately if toggled
+    const coreLvKey = `${Number(!!layerVisibility?.water)}${Number(!!layerVisibility?.railways)}${Number(!!layerVisibility?.aeroways)}`;
+    const paramsKey = `${latitude.toFixed(4)}-${longitude.toFixed(4)}-${distance}-${includeBuildings}-core-${coreLvKey}`;
     
     if (paramsKey === lastParamsRef.current) return;
 
@@ -342,20 +341,37 @@ export const useStreetData = ({
       clearOldCache();
 
       try {
-        const applyMergedState = (merged: TileResult) => {
+        // PHASE 1: Load only CORE layers that are enabled by default
+        // (Streets, Water, Railways, Aeroways) - these are fast and essential
+        const coreLayerVisibility: LayerVisibility = {
+          water: layerVisibility?.water ?? true,
+          railways: layerVisibility?.railways ?? true,
+          aeroways: layerVisibility?.aeroways ?? true,
+          // These are DISABLED by default - don't load in Phase 1
+          forests: false,
+          parks: false,
+          coastlines: false,
+          buildings: false,
+        };
+
+        const applyMergedState = (merged: TileResult, includeOptionalLayers = false) => {
           setStreets(merged.streets);
-          setRailways(layerVisibility?.railways ? merged.railways : []);
-          setAeroways(layerVisibility?.aeroways ? merged.aeroways : []);
-          setWater(layerVisibility?.water ? merged.water : []);
-          setCoastlines(layerVisibility?.coastlines ? merged.coastlines : []);
-          setParks(layerVisibility?.parks ? merged.parks : []);
-          setForests(layerVisibility?.forests ? merged.forests : []);
+          setRailways(coreLayerVisibility.railways ? merged.railways : []);
+          setAeroways(coreLayerVisibility.aeroways ? merged.aeroways : []);
+          setWater(coreLayerVisibility.water ? merged.water : []);
+          
+          // Only update optional layers if they were included in this fetch
+          if (includeOptionalLayers) {
+            setCoastlines(layerVisibility?.coastlines ? merged.coastlines : []);
+            setParks(layerVisibility?.parks ? merged.parks : []);
+            setForests(layerVisibility?.forests ? merged.forests : []);
+          }
         };
 
         // Progressive results - only ever ADD, never overwrite with smaller sets
         const progressiveResults: TileResult[] = [];
 
-        // FAST FIRST PAINT: Fetch a small center preview first
+        // FAST FIRST PAINT: Fetch a small center preview first (CORE layers only)
         const previewRadius = Math.min(1200, Math.max(600, Math.floor(distance * 0.35)));
 
         const previewFull = await fetchTileWithRetry(
@@ -367,7 +383,7 @@ export const useStreetData = ({
           false,
           false,
           0,
-          layerVisibility,
+          coreLayerVisibility, // Only core layers!
         );
 
         if (runId !== runIdRef.current) return;
@@ -375,7 +391,7 @@ export const useStreetData = ({
         if (previewFull) {
           progressiveResults.push(previewFull);
           applyMergedState(mergeResults(progressiveResults));
-          console.log(`⚡ PREVIEW full (r=${previewRadius}m) in ${(performance.now() - startTime).toFixed(0)}ms`);
+          console.log(`⚡ PREVIEW core (r=${previewRadius}m) in ${(performance.now() - startTime).toFixed(0)}ms`);
         }
 
         // Calculate tiles for the full area
@@ -398,9 +414,9 @@ export const useStreetData = ({
           : [];
         
         const skipService = false;
-        console.log(`🚀 FULL DETAIL LOAD: ${streetTiles.length} tiles`);
+        console.log(`🚀 PHASE 1 (Core): ${streetTiles.length} tiles - Streets, Water, Railways, Aeroways`);
 
-        // PHASE 1A: Center tile FULL detail for INSTANT feedback
+        // PHASE 1A: Center tile FULL detail for INSTANT feedback (CORE layers only)
         const centerTile = streetTiles[0];
         const centerFullResult = await fetchTileWithRetry(
           runId,
@@ -411,7 +427,7 @@ export const useStreetData = ({
           false,
           false,
           0,
-          layerVisibility,
+          coreLayerVisibility,
         );
         
         if (runId !== runIdRef.current) return;
@@ -419,10 +435,10 @@ export const useStreetData = ({
         if (centerFullResult) {
           progressiveResults.push(centerFullResult);
           applyMergedState(mergeResults(progressiveResults));
-          console.log(`⚡ CENTER full in ${(performance.now() - startTime).toFixed(0)}ms`);
+          console.log(`⚡ CENTER core in ${(performance.now() - startTime).toFixed(0)}ms`);
         }
 
-        // PHASE 1B: Remaining tiles in small batches with delays between
+        // PHASE 1B: Remaining tiles in small batches (CORE layers only)
         const remainingTiles = streetTiles.slice(1);
         const fullResults: TileResult[] = [...progressiveResults];
         
@@ -432,7 +448,7 @@ export const useStreetData = ({
           const batch = remainingTiles.slice(i, i + STREET_BATCH_SIZE);
           const batchResults = await Promise.all(
             batch.map(tile =>
-              fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, false, false, 0, layerVisibility)
+              fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, false, false, 0, coreLayerVisibility)
             )
           );
           
@@ -450,8 +466,63 @@ export const useStreetData = ({
           }
         }
         
-        const fullTime = performance.now() - startTime;
-        console.log(`✅ FULL detail complete: ${fullResults.length} tiles in ${fullTime.toFixed(0)}ms`);
+        const coreTime = performance.now() - startTime;
+        console.log(`✅ PHASE 1 (Core) complete: ${fullResults.length} tiles in ${coreTime.toFixed(0)}ms`);
+
+        // ==========================================================================
+        // PHASE 2 (BACKGROUND): Load optional layers if enabled
+        // Parks, Forests, Coastlines - these are heavy and disabled by default
+        // ==========================================================================
+        const needsOptionalLayers = 
+          layerVisibility?.parks || 
+          layerVisibility?.forests || 
+          layerVisibility?.coastlines;
+
+        if (needsOptionalLayers && runId === runIdRef.current) {
+          console.log(`🌳 PHASE 2 (Background): Loading optional layers...`);
+          
+          const optionalLayerVisibility: LayerVisibility = {
+            water: false, // Already loaded
+            railways: false, // Already loaded
+            aeroways: false, // Already loaded
+            forests: layerVisibility?.forests ?? false,
+            parks: layerVisibility?.parks ?? false,
+            coastlines: layerVisibility?.coastlines ?? false,
+            buildings: false,
+          };
+
+          const optionalResults: TileResult[] = [];
+          
+          // Fetch optional layers for all tiles (in smaller batches)
+          for (let i = 0; i < streetTiles.length; i += STREET_BATCH_SIZE) {
+            if (runId !== runIdRef.current) break;
+            
+            const batch = streetTiles.slice(i, i + STREET_BATCH_SIZE);
+            const batchResults = await Promise.all(
+              batch.map(tile =>
+                fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, false, false, 0, optionalLayerVisibility)
+              )
+            );
+            
+            for (const result of batchResults) {
+              if (result) optionalResults.push(result);
+            }
+            
+            // Progressive update for optional layers
+            if (optionalResults.length > 0) {
+              const optionalMerged = mergeResults(optionalResults);
+              setCoastlines(layerVisibility?.coastlines ? optionalMerged.coastlines : []);
+              setParks(layerVisibility?.parks ? optionalMerged.parks : []);
+              setForests(layerVisibility?.forests ? optionalMerged.forests : []);
+            }
+            
+            if (i + STREET_BATCH_SIZE < streetTiles.length) {
+              await new Promise(r => setTimeout(r, 50));
+            }
+          }
+          
+          console.log(`✅ PHASE 2 (Optional) complete: ${optionalResults.length} tiles`);
+        }
 
         // PROGRESSIVE BUILDING FETCH
         if (includeBuildings && buildingTiles.length > 0) {
@@ -495,19 +566,18 @@ export const useStreetData = ({
           return;
         }
 
-        // Final merge and state update
+        // Final merge for CORE layers only (optional layers already set in Phase 2)
         const merged = mergeResults(fullResults);
         
         const totalTime = performance.now() - startTime;
         console.log(`✅ COMPLETE: ${merged.streets.reduce((sum, s) => sum + s.coordinates.length, 0)} streets in ${totalTime.toFixed(0)}ms`);
 
+        // Only update core layers here - optional layers were updated in Phase 2
         setStreets(merged.streets);
         setRailways(layerVisibility?.railways ? merged.railways : []);
         setAeroways(layerVisibility?.aeroways ? merged.aeroways : []);
-        setCoastlines(layerVisibility?.coastlines ? merged.coastlines : []);
         setWater(layerVisibility?.water ? merged.water : []);
-        setParks(layerVisibility?.parks ? merged.parks : []);
-        setForests(layerVisibility?.forests ? merged.forests : []);
+        // Don't overwrite optional layers here - they were set in Phase 2
         
         lastParamsRef.current = paramsKey;
 
