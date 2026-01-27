@@ -71,9 +71,13 @@ export interface PosterConfig {
   orientation: PosterOrientation;
   aspectRatio: AspectRatioId;
   customTextColor?: string;
+  customRoadColor?: string;
+  customBackgroundColor?: string;
   coloredStreets?: boolean;
   renderMode: RenderMode;
   layerVisibility: LayerVisibility;
+  showCoordinates: boolean;
+  showCountry: boolean;
 }
 
 export const ASPECT_RATIOS: AspectRatio[] = [
@@ -313,7 +317,7 @@ export const DEFAULT_CONFIG: PosterConfig = {
   country: 'Germany',
   latitude: 52.52,
   longitude: 13.405,
-  distance: 15000,
+  distance: 10000, // Reduced for better performance
   theme: POSTER_THEMES[0], // Ocean (bright/light) theme
   width: 12,
   height: 16,
@@ -324,4 +328,6 @@ export const DEFAULT_CONFIG: PosterConfig = {
   coloredStreets: false,
   renderMode: 'vector',
   layerVisibility: DEFAULT_LAYER_VISIBILITY,
+  showCoordinates: true,
+  showCountry: true,
 };
