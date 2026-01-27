@@ -55,7 +55,7 @@ async function getElementCount(bbox: string, highwayTags: string[]): Promise<num
   const aerowayRegex = AEROWAY_TYPES.join('|');
   
   const countQuery = `
-    [out:json][timeout:15];
+    [out:json][timeout:10];
     (
       way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
       way["railway"~"^(${railwayRegex})$"](${bbox});
@@ -104,7 +104,7 @@ function buildQuery(params: {
   if (!includePolygons) {
     // Reduced mode: only linear features (roads, railways, aeroways) - shorter timeout
     return `
-      [out:json][timeout:20];
+      [out:json][timeout:15];
       (
         way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
         way["railway"~"^(${railwayRegex})$"](${bbox});
@@ -116,7 +116,7 @@ function buildQuery(params: {
 
   // Full mode with all features - shorter timeout for speed
   return `
-    [out:json][timeout:25];
+    [out:json][timeout:18];
     (
       way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
       way["railway"~"^(${railwayRegex})$"](${bbox});

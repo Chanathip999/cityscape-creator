@@ -183,7 +183,7 @@ export const useStreetData = ({
     tileLng: number,
     tileRadius: number,
     skipService: boolean,
-    retries = 2
+    retries = 1
   ): Promise<TileResult | null> => {
     const cacheKey = getTileCacheKey(tileLat, tileLng, tileRadius);
     
@@ -202,7 +202,7 @@ export const useStreetData = ({
         if (fnError) {
           if (attempt < retries) {
             // Wait before retry with exponential backoff
-            await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
+            await new Promise(r => setTimeout(r, 100 * (attempt + 1)));
             continue;
           }
           console.error('Tile fetch error after retries:', fnError);
@@ -225,7 +225,7 @@ export const useStreetData = ({
         return result;
       } catch (err) {
         if (attempt < retries) {
-          await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
+          await new Promise(r => setTimeout(r, 100 * (attempt + 1)));
           continue;
         }
         console.error('Tile fetch exception:', err);
@@ -269,7 +269,7 @@ export const useStreetData = ({
 
         // Smart batching: fetch in small concurrent batches to avoid rate limiting
         // while still being much faster than sequential
-        const BATCH_SIZE = 5;
+        const BATCH_SIZE = 10;
         const results: TileResult[] = [];
         
         for (let i = 0; i < tiles.length; i += BATCH_SIZE) {
@@ -311,7 +311,7 @@ export const useStreetData = ({
       } finally {
         setIsLoading(false);
       }
-    }, 200); // Reduced debounce for faster response
+    }, 100); // 100ms debounce for faster response
 
     return () => {
       if (fetchTimeoutRef.current) {
