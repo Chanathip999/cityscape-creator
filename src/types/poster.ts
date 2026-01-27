@@ -38,6 +38,24 @@ export interface ExportOption {
   description: string;
 }
 
+export interface LayerVisibility {
+  water: boolean;
+  forests: boolean;
+  parks: boolean;
+  railways: boolean;
+  aeroways: boolean;
+  coastlines: boolean;
+}
+
+export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
+  water: true,
+  forests: true,
+  parks: true,
+  railways: true,
+  aeroways: true,
+  coastlines: true,
+};
+
 export interface PosterConfig {
   city: string;
   country: string;
@@ -55,6 +73,7 @@ export interface PosterConfig {
   customTextColor?: string;
   coloredStreets?: boolean;
   renderMode: RenderMode;
+  layerVisibility: LayerVisibility;
 }
 
 export const ASPECT_RATIOS: AspectRatio[] = [
@@ -304,4 +323,5 @@ export const DEFAULT_CONFIG: PosterConfig = {
   aspectRatio: '3:4',
   coloredStreets: false,
   renderMode: 'vector',
+  layerVisibility: DEFAULT_LAYER_VISIBILITY,
 };
