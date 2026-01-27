@@ -22,10 +22,8 @@ const EXTRA_STREET_TYPES = [
 
 const ALL_STREET_TYPES = [...CORE_STREET_TYPES, ...EXTRA_STREET_TYPES];
 
-// Simple in-memory cache for recent queries (TTL: 5 minutes - shorter to reduce memory)
-const cache = new Map<string, { data: unknown; timestamp: number }>();
-const CACHE_TTL = 300000; // 5 minutes - reduced to prevent memory buildup
-const MAX_CACHE_ENTRIES = 10; // Limit cache size to prevent memory issues
+// NOTE: In-memory cache removed to prevent BOOT_ERROR/memory issues
+// Caching is handled client-side in IndexedDB instead
 
 // All railway types for maximum detail
 const RAILWAY_TYPES = ['rail', 'tram', 'subway', 'light_rail', 'monorail', 'narrow_gauge'];
@@ -240,16 +238,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create cache key (include buildings + mode)
-    const cacheKey = `${lat.toFixed(3)}-${lng.toFixed(3)}-${distance}-${skipService}-${includeBuildings}-${buildingsOnly}`;
-    const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      console.log('Cache hit for:', cacheKey);
-      return new Response(
-        JSON.stringify(cached.data),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // NOTE: Server-side cache removed to prevent BOOT_ERROR/memory issues
+    // Caching is handled client-side in IndexedDB instead
 
     console.log(
       `Fetching streets for lat=${lat}, lng=${lng}, distance=${distance}m, skipService=${skipService}, buildings=${includeBuildings}, buildingsOnly=${buildingsOnly}`
@@ -280,13 +270,6 @@ Deno.serve(async (req) => {
       const elements = await fetchOverpass(query);
 
       if (elements === null) {
-        // Fallback to stale cache
-        if (cached) {
-          console.log('Overpass unavailable; serving stale cache (buildingsOnly)');
-          return new Response(JSON.stringify(cached.data), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'stale' },
-          });
-        }
         return new Response(JSON.stringify({ error: 'Overpass API unavailable' }), {
           status: 503,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -321,7 +304,6 @@ Deno.serve(async (req) => {
         buildings: buildingPolygons,
       };
 
-      cache.set(cacheKey, { data: responseData, timestamp: Date.now() });
       return new Response(JSON.stringify(responseData), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -366,15 +348,6 @@ Deno.serve(async (req) => {
     const elements = await fetchOverpass(query);
 
     if (elements === null) {
-      // Fallback to stale cache
-      if (cached) {
-        console.log('Overpass unavailable; serving stale cache');
-        return new Response(
-          JSON.stringify(cached.data),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'stale' } }
-        );
-      }
-
       return new Response(
         JSON.stringify({ error: 'Overpass API unavailable' }),
         { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -523,27 +496,7 @@ Deno.serve(async (req) => {
       buildings: buildingPolygons,
     };
     
-    // Cache the result - with size limit to prevent memory issues
-    if (cache.size >= MAX_CACHE_ENTRIES) {
-      // Remove oldest entry
-      let oldestKey: string | null = null;
-      let oldestTime = Infinity;
-      for (const [key, value] of cache.entries()) {
-        if (value.timestamp < oldestTime) {
-          oldestTime = value.timestamp;
-          oldestKey = key;
-        }
-      }
-      if (oldestKey) cache.delete(oldestKey);
-    }
-    cache.set(cacheKey, { data: responseData, timestamp: Date.now() });
-    
-    // Clean expired cache entries
-    for (const [key, value] of cache.entries()) {
-      if (Date.now() - value.timestamp > CACHE_TTL) {
-        cache.delete(key);
-      }
-    }
+    // NOTE: No server-side caching - handled by client IndexedDB
 
     return new Response(
       JSON.stringify(responseData),
