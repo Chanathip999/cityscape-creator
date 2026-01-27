@@ -9,17 +9,23 @@ interface ClearCacheButtonProps {
 
 export const ClearCacheButton = ({ onCacheCleared }: ClearCacheButtonProps) => {
   const handleClearCache = async () => {
-    await clearAllCache();
-    toast.success('Kartendaten-Cache geleert. Seite wird neu geladen...');
-    
-    // Reload after a short delay so user sees the toast
-    setTimeout(() => {
-      if (onCacheCleared) {
-        onCacheCleared();
-      } else {
-        window.location.reload();
-      }
-    }, 1000);
+    try {
+      console.log('[cache] clear button clicked');
+      await clearAllCache();
+      toast.success('Kartendaten-Cache geleert. Seite wird neu geladen...');
+    } catch (e) {
+      console.error('[cache] clear failed', e);
+      toast.error('Cache konnte nicht vollständig geleert werden. Seite wird trotzdem neu geladen...');
+    } finally {
+      // Reload after a short delay so user sees the toast
+      setTimeout(() => {
+        if (onCacheCleared) {
+          onCacheCleared();
+        } else {
+          window.location.reload();
+        }
+      }, 800);
+    }
   };
 
   return (
