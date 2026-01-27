@@ -14,28 +14,22 @@ import { Download, Loader2, FileImage, Image } from 'lucide-react';
 import {
   ExportFormat,
   ExportResolution,
-  EXPORT_FORMATS,
   PosterConfig,
   ASPECT_RATIOS,
 } from '@/types/poster';
 import { toast } from '@/hooks/use-toast';
+import { useRenderPoster, svgToPng, downloadBlob } from '@/hooks/useRenderPoster';
 
 interface ExportDialogProps {
   config: PosterConfig;
   posterRef: React.RefObject<HTMLDivElement>;
 }
 
-// Pricing per resolution
-const RESOLUTION_PRICES: Record<ExportResolution, number> = {
-  fullhd: 9.99,
-  '4k': 14.99,
-  '8k': 24.99,
-};
-
+// Pricing per resolution (for display only, Stripe integration later)
 const RESOLUTION_OPTIONS = [
-  { id: 'fullhd' as ExportResolution, name: 'Full HD', description: '1920px', price: 9.99 },
-  { id: '4k' as ExportResolution, name: '4K', description: '3840px', price: 14.99 },
-  { id: '8k' as ExportResolution, name: '8K', description: '7680px', price: 24.99 },
+  { id: 'fullhd' as ExportResolution, name: 'Full HD', description: '1920px', price: 9.99, multiplier: 1 },
+  { id: '4k' as ExportResolution, name: '4K', description: '3840px', price: 14.99, multiplier: 2 },
+  { id: '8k' as ExportResolution, name: '8K', description: '7680px', price: 24.99, multiplier: 4 },
 ];
 
 export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
@@ -43,28 +37,88 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
   const [format, setFormat] = useState<ExportFormat>('png');
   const [resolution, setResolution] = useState<ExportResolution>('fullhd');
   const [open, setOpen] = useState(false);
+  
+  const { renderPoster } = useRenderPoster();
 
-  const currentPrice = RESOLUTION_PRICES[resolution];
+  const currentResolution = RESOLUTION_OPTIONS.find((r) => r.id === resolution) || RESOLUTION_OPTIONS[0];
+  const currentPrice = currentResolution.price;
 
-  const handlePurchase = async () => {
+  const handleDownload = async () => {
     if (isLoading) return;
 
     setIsLoading(true);
 
     try {
-      // TODO: Stripe integration - currently disabled
       toast({
-        title: 'Zahlung noch nicht aktiviert',
-        description: 'Die Stripe-Integration wird noch eingerichtet. Bitte versuche es später erneut.',
+        title: 'Poster wird generiert...',
+        description: 'Bitte warte einen Moment.',
+      });
+
+      // Calculate dimensions
+      const aspectRatioConfig = ASPECT_RATIOS.find((r) => r.id === config.aspectRatio);
+      const ratioWidth = aspectRatioConfig?.width || 3;
+      const ratioHeight = aspectRatioConfig?.height || 4;
+      const exportWidth = 1920 * currentResolution.multiplier;
+      const exportHeight = Math.round(exportWidth * (ratioHeight / ratioWidth));
+
+      // Render poster via backend
+      const svg = await renderPoster(config, exportWidth, exportHeight);
+
+      const fileName = `${config.city.toLowerCase().replace(/\s+/g, '-')}-${config.aspectRatio.replace(':', 'x')}-${resolution}`;
+
+      if (format === 'png') {
+        const blob = await svgToPng(svg, exportWidth, exportHeight);
+        downloadBlob(blob, `${fileName}.png`);
+      } else {
+        // JPEG conversion
+        const pngBlob = await svgToPng(svg, exportWidth, exportHeight);
+        const img = new window.Image();
+        const url = URL.createObjectURL(pngBlob);
+
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = exportWidth;
+            canvas.height = exportHeight;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              reject(new Error('Could not get canvas context'));
+              return;
+            }
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, exportWidth, exportHeight);
+            ctx.drawImage(img, 0, 0);
+
+            canvas.toBlob(
+              (blob) => {
+                if (blob) {
+                  downloadBlob(blob, `${fileName}.jpg`);
+                  resolve();
+                } else {
+                  reject(new Error('Could not create JPEG'));
+                }
+              },
+              'image/jpeg',
+              0.95
+            );
+          };
+          img.onerror = () => reject(new Error('Could not load image'));
+          img.src = url;
+        });
+
+        URL.revokeObjectURL(url);
+      }
+
+      toast({
+        title: 'Download erfolgreich!',
+        description: `${config.city} Poster wurde als ${format.toUpperCase()} gespeichert.`,
       });
       
-      // Stripe redirect is disabled for now
-      // The integration will be enabled once the API key is configured
-      
+      setOpen(false);
     } catch (error) {
       console.error('Export failed:', error);
       toast({
-        title: 'Fehler',
+        title: 'Fehler beim Export',
         description: error instanceof Error ? error.message : 'Bitte versuche es erneut.',
         variant: 'destructive',
       });
@@ -77,9 +131,7 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
   const aspectRatioConfig = ASPECT_RATIOS.find((r) => r.id === config.aspectRatio);
   const ratioWidth = aspectRatioConfig?.width || 3;
   const ratioHeight = aspectRatioConfig?.height || 4;
-  const resolutionConfig = RESOLUTION_OPTIONS.find((r) => r.id === resolution);
-  const multiplier = resolution === 'fullhd' ? 1 : resolution === '4k' ? 2 : 4;
-  const exportWidth = 1920 * multiplier;
+  const exportWidth = 1920 * currentResolution.multiplier;
   const exportHeight = Math.round(exportWidth * (ratioHeight / ratioWidth));
 
   return (
@@ -175,9 +227,9 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
             <p>💾 Vektor-Modus: Poster wird serverseitig gerendert für perfekte Qualität.</p>
           </div>
 
-          {/* Purchase Button */}
+          {/* Download Button */}
           <Button
-            onClick={handlePurchase}
+            onClick={handleDownload}
             disabled={isLoading}
             className="w-full gap-2"
             size="lg"
@@ -185,12 +237,12 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
             {isLoading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Wird vorbereitet...
+                Wird generiert...
               </>
             ) : (
               <>
                 <Download className="w-4 h-4" />
-                Download {format.toUpperCase()} ({resolution.toUpperCase()}) – €{currentPrice.toFixed(2)}
+                Download {format.toUpperCase()} ({currentResolution.name}) – €{currentPrice.toFixed(2)}
               </>
             )}
           </Button>
