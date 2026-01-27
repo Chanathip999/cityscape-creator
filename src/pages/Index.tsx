@@ -7,7 +7,7 @@ import { toast } from '@/hooks/use-toast';
 
 // Clear old localStorage config on load to ensure new defaults are used
 // This runs once on initial load
-const CURRENT_CONFIG_VERSION = 3; // Increment to reset user configs - parks now disabled
+const CURRENT_CONFIG_VERSION = 4; // Increment to reset user configs - parks now disabled by default
 
 const getInitialConfig = (): PosterConfig => {
   try {

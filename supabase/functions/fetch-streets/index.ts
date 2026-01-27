@@ -48,9 +48,9 @@ interface StreetData {
 const roundCoord = (n: number): number => Math.round(n * 10000) / 10000;
 
 // Threshold: if count query returns more than this, use reduced mode
-// CONSERVATIVE thresholds to prevent memory crashes (WORKER_LIMIT/BOOT_ERROR)
-const ELEMENT_COUNT_THRESHOLD = 30000; // Reduced from 50000
-const ELEMENT_COUNT_THRESHOLD_WITH_BUILDINGS = 20000; // Reduced from 35000
+// Tuned to preserve fine street detail (paths/service) in most cases.
+const ELEMENT_COUNT_THRESHOLD = 50000;
+const ELEMENT_COUNT_THRESHOLD_WITH_BUILDINGS = 35000;
 
 // More Overpass endpoints for better load distribution and reliability
 const OVERPASS_URLS = [
@@ -66,27 +66,61 @@ function getRandomEndpoint(): string {
 }
 
 // Quick count query with shorter timeout - skip if it fails
-async function getElementCount(bbox: string, highwayTags: string[], includeBuildings: boolean): Promise<number> {
+async function getElementCount(
+  bbox: string,
+  highwayTags: string[],
+  opts: {
+    includeBuildings: boolean;
+    includeWater: boolean;
+    includeCoastlines: boolean;
+    includeParksForests: boolean;
+    includeRailways: boolean;
+    includeAeroways: boolean;
+  }
+): Promise<number> {
   const railwayRegex = RAILWAY_TYPES.join('|');
   const aerowayRegex = AEROWAY_TYPES.join('|');
-  
-  let buildingQuery = '';
-  if (includeBuildings) {
-    buildingQuery = `way["building"](${bbox});`;
-  }
+
+  const {
+    includeBuildings,
+    includeWater,
+    includeCoastlines,
+    includeParksForests,
+    includeRailways,
+    includeAeroways,
+  } = opts;
+
+  const buildingQuery = includeBuildings ? `way["building"](${bbox});` : '';
+
+  const waterQuery = includeWater
+    ? `
+       way["natural"="water"](${bbox});
+       way["waterway"~"^(river|stream|canal|drain)$"](${bbox});
+      `
+    : '';
+
+  const coastlineQuery = includeCoastlines ? `way["natural"="coastline"](${bbox});` : '';
+
+  const parksForestsQuery = includeParksForests
+    ? `
+       way["leisure"="park"](${bbox});
+       way["landuse"~"^(grass|meadow|forest)$"](${bbox});
+       way["natural"~"^(wood|beach)$"](${bbox});
+      `
+    : '';
+
+  const railwaysQuery = includeRailways ? `way["railway"~"^(${railwayRegex})$"](${bbox});` : '';
+  const aerowaysQuery = includeAeroways ? `way["aeroway"~"^(${aerowayRegex})$"](${bbox});` : '';
   
   const countQuery = `
     [out:json][timeout:5];
     (
       way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
-      way["railway"~"^(${railwayRegex})$"](${bbox});
-      way["aeroway"~"^(${aerowayRegex})$"](${bbox});
-      way["natural"="water"](${bbox});
-      way["natural"="coastline"](${bbox});
-      way["waterway"~"^(river|stream|canal|drain)$"](${bbox});
-      way["leisure"="park"](${bbox});
-      way["landuse"~"^(grass|meadow|forest)$"](${bbox});
-      way["natural"~"^(wood|beach)$"](${bbox});
+      ${railwaysQuery}
+      ${aerowaysQuery}
+      ${waterQuery}
+      ${coastlineQuery}
+      ${parksForestsQuery}
       ${buildingQuery}
     );
     out count;
@@ -307,6 +341,7 @@ Deno.serve(async (req) => {
       includeBuildings = false,
       buildingsOnly = false,
       priority = 0, // 0 = all, 1 = essential only, 2 = details only
+      layerVisibility,
     } = await req.json();
 
     if (!lat || !lng || !distance) {
@@ -397,11 +432,26 @@ Deno.serve(async (req) => {
     // ==========================================================================
     
     let activeStreetTypes;
-    let includeWater = true;
-    let includeCoastlines = true;
-    let includeParksForests = true;
-    let includeRailways = true;
-    let includeAeroways = true;
+
+    // Respect frontend visibility toggles to reduce payload & avoid reduced mode,
+    // while keeping full street detail.
+    const lv = layerVisibility as
+      | {
+          water?: boolean;
+          forests?: boolean;
+          parks?: boolean;
+          railways?: boolean;
+          aeroways?: boolean;
+          coastlines?: boolean;
+          buildings?: boolean;
+        }
+      | undefined;
+
+    let includeWater = lv?.water ?? true;
+    let includeCoastlines = lv?.coastlines ?? true;
+    let includeParksForests = (lv?.parks ?? true) || (lv?.forests ?? true);
+    let includeRailways = lv?.railways ?? true;
+    let includeAeroways = lv?.aeroways ?? true;
     
     if (priority === 1) {
       // FAST PATH: Only essential features for immediate visual feedback
@@ -431,7 +481,14 @@ Deno.serve(async (req) => {
     
     if (priority === 0) {
       console.log('Checking element count...');
-      estimatedCount = await getElementCount(bbox, highwayTags, false);
+      estimatedCount = await getElementCount(bbox, highwayTags, {
+        includeBuildings: false,
+        includeWater,
+        includeCoastlines,
+        includeParksForests,
+        includeRailways,
+        includeAeroways,
+      });
       console.log(`Estimated element count (without buildings): ${estimatedCount}`);
       
       const threshold = includeBuildings ? ELEMENT_COUNT_THRESHOLD_WITH_BUILDINGS : ELEMENT_COUNT_THRESHOLD;
