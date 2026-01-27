@@ -456,7 +456,16 @@ async function fetchSingleTile(
     return { streets: [], railways: [], aeroways: [], coastlines: [], water: [], forests: [], parks: [], buildings: [] };
   }
 
-  const osmData = await response.json();
+  // Safely parse response - Overpass can return XML errors instead of JSON
+  const responseText = await response.text();
+  let osmData;
+  try {
+    osmData = JSON.parse(responseText);
+  } catch (parseError) {
+    // Log first 200 chars for debugging
+    console.error('Failed to parse Overpass response as JSON. Response starts with:', responseText.substring(0, 200));
+    return { streets: [], railways: [], aeroways: [], coastlines: [], water: [], forests: [], parks: [], buildings: [] };
+  }
   const elements = osmData.elements || [];
 
   const tagToType = new Map<string, string>();
