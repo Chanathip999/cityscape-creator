@@ -11,6 +11,7 @@ import { FontSelector } from './FontSelector';
 import { AspectRatioSelector } from './AspectRatioSelector';
 import { RenderModeSelector } from './RenderModeSelector';
 import { LayerToggleSelector } from './LayerToggleSelector';
+import { ClearCacheButton } from './ClearCacheButton';
 import { ExportDialog } from './ExportDialog';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
@@ -197,11 +198,14 @@ export const PosterEditor = () => {
                 onAspectRatioChange={handleAspectRatioChange}
               />
 
-              <p className="text-xs text-muted-foreground">
-                💡 {config.renderMode === 'vector' 
-                  ? 'Vektor-Modus: Nur Straßen werden als scharfe Linien gezeichnet.'
-                  : 'Tile-Modus: Karten-Tiles von OpenStreetMap mit Details.'}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  💡 {config.renderMode === 'vector' 
+                    ? 'Vektor-Modus: Nur Straßen werden als scharfe Linien gezeichnet.'
+                    : 'Tile-Modus: Karten-Tiles von OpenStreetMap mit Details.'}
+                </p>
+                {config.renderMode === 'vector' && <ClearCacheButton />}
+              </div>
             </motion.div>
           </div>
 
