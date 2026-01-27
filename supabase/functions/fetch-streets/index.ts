@@ -22,9 +22,10 @@ const EXTRA_STREET_TYPES = [
 
 const ALL_STREET_TYPES = [...CORE_STREET_TYPES, ...EXTRA_STREET_TYPES];
 
-// Simple in-memory cache for recent queries (TTL: 10 minutes for stability)
+// Simple in-memory cache for recent queries (TTL: 5 minutes - shorter to reduce memory)
 const cache = new Map<string, { data: unknown; timestamp: number }>();
-const CACHE_TTL = 600000; // 10 minutes
+const CACHE_TTL = 300000; // 5 minutes - reduced to prevent memory buildup
+const MAX_CACHE_ENTRIES = 10; // Limit cache size to prevent memory issues
 
 // All railway types for maximum detail
 const RAILWAY_TYPES = ['rail', 'tram', 'subway', 'light_rail', 'monorail', 'narrow_gauge'];
@@ -41,9 +42,9 @@ interface StreetData {
 const roundCoord = (n: number): number => Math.round(n * 100000) / 100000;
 
 // Threshold: if count query returns more than this, use reduced mode
-// Threshold for reduced mode - optimized for speed
-const ELEMENT_COUNT_THRESHOLD = 50000;
-const ELEMENT_COUNT_THRESHOLD_WITH_BUILDINGS = 35000; // Higher threshold - allow more buildings
+// CONSERVATIVE thresholds to prevent memory crashes (WORKER_LIMIT/BOOT_ERROR)
+const ELEMENT_COUNT_THRESHOLD = 30000; // Reduced from 50000
+const ELEMENT_COUNT_THRESHOLD_WITH_BUILDINGS = 20000; // Reduced from 35000
 
 // More Overpass endpoints for better load distribution and reliability
 const OVERPASS_URLS = [
@@ -343,8 +344,8 @@ Deno.serve(async (req) => {
     let useReducedMode = estimatedCount > threshold;
     let includePolygons = !useReducedMode;
     
-    // Allow buildings even in moderately dense areas - only skip in extreme cases
-    const actuallyIncludeBuildings = includeBuildings && estimatedCount < 60000;
+    // Allow buildings even in moderately dense areas - but be conservative
+    const actuallyIncludeBuildings = includeBuildings && estimatedCount < 25000;
 
     // For reduced mode, also use core streets only (no service/paths)
     const finalHighwayTags = useReducedMode 
@@ -522,10 +523,22 @@ Deno.serve(async (req) => {
       buildings: buildingPolygons,
     };
     
-    // Cache the result
+    // Cache the result - with size limit to prevent memory issues
+    if (cache.size >= MAX_CACHE_ENTRIES) {
+      // Remove oldest entry
+      let oldestKey: string | null = null;
+      let oldestTime = Infinity;
+      for (const [key, value] of cache.entries()) {
+        if (value.timestamp < oldestTime) {
+          oldestTime = value.timestamp;
+          oldestKey = key;
+        }
+      }
+      if (oldestKey) cache.delete(oldestKey);
+    }
     cache.set(cacheKey, { data: responseData, timestamp: Date.now() });
     
-    // Clean old cache entries
+    // Clean expired cache entries
     for (const [key, value] of cache.entries()) {
       if (Date.now() - value.timestamp > CACHE_TTL) {
         cache.delete(key);
