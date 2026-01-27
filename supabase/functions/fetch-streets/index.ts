@@ -58,9 +58,14 @@ function getRandomEndpoint(): string {
 }
 
 // Quick count query with shorter timeout - skip if it fails
-async function getElementCount(bbox: string, highwayTags: string[]): Promise<number> {
+async function getElementCount(bbox: string, highwayTags: string[], includeBuildings: boolean): Promise<number> {
   const railwayRegex = RAILWAY_TYPES.join('|');
   const aerowayRegex = AEROWAY_TYPES.join('|');
+  
+  let buildingQuery = '';
+  if (includeBuildings) {
+    buildingQuery = `way["building"](${bbox});`;
+  }
   
   const countQuery = `
     [out:json][timeout:5];
@@ -74,6 +79,7 @@ async function getElementCount(bbox: string, highwayTags: string[]): Promise<num
       way["leisure"="park"](${bbox});
       way["landuse"~"^(grass|meadow|forest)$"](${bbox});
       way["natural"~"^(wood|beach)$"](${bbox});
+      ${buildingQuery}
     );
     out count;
   `;
@@ -114,10 +120,14 @@ function buildQuery(params: {
   bbox: string;
   highwayTags: string[];
   includePolygons: boolean;
+  includeBuildings: boolean;
 }): string {
-  const { bbox, highwayTags, includePolygons } = params;
+  const { bbox, highwayTags, includePolygons, includeBuildings } = params;
   const railwayRegex = RAILWAY_TYPES.join('|');
   const aerowayRegex = AEROWAY_TYPES.join('|');
+
+  // Building query - only when requested
+  const buildingQuery = includeBuildings ? `way["building"](${bbox});` : '';
 
   if (!includePolygons) {
     // Reduced mode: only linear features (roads, railways, aeroways) - shorter timeout
@@ -127,6 +137,7 @@ function buildQuery(params: {
         way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
         way["railway"~"^(${railwayRegex})$"](${bbox});
         way["aeroway"~"^(${aerowayRegex})$"](${bbox});
+        ${buildingQuery}
       );
       out geom;
     `;
@@ -145,6 +156,7 @@ function buildQuery(params: {
       way["leisure"="park"](${bbox});
       way["landuse"~"^(grass|meadow|forest)$"](${bbox});
       way["natural"~"^(wood|beach)$"](${bbox});
+      ${buildingQuery}
     );
     out geom;
   `;
@@ -200,7 +212,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { lat, lng, distance, skipService = false } = await req.json();
+    const { lat, lng, distance, skipService = false, includeBuildings = false } = await req.json();
 
     if (!lat || !lng || !distance) {
       return new Response(
@@ -209,8 +221,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create cache key
-    const cacheKey = `${lat.toFixed(3)}-${lng.toFixed(3)}-${distance}-${skipService}`;
+    // Create cache key (include buildings flag)
+    const cacheKey = `${lat.toFixed(3)}-${lng.toFixed(3)}-${distance}-${skipService}-${includeBuildings}`;
     const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       console.log('Cache hit for:', cacheKey);
@@ -220,7 +232,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Fetching streets for lat=${lat}, lng=${lng}, distance=${distance}m, skipService=${skipService}`);
+    console.log(`Fetching streets for lat=${lat}, lng=${lng}, distance=${distance}m, skipService=${skipService}, buildings=${includeBuildings}`);
 
     const distanceNum = Number(distance);
     const radius = Math.min(5000, Math.max(2000, distanceNum));
@@ -242,7 +254,7 @@ Deno.serve(async (req) => {
 
     // CRITICAL FIX: Check element count BEFORE fetching full data to avoid memory crashes
     console.log('Checking element count...');
-    const estimatedCount = await getElementCount(bbox, highwayTags);
+    const estimatedCount = await getElementCount(bbox, highwayTags, includeBuildings);
     console.log(`Estimated element count: ${estimatedCount}`);
 
     let useReducedMode = estimatedCount > ELEMENT_COUNT_THRESHOLD;
@@ -259,7 +271,7 @@ Deno.serve(async (req) => {
       console.log(`Using FULL mode (${estimatedCount} elements estimated)`);
     }
 
-    const query = buildQuery({ bbox, highwayTags: finalHighwayTags, includePolygons });
+    const query = buildQuery({ bbox, highwayTags: finalHighwayTags, includePolygons, includeBuildings });
     const elements = await fetchOverpass(query);
 
     if (elements === null) {
@@ -296,6 +308,7 @@ Deno.serve(async (req) => {
     const coastlineLines: [number, number][][] = [];
     const parkPolygons: [number, number][][] = [];
     const forestPolygons: [number, number][][] = [];
+    const buildingPolygons: [number, number][][] = [];
 
     for (const element of elements) {
       if (element.type !== 'way') continue;
@@ -386,6 +399,18 @@ Deno.serve(async (req) => {
           forestPolygons.push(points);
         }
       }
+      else if (tags.building) {
+        // Building outlines - requires closed polygon
+        const points: [number, number][] = [];
+        for (const pt of geom) {
+          if (pt?.lat !== undefined && pt?.lon !== undefined) {
+            points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+          }
+        }
+        if (points.length >= 3) {
+          buildingPolygons.push(points);
+        }
+      }
     }
 
     const streetData: StreetData[] = activeStreetTypes.map((st) => ({
@@ -394,7 +419,7 @@ Deno.serve(async (req) => {
     }));
 
     const totalStreets = streetData.reduce((sum, st) => sum + st.coordinates.length, 0);
-    console.log(`Returning ${totalStreets} streets, ${railwayLines.length} railways, ${aerowayLines.length} aeroways, ${coastlineLines.length} coastlines, ${waterPolygons.length} water, ${parkPolygons.length} parks, ${forestPolygons.length} forests`);
+    console.log(`Returning ${totalStreets} streets, ${railwayLines.length} railways, ${aerowayLines.length} aeroways, ${coastlineLines.length} coastlines, ${waterPolygons.length} water, ${parkPolygons.length} parks, ${forestPolygons.length} forests, ${buildingPolygons.length} buildings`);
 
     const responseData = { 
       streets: streetData,
@@ -404,6 +429,7 @@ Deno.serve(async (req) => {
       water: waterPolygons,
       parks: parkPolygons,
       forests: forestPolygons,
+      buildings: buildingPolygons,
     };
     
     // Cache the result
