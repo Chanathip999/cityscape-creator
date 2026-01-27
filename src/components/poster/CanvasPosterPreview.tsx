@@ -116,7 +116,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   // Too high increases tile count and backend load.
   const fetchDistance = Math.max(distance, compensatedDistance) * 1.5;
 
-  const { streets, railways, water, parks, isLoading, error } = useStreetData({
+  const { streets, railways, aeroways, coastlines, water, parks, forests, isLoading, error } = useStreetData({
     latitude,
     longitude,
     distance: fetchDistance,
@@ -157,6 +157,24 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     // residential/tertiary get a higher minimum (1px instead of 0.5px)
     const minWidth = ['residential', 'tertiary', 'living_street', 'unclassified'].includes(type) ? 1.0 : 0.5;
     return Math.max(minWidth, Math.min(baseWidth * scaleFactor, 8));
+  }, []);
+
+  // Helper to adjust color brightness/saturation for forests
+  const adjustColor = useCallback((hexColor: string, darken: number, saturate: number): string => {
+    // Parse hex to RGB
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hexColor);
+    if (!result) return hexColor;
+    
+    let r = parseInt(result[1], 16);
+    let g = parseInt(result[2], 16);
+    let b = parseInt(result[3], 16);
+    
+    // Darken
+    r = Math.max(0, r - darken);
+    g = Math.max(0, g - darken + saturate); // Boost green for forest feel
+    b = Math.max(0, b - darken);
+    
+    return `rgb(${r}, ${g}, ${b})`;
   }, []);
 
   const getCropLimits = useCallback(() => {
@@ -236,10 +254,63 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     ctx.fillStyle = theme.bg;
     ctx.fillRect(0, 0, width, height);
 
-    // z=1: Draw water first (below parks)
+    // z=0.5: Draw coastlines (land-water boundaries)
+    if (coastlines && coastlines.length > 0) {
+      ctx.strokeStyle = theme.water;
+      ctx.lineWidth = Math.max(2, 3 * (width / 864));
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      
+      for (const polyline of coastlines) {
+        if (polyline.length < 2) continue;
+        
+        ctx.beginPath();
+        const start = toCanvasCoords(polyline[0][0], polyline[0][1], width, height, bounds);
+        ctx.moveTo(start.x, start.y);
+        
+        for (let i = 1; i < polyline.length; i++) {
+          const point = toCanvasCoords(polyline[i][0], polyline[i][1], width, height, bounds);
+          ctx.lineTo(point.x, point.y);
+        }
+        ctx.stroke();
+      }
+    }
+
+    // z=1: Draw water (below parks)
     if (water && water.length > 0) {
       ctx.fillStyle = theme.water;
+      ctx.strokeStyle = theme.water;
+      ctx.lineWidth = Math.max(1, 2 * (width / 864));
+      
       for (const polygon of water) {
+        if (polygon.length < 2) continue;
+        
+        ctx.beginPath();
+        const start = toCanvasCoords(polygon[0][0], polygon[0][1], width, height, bounds);
+        ctx.moveTo(start.x, start.y);
+        
+        for (let i = 1; i < polygon.length; i++) {
+          const point = toCanvasCoords(polygon[i][0], polygon[i][1], width, height, bounds);
+          ctx.lineTo(point.x, point.y);
+        }
+        
+        // Rivers/streams are lines, lakes are polygons
+        if (polygon.length >= 3) {
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          ctx.stroke();
+        }
+      }
+    }
+
+    // z=1.5: Draw forests (below parks, above water)
+    if (forests && forests.length > 0) {
+      // Slightly darker/greener than parks
+      const forestColor = adjustColor(theme.parks, -20, 10);
+      ctx.fillStyle = forestColor;
+      
+      for (const polygon of forests) {
         if (polygon.length < 3) continue;
         
         ctx.beginPath();
@@ -255,7 +326,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       }
     }
 
-    // z=2: Draw parks (above water)
+    // z=2: Draw parks (above water/forests)
     if (parks && parks.length > 0) {
       ctx.fillStyle = theme.parks;
       for (const polygon of parks) {
@@ -271,6 +342,29 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
         }
         ctx.closePath();
         ctx.fill();
+      }
+    }
+
+    // z=2.3: Draw aeroways (runways, taxiways)
+    if (aeroways && aeroways.length > 0) {
+      // Runways are typically gray/dark
+      ctx.strokeStyle = theme.roadService || '#666666';
+      ctx.lineWidth = Math.max(3, 6 * (width / 864));
+      ctx.lineCap = 'butt';
+      ctx.lineJoin = 'miter';
+      
+      for (const polyline of aeroways) {
+        if (polyline.length < 2) continue;
+        
+        ctx.beginPath();
+        const start = toCanvasCoords(polyline[0][0], polyline[0][1], width, height, bounds);
+        ctx.moveTo(start.x, start.y);
+        
+        for (let i = 1; i < polyline.length; i++) {
+          const point = toCanvasCoords(polyline[i][0], polyline[i][1], width, height, bounds);
+          ctx.lineTo(point.x, point.y);
+        }
+        ctx.stroke();
       }
     }
 
