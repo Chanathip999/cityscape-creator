@@ -269,36 +269,72 @@ export const useStreetData = ({
       abortControllerRef.current = new AbortController();
 
       try {
-        const tiles = calculateTiles(latitude, longitude, distance);
+        // OPTIMIZATION: Fetch streets and buildings in PARALLEL
+        // Streets use full tile coverage, buildings use smaller radius for speed
+        const streetTiles = calculateTiles(latitude, longitude, distance);
         
-        // Always fetch all street types including service for maximum detail
-        // The tile-based approach handles this efficiently
+        // Buildings: use smaller radius (max 3km) and fewer tiles to avoid memory issues
+        const buildingRadius = Math.min(distance, 3000);
+        const buildingTiles = includeBuildings ? calculateTiles(latitude, longitude, buildingRadius).slice(0, 9) : [];
+        
         const skipService = false;
-        console.log(`Fetching ${tiles.length} tile(s) for area (skipService: ${skipService}, buildings: ${includeBuildings})`);
+        console.log(`Fetching ${streetTiles.length} street tiles + ${buildingTiles.length} building tiles in parallel`);
 
-        // Smart batching: fetch in small concurrent batches to avoid rate limiting
-        // while still being much faster than sequential
+        // PARALLEL FETCH: Streets and buildings simultaneously
         const BATCH_SIZE = 10;
-        const results: TileResult[] = [];
         
-        for (let i = 0; i < tiles.length; i += BATCH_SIZE) {
-          const batch = tiles.slice(i, i + BATCH_SIZE);
-          const batchResults = await Promise.all(
-            batch.map(tile => fetchTileWithRetry(tile.lat, tile.lng, tile.radius, skipService, includeBuildings))
-          );
-          
-          for (const result of batchResults) {
-            if (result) results.push(result);
+        // Start both fetches at the same time
+        const streetFetchPromise = (async () => {
+          const results: TileResult[] = [];
+          for (let i = 0; i < streetTiles.length; i += BATCH_SIZE) {
+            const batch = streetTiles.slice(i, i + BATCH_SIZE);
+            const batchResults = await Promise.all(
+              batch.map(tile => fetchTileWithRetry(tile.lat, tile.lng, tile.radius, skipService, false))
+            );
+            for (const result of batchResults) {
+              if (result) results.push(result);
+            }
           }
-        }
+          return results;
+        })();
 
-        if (results.length === 0) {
+        const buildingFetchPromise = (async () => {
+          if (!includeBuildings || buildingTiles.length === 0) return [];
+          const results: TileResult[] = [];
+          // Fetch building tiles in smaller batches to avoid memory issues
+          const BUILDING_BATCH_SIZE = 3;
+          for (let i = 0; i < buildingTiles.length; i += BUILDING_BATCH_SIZE) {
+            const batch = buildingTiles.slice(i, i + BUILDING_BATCH_SIZE);
+            const batchResults = await Promise.all(
+              batch.map(tile => fetchTileWithRetry(tile.lat, tile.lng, tile.radius, true, true))
+            );
+            for (const result of batchResults) {
+              if (result) results.push(result);
+            }
+          }
+          return results;
+        })();
+
+        // Wait for both to complete
+        const [streetResults, buildingResults] = await Promise.all([
+          streetFetchPromise,
+          buildingFetchPromise
+        ]);
+
+        if (streetResults.length === 0) {
           setError('Failed to fetch street data');
           return;
         }
 
-        // Merge all tile results
-        const merged = mergeResults(results);
+        // Merge street results
+        const merged = mergeResults(streetResults);
+        
+        // Merge building results separately (they come from different tiles)
+        if (buildingResults.length > 0) {
+          const buildingMerged = mergeResults(buildingResults);
+          merged.buildings = buildingMerged.buildings;
+          console.log(`Loaded ${merged.buildings.length} buildings from ${buildingResults.length} tiles`);
+        }
 
         console.log('Merged street data:', merged.streets.map(s => ({
           type: s.type,

@@ -122,10 +122,20 @@ function buildQuery(params: {
   highwayTags: string[];
   includePolygons: boolean;
   includeBuildings: boolean;
+  buildingsOnly?: boolean;
 }): string {
-  const { bbox, highwayTags, includePolygons, includeBuildings } = params;
+  const { bbox, highwayTags, includePolygons, includeBuildings, buildingsOnly } = params;
   const railwayRegex = RAILWAY_TYPES.join('|');
   const aerowayRegex = AEROWAY_TYPES.join('|');
+
+  // OPTIMIZATION: Buildings-only query for parallel fetching
+  if (buildingsOnly) {
+    return `
+      [out:json][timeout:12];
+      way["building"](${bbox});
+      out geom;
+    `;
+  }
 
   // Building query - only when requested
   const buildingQuery = includeBuildings ? `way["building"](${bbox});` : '';
