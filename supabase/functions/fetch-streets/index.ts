@@ -102,9 +102,9 @@ function buildQuery(params: {
   const aerowayRegex = AEROWAY_TYPES.join('|');
 
   if (!includePolygons) {
-    // Reduced mode: only linear features (roads, railways, aeroways)
+    // Reduced mode: only linear features (roads, railways, aeroways) - shorter timeout
     return `
-      [out:json][timeout:30];
+      [out:json][timeout:20];
       (
         way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
         way["railway"~"^(${railwayRegex})$"](${bbox});
@@ -114,9 +114,9 @@ function buildQuery(params: {
     `;
   }
 
-  // Full mode with all features
+  // Full mode with all features - shorter timeout for speed
   return `
-    [out:json][timeout:45];
+    [out:json][timeout:25];
     (
       way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
       way["railway"~"^(${railwayRegex})$"](${bbox});
