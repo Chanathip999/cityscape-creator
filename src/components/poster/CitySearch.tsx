@@ -38,8 +38,10 @@ export const CitySearch = ({ onCitySelect }: CitySearchProps) => {
       return;
     }
 
+    // Start loading immediately for instant feedback
+    setIsLoading(true);
+    
     debounceRef.current = setTimeout(async () => {
-      setIsLoading(true);
       try {
         const { data, error } = await supabase.functions.invoke('geonames-search', {
           body: { query: query.trim() },
@@ -59,7 +61,7 @@ export const CitySearch = ({ onCitySelect }: CitySearchProps) => {
       } finally {
         setIsLoading(false);
       }
-    }, 50); // 50ms debounce for near-instant feel
+    }, 15); // 15ms ultra-fast debounce for instant feel
 
     return () => {
       if (debounceRef.current) {

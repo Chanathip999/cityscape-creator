@@ -26,6 +26,7 @@ interface CanvasPosterPreviewProps {
   config: PosterConfig;
   onExportReady?: (canvas: HTMLCanvasElement) => void;
   containerRef?: React.RefObject<HTMLDivElement>;
+  onMapCenterChange?: (lat: number, lng: number) => void; // New callback for coordinate sync
 }
 
 /**
@@ -68,7 +69,7 @@ const handleContextMenu = (e: React.MouseEvent) => {
   return false;
 };
 
-export const CanvasPosterPreview = ({ config, onExportReady, containerRef: externalContainerRef }: CanvasPosterPreviewProps) => {
+export const CanvasPosterPreview = ({ config, onExportReady, containerRef: externalContainerRef, onMapCenterChange }: CanvasPosterPreviewProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const internalContainerRef = useRef<HTMLDivElement>(null);
   const containerRef = externalContainerRef || internalContainerRef;
@@ -642,8 +643,15 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   }, [isPanning, canvasWidth, canvasHeight, containerRef]);
 
   const handleMouseUp = useCallback(() => {
+    if (isPanning && onMapCenterChange) {
+      // Calculate the new center based on pan offset
+      const bounds = getCropLimits();
+      const centerLat = (bounds.minLat + bounds.maxLat) / 2;
+      const centerLng = (bounds.minLng + bounds.maxLng) / 2;
+      onMapCenterChange(centerLat, centerLng);
+    }
     setIsPanning(false);
-  }, []);
+  }, [isPanning, onMapCenterChange, getCropLimits]);
 
   const handleMouseLeave = useCallback(() => {
     setIsPanning(false);

@@ -32,6 +32,7 @@ interface RenderRequest {
   };
   fontFamily: string;
   fontSize: string;
+  fontSizeScale?: number; // Fine-tuning multiplier (0.5 - 2.0)
   customTextColor?: string;
   customMotorwayColor?: string;
   customRoadColor?: string;
@@ -42,6 +43,24 @@ interface RenderRequest {
   showCountry?: boolean;
   showCoordinates?: boolean;
   textPosition?: 'bottom' | 'center' | 'top';
+  layerVisibility?: {
+    water: boolean;
+    forests: boolean;
+    parks: boolean;
+    railways: boolean;
+    aeroways: boolean;
+    coastlines: boolean;
+    buildings: boolean;
+  };
+  layerColors?: {
+    water?: string;
+    forests?: string;
+    parks?: string;
+    railways?: string;
+    aeroways?: string;
+    coastlines?: string;
+    buildings?: string;
+  };
 }
 
 interface StreetSegment {
@@ -623,13 +642,14 @@ function generateSVG(request: RenderRequest, data: {
   // Scale factor for line widths (matching Python: width / 1200)
   const scaleFactor = width / 1200;
   
-  // Font scaling
+  // Font scaling with fontSizeScale support
   const fontScale = height / 1000;
   const fontMultiplier = FONT_SIZE_MULTIPLIERS[request.fontSize] || 1.0;
+  const fontSizeScale = request.fontSizeScale || 1.0;
   
-  const titleSize = BASE_FONT_SIZES.title * fontScale * fontMultiplier;
-  const subtitleSize = BASE_FONT_SIZES.subtitle * fontScale * fontMultiplier;
-  const coordsSize = BASE_FONT_SIZES.coords * fontScale * fontMultiplier;
+  const titleSize = BASE_FONT_SIZES.title * fontScale * fontMultiplier * fontSizeScale;
+  const subtitleSize = BASE_FONT_SIZES.subtitle * fontScale * fontMultiplier * fontSizeScale;
+  const coordsSize = BASE_FONT_SIZES.coords * fontScale * fontMultiplier * fontSizeScale;
   const attrSize = BASE_FONT_SIZES.attribution * fontScale;
   
   const textColor = request.customTextColor || theme.text;
@@ -661,10 +681,21 @@ function generateSVG(request: RenderRequest, data: {
   // Background
   svg += `<rect width="${width}" height="${height}" fill="${theme.bg}"/>`;
   
+  // Default layer visibility (all enabled)
+  const layerVisibility = request.layerVisibility || {
+    water: true,
+    forests: true,
+    parks: true,
+    railways: true,
+    aeroways: true,
+    coastlines: true,
+    buildings: false,
+  };
+  
   // Layer 0.5: Coastlines (z-order 0.5 - first layer)
-  const coastlineColor = theme.water; // Use water color for coastlines
-  const coastlineStrokeWidth = 0.8 * scaleFactor;
-  {
+  if (layerVisibility.coastlines) {
+    const coastlineColor = request.layerColors?.coastlines || theme.water;
+    const coastlineStrokeWidth = 0.8 * scaleFactor;
     const dParts: string[] = [];
     for (const polyline of data.coastlines) {
       if (polyline.length < 2) continue;
@@ -680,43 +711,48 @@ function generateSVG(request: RenderRequest, data: {
   }
   
   // Layer 1: Water (z-order 1)
-  for (const polygon of data.water) {
-    if (polygon.length < 3) continue;
-    const points = polygon.map(([lat, lng]) => {
-      const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    }).join(' ');
-    svg += `<polygon points="${points}" fill="${theme.water}"/>`;
+  if (layerVisibility.water) {
+    const waterColor = request.layerColors?.water || theme.water;
+    for (const polygon of data.water) {
+      if (polygon.length < 3) continue;
+      const points = polygon.map(([lat, lng]) => {
+        const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+      }).join(' ');
+      svg += `<polygon points="${points}" fill="${waterColor}"/>`;
+    }
   }
   
   // Layer 1.5: Forests (z-order 1.5)
-  // Use a slightly darker/different shade of parks color for forests
-  const forestColor = adjustForestColor(theme.parks);
-  
-  for (const polygon of data.forests) {
-    if (polygon.length < 3) continue;
-    const points = polygon.map(([lat, lng]) => {
-      const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    }).join(' ');
-    svg += `<polygon points="${points}" fill="${forestColor}"/>`;
+  if (layerVisibility.forests) {
+    const forestColor = request.layerColors?.forests || adjustForestColor(theme.parks);
+    for (const polygon of data.forests) {
+      if (polygon.length < 3) continue;
+      const points = polygon.map(([lat, lng]) => {
+        const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+      }).join(' ');
+      svg += `<polygon points="${points}" fill="${forestColor}"/>`;
+    }
   }
   
   // Layer 2: Parks (z-order 2)
-  for (const polygon of data.parks) {
-    if (polygon.length < 3) continue;
-    const points = polygon.map(([lat, lng]) => {
-      const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    }).join(' ');
-    svg += `<polygon points="${points}" fill="${theme.parks}"/>`;
+  if (layerVisibility.parks) {
+    const parksColor = request.layerColors?.parks || theme.parks;
+    for (const polygon of data.parks) {
+      if (polygon.length < 3) continue;
+      const points = polygon.map(([lat, lng]) => {
+        const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+      }).join(' ');
+      svg += `<polygon points="${points}" fill="${parksColor}"/>`;
+    }
   }
   
-  // Layer 2.3: Aeroways (z-order 2.3 - runways and taxiways in yellow)
-  const aerowayColor = '#E8D44D'; // Yellow color for aeroways (matching frontend)
-  const aerowayStrokeWidth = 1.5 * scaleFactor;
-  
-  {
+  // Layer 2.3: Aeroways (z-order 2.3 - runways and taxiways)
+  if (layerVisibility.aeroways) {
+    const aerowayColor = request.layerColors?.aeroways || '#E8D44D';
+    const aerowayStrokeWidth = 1.5 * scaleFactor;
     const dParts: string[] = [];
     for (const polyline of data.aeroways) {
       if (polyline.length < 2) continue;
@@ -732,10 +768,9 @@ function generateSVG(request: RenderRequest, data: {
   }
   
   // Layer 2.5: Railways (z-order 2.5 - between aeroways and streets)
-  const railwayColor = theme.railway || theme.roadPrimary;
-  const railwayStrokeWidth = RAILWAY_WIDTH * scaleFactor;
-  
-  {
+  if (layerVisibility.railways) {
+    const railwayColor = request.layerColors?.railways || theme.railway || theme.roadPrimary;
+    const railwayStrokeWidth = RAILWAY_WIDTH * scaleFactor;
     const dParts: string[] = [];
     for (const polyline of data.railways) {
       if (polyline.length < 2) continue;
