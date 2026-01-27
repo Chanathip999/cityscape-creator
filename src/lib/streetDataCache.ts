@@ -1,14 +1,19 @@
 /**
  * IndexedDB cache for street data - persists across browser sessions
  * Dramatically speeds up repeated views of the same area
+ * 
+ * AGGRESSIVE CACHING STRATEGY:
+ * - 7-day TTL for tile data (OSM data doesn't change frequently)
+ * - Prefetching for popular cities on app load
+ * - Larger cache keys for better hit rates
  */
 
 const DB_NAME = 'poster-street-cache';
 // IMPORTANT: Increment version when data format changes (e.g., coordinate precision)
-// v2: Changed from 3 decimal places to 5 decimal places for smooth lines
-const DB_VERSION = 2;
+// v3: Extended TTL to 7 days for aggressive caching
+const DB_VERSION = 3;
 const STORE_NAME = 'tiles';
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days (up from 24h)
 
 interface CachedTile {
   key: string;

@@ -4,10 +4,14 @@ import { PosterEditor } from '@/components/poster/PosterEditor';
 import { usePaymentDownload } from '@/hooks/usePaymentDownload';
 import { DEFAULT_CONFIG, DEFAULT_LAYER_VISIBILITY, ExportFormat, ExportResolution, PosterConfig } from '@/types/poster';
 import { toast } from '@/hooks/use-toast';
+import { startCityPrefetch } from '@/lib/cityPrefetch';
 
 // Clear old localStorage config on load to ensure new defaults are used
 // This runs once on initial load
 const CURRENT_CONFIG_VERSION = 5; // Increment to force reset - parks/forests/coastlines disabled
+
+// Start prefetching popular cities in background (only once)
+let prefetchInitialized = false;
 
 const getInitialConfig = (): PosterConfig => {
   try {
@@ -52,6 +56,14 @@ const Index = () => {
   const { verifyAndDownload } = usePaymentDownload();
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [initialConfig] = useState<PosterConfig>(getInitialConfig);
+
+  // Start background prefetch of popular cities (once per session)
+  useEffect(() => {
+    if (!prefetchInitialized) {
+      prefetchInitialized = true;
+      startCityPrefetch();
+    }
+  }, []);
 
   useEffect(() => {
     const payment = searchParams.get('payment');
