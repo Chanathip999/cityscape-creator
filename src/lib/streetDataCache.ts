@@ -96,6 +96,19 @@ export async function clearOldCache(): Promise<void> {
   }
 }
 
+// Clear ALL cached tiles - for manual refresh
+export async function clearAllCache(): Promise<void> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.clear();
+    console.log('Street data cache cleared');
+  } catch (error) {
+    console.error('Failed to clear cache:', error);
+  }
+}
+
 // Generate cache key from tile parameters
 export function getTileCacheKey(lat: number, lng: number, radius: number): string {
   return `tile-${lat.toFixed(3)}-${lng.toFixed(3)}-${radius}`;

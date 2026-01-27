@@ -314,7 +314,7 @@ export const DEFAULT_CONFIG: PosterConfig = {
   latitude: 52.52,
   longitude: 13.405,
   distance: 15000,
-  theme: POSTER_THEMES[0],
+  theme: POSTER_THEMES[0], // Ocean (bright/light) theme
   width: 12,
   height: 16,
   fontFamily: 'mono',

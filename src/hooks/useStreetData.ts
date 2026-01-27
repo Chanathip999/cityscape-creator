@@ -41,7 +41,7 @@ const MAX_TILE_RADIUS = 5000;
 // Maximum tiles to prevent excessive requests
 const MAX_TILES = 25;
 
-// Calculate tiles needed for a given area - prioritizes center coverage
+// Calculate tiles needed for a given area - ensures center is always included
 function calculateTiles(lat: number, lng: number, distance: number): { lat: number; lng: number; radius: number }[] {
   // For small areas, single tile is enough
   if (distance <= MAX_TILE_RADIUS) {
@@ -50,7 +50,7 @@ function calculateTiles(lat: number, lng: number, distance: number): { lat: numb
 
   const tiles: { lat: number; lng: number; radius: number }[] = [];
   
-  // Always start with center tile
+  // CRITICAL: Always start with exact center tile at the user's coordinates
   tiles.push({ lat, lng, radius: MAX_TILE_RADIUS });
 
   // Tile spacing with overlap for seamless coverage
@@ -67,8 +67,36 @@ function calculateTiles(lat: number, lng: number, distance: number): { lat: numb
   const latStep = tileSpacing / metersPerDegreeLat;
   const lngStep = tileSpacing / metersPerDegreeLng;
 
-  // Add tiles in concentric rings around center
-  for (let ring = 1; ring <= numTilesPerSide && tiles.length < MAX_TILES; ring++) {
+  // Add cardinal directions first (N, S, E, W) to fill gaps around center
+  const cardinalOffsets = [
+    { dLat: latStep, dLng: 0 },      // North
+    { dLat: -latStep, dLng: 0 },     // South
+    { dLat: 0, dLng: lngStep },      // East
+    { dLat: 0, dLng: -lngStep },     // West
+  ];
+  
+  for (const offset of cardinalOffsets) {
+    if (tiles.length < MAX_TILES) {
+      tiles.push({ lat: lat + offset.dLat, lng: lng + offset.dLng, radius: MAX_TILE_RADIUS });
+    }
+  }
+
+  // Add diagonal tiles
+  const diagonalOffsets = [
+    { dLat: latStep, dLng: lngStep },    // NE
+    { dLat: latStep, dLng: -lngStep },   // NW
+    { dLat: -latStep, dLng: lngStep },   // SE
+    { dLat: -latStep, dLng: -lngStep },  // SW
+  ];
+  
+  for (const offset of diagonalOffsets) {
+    if (tiles.length < MAX_TILES) {
+      tiles.push({ lat: lat + offset.dLat, lng: lng + offset.dLng, radius: MAX_TILE_RADIUS });
+    }
+  }
+
+  // Add outer ring tiles for larger areas
+  for (let ring = 2; ring <= numTilesPerSide && tiles.length < MAX_TILES; ring++) {
     // Top and bottom rows of this ring
     for (let col = -ring; col <= ring && tiles.length < MAX_TILES; col++) {
       tiles.push({ lat: lat + ring * latStep, lng: lng + col * lngStep, radius: MAX_TILE_RADIUS });
@@ -85,7 +113,7 @@ function calculateTiles(lat: number, lng: number, distance: number): { lat: numb
     }
   }
 
-  console.log(`Created ${tiles.length} tiles for ${distance}m radius (capped at ${MAX_TILES})`);
+  console.log(`Created ${tiles.length} tiles for ${distance}m radius (center: ${lat.toFixed(3)}, ${lng.toFixed(3)})`);
   return tiles;
 }
 
