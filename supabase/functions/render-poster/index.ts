@@ -14,9 +14,12 @@ interface TextPositionOffset {
   y: number;
 }
 
+type TextOrientation = 'horizontal' | 'vertical';
+
 interface TextElementConfig {
   position?: TextPositionOffset;
   scale?: number;
+  orientation?: TextOrientation;
 }
 
 interface TextOverrides {
@@ -854,6 +857,10 @@ function generateSVG(request: RenderRequest, data: {
   const getTextScale = (elementId: 'city' | 'country' | 'coordinates') => {
     return request.textOverrides?.[elementId]?.scale || 1;
   };
+
+  const getTextOrientation = (elementId: 'city' | 'country' | 'coordinates'): TextOrientation => {
+    return request.textOverrides?.[elementId]?.orientation || 'horizontal';
+  };
   
   // Layer 5: Typography (z-order 11 in Python)
   const cityText = request.city.toUpperCase();
@@ -864,6 +871,8 @@ function generateSVG(request: RenderRequest, data: {
   if (request.showCity !== false) {
     const cityScale = getTextScale('city');
     const cityPos = getTextPos('city', TEXT_POSITIONS.title);
+    const cityOrientation = getTextOrientation('city');
+    const isVertical = cityOrientation === 'vertical';
     
     const charWidth = titleSize * 0.6;
     const letterSpacing = TRACKING.title * titleSize;
@@ -871,13 +880,14 @@ function generateSVG(request: RenderRequest, data: {
     const maxTextWidth = width * 0.9;
     
     let adjustedTitleSize = titleSize * cityScale;
-    if (estimatedTextWidth > maxTextWidth) {
+    if (estimatedTextWidth > maxTextWidth && !isVertical) {
       const scaleFactor = maxTextWidth / estimatedTextWidth;
       adjustedTitleSize = adjustedTitleSize * scaleFactor;
     }
     const adjustedLetterSpacing = TRACKING.title * adjustedTitleSize;
     
-    svg += `<text x="${cityPos.x.toFixed(1)}" y="${cityPos.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${adjustedTitleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.title}" letter-spacing="${adjustedLetterSpacing.toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif">${cityText}</text>`;
+    const transform = isVertical ? ` transform="rotate(-90, ${cityPos.x.toFixed(1)}, ${cityPos.y.toFixed(1)})"` : '';
+    svg += `<text x="${cityPos.x.toFixed(1)}" y="${cityPos.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${adjustedTitleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.title}" letter-spacing="${adjustedLetterSpacing.toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif"${transform}>${cityText}</text>`;
     
     // Decorative line between city and country (only if no custom position)
     if (!request.textOverrides?.city?.position) {
@@ -889,18 +899,24 @@ function generateSVG(request: RenderRequest, data: {
   if (request.showCountry !== false) {
     const countryScale = getTextScale('country');
     const countryPos = getTextPos('country', TEXT_POSITIONS.subtitle);
+    const countryOrientation = getTextOrientation('country');
+    const isVertical = countryOrientation === 'vertical';
     const countryFontSize = subtitleSize * countryScale;
     
-    svg += `<text x="${countryPos.x.toFixed(1)}" y="${countryPos.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${countryFontSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.subtitle}" letter-spacing="${(TRACKING.subtitle * countryFontSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif">${countryText}</text>`;
+    const transform = isVertical ? ` transform="rotate(-90, ${countryPos.x.toFixed(1)}, ${countryPos.y.toFixed(1)})"` : '';
+    svg += `<text x="${countryPos.x.toFixed(1)}" y="${countryPos.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${countryFontSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.subtitle}" letter-spacing="${(TRACKING.subtitle * countryFontSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif"${transform}>${countryText}</text>`;
   }
   
   // Coordinates (only if showCoordinates)
   if (request.showCoordinates !== false) {
     const coordsScale = getTextScale('coordinates');
     const coordsPos = getTextPos('coordinates', TEXT_POSITIONS.coords);
+    const coordsOrientation = getTextOrientation('coordinates');
+    const isVertical = coordsOrientation === 'vertical';
     const coordsFontSize = coordsSize * coordsScale;
     
-    svg += `<text x="${coordsPos.x.toFixed(1)}" y="${coordsPos.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${coordsFontSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.coords}" letter-spacing="${(TRACKING.coords * coordsFontSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif" opacity="0.7">${coordsText}</text>`;
+    const transform = isVertical ? ` transform="rotate(-90, ${coordsPos.x.toFixed(1)}, ${coordsPos.y.toFixed(1)})"` : '';
+    svg += `<text x="${coordsPos.x.toFixed(1)}" y="${coordsPos.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${coordsFontSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.coords}" letter-spacing="${(TRACKING.coords * coordsFontSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif" opacity="0.7"${transform}>${coordsText}</text>`;
   }
   
   // Attribution
