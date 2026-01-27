@@ -454,30 +454,8 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       }
     }
 
-    // z=2.8: Draw buildings (between parks and roads)
-    if (layerVisibility.buildings && buildings && buildings.length > 0) {
-      const buildingColor = layerColors.buildings || theme.roadTertiary || '#888888';
-      ctx.fillStyle = buildingColor;
-      ctx.strokeStyle = buildingColor;
-      ctx.lineWidth = Math.max(0.5, 1 * (width / 864));
-      
-      for (const polygon of buildings) {
-        if (polygon.length < 3) continue;
-        
-        ctx.beginPath();
-        const start = toCanvasCoords(polygon[0][0], polygon[0][1], width, height, bounds);
-        ctx.moveTo(start.x, start.y);
-        
-        for (let i = 1; i < polygon.length; i++) {
-          const point = toCanvasCoords(polygon[i][0], polygon[i][1], width, height, bounds);
-          ctx.lineTo(point.x, point.y);
-        }
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
-
     // z=3: Draw streets (service first → motorway last for proper layering)
+    // (moved up - buildings will be drawn AFTER streets to avoid obscuring them)
     const streetOrder = ['service', 'residential', 'tertiary', 'secondary', 'primary', 'motorway'];
 
     for (const streetType of streetOrder) {
@@ -505,6 +483,29 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
         }
         ctx.stroke();
       }
+    }
+
+    // z=4: Draw buildings AFTER streets (so streets remain visible on top)
+    if (layerVisibility.buildings && buildings && buildings.length > 0) {
+      const buildingColor = layerColors.buildings || '#555555';
+      ctx.fillStyle = buildingColor;
+      ctx.globalAlpha = 0.6; // Semi-transparent so streets show through
+      
+      for (const polygon of buildings) {
+        if (polygon.length < 3) continue;
+        
+        ctx.beginPath();
+        const start = toCanvasCoords(polygon[0][0], polygon[0][1], width, height, bounds);
+        ctx.moveTo(start.x, start.y);
+        
+        for (let i = 1; i < polygon.length; i++) {
+          const point = toCanvasCoords(polygon[i][0], polygon[i][1], width, height, bounds);
+          ctx.lineTo(point.x, point.y);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1.0; // Reset alpha
     }
 
     // z=10: Gradient fades (top & bottom) - conditional
