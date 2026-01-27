@@ -16,7 +16,7 @@ export interface PosterTheme {
   gradientColor: string;
 }
 
-export type FontFamily = 'mono' | 'sans' | 'serif' | 'display' | 'elegant' | 'condensed';
+export type FontFamily = 'mono' | 'sans' | 'serif' | 'display' | 'elegant' | 'condensed' | 'script' | 'retro' | 'minimal' | 'brutalist';
 export type FontSize = 'small' | 'medium' | 'large';
 export type PosterOrientation = 'vertical' | 'horizontal';
 export type AspectRatioId = '1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '9:16' | '16:9' | '6:19' | '19:6';
@@ -342,6 +342,10 @@ export const FONT_FAMILIES: { id: FontFamily; name: string; className: string }[
   { id: 'display', name: 'Display', className: 'font-display' },
   { id: 'elegant', name: 'Elegant', className: 'font-elegant' },
   { id: 'condensed', name: 'Condensed', className: 'font-condensed' },
+  { id: 'script', name: 'Script', className: 'font-script' },
+  { id: 'retro', name: 'Retro', className: 'font-retro' },
+  { id: 'minimal', name: 'Minimal', className: 'font-minimal' },
+  { id: 'brutalist', name: 'Brutalist', className: 'font-brutalist' },
 ];
 
 export const TEXT_COLORS: { id: string; name: string; color: string }[] = [

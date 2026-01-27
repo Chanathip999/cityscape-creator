@@ -17,6 +17,10 @@ export const FONT_STACKS: Record<FontFamily, string> = {
   display: '"Bebas Neue", Impact, sans-serif',
   elegant: '"Playfair Display", Georgia, serif',
   condensed: 'Oswald, "Arial Narrow", sans-serif',
+  script: '"Dancing Script", cursive',
+  retro: '"Righteous", cursive',
+  minimal: '"Raleway", sans-serif',
+  brutalist: '"Space Grotesk", sans-serif',
 };
 
 export const FONT_CSS_CLASSES: Record<FontFamily, string> = {
@@ -26,6 +30,10 @@ export const FONT_CSS_CLASSES: Record<FontFamily, string> = {
   display: 'font-display',
   elegant: 'font-elegant',
   condensed: 'font-condensed',
+  script: 'font-script',
+  retro: 'font-retro',
+  minimal: 'font-minimal',
+  brutalist: 'font-brutalist',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

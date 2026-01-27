@@ -14,16 +14,49 @@ interface CachedTile {
   timestamp: number;
 }
 
+let dbInstance: IDBDatabase | null = null;
 let dbPromise: Promise<IDBDatabase> | null = null;
 
 function openDB(): Promise<IDBDatabase> {
+  // If we have an active connection, return it
+  if (dbInstance && dbInstance.transaction) {
+    try {
+      // Test if connection is still valid
+      dbInstance.transaction(STORE_NAME, 'readonly');
+      return Promise.resolve(dbInstance);
+    } catch {
+      // Connection is stale, reset
+      dbInstance = null;
+      dbPromise = null;
+    }
+  }
+  
   if (dbPromise) return dbPromise;
   
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => {
+      dbPromise = null;
+      reject(request.error);
+    };
+    
+    request.onsuccess = () => {
+      dbInstance = request.result;
+      
+      // Handle connection closing unexpectedly
+      dbInstance.onclose = () => {
+        dbInstance = null;
+        dbPromise = null;
+      };
+      
+      dbInstance.onerror = () => {
+        dbInstance = null;
+        dbPromise = null;
+      };
+      
+      resolve(dbInstance);
+    };
     
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
@@ -40,19 +73,26 @@ export async function getCachedTile(key: string): Promise<unknown | null> {
   try {
     const db = await openDB();
     return new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const request = store.get(key);
-      
-      request.onsuccess = () => {
-        const result = request.result as CachedTile | undefined;
-        if (result && Date.now() - result.timestamp < CACHE_TTL) {
-          resolve(result.data);
-        } else {
-          resolve(null);
-        }
-      };
-      request.onerror = () => resolve(null);
+      try {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.get(key);
+        
+        request.onsuccess = () => {
+          const result = request.result as CachedTile | undefined;
+          if (result && Date.now() - result.timestamp < CACHE_TTL) {
+            resolve(result.data);
+          } else {
+            resolve(null);
+          }
+        };
+        request.onerror = () => resolve(null);
+      } catch {
+        // Transaction failed, reset connection
+        dbInstance = null;
+        dbPromise = null;
+        resolve(null);
+      }
     });
   } catch {
     return null;
@@ -63,11 +103,18 @@ export async function setCachedTile(key: string, data: unknown): Promise<void> {
   try {
     const db = await openDB();
     return new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      store.put({ key, data, timestamp: Date.now() });
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
+      try {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.put({ key, data, timestamp: Date.now() });
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      } catch {
+        // Transaction failed, reset connection
+        dbInstance = null;
+        dbPromise = null;
+        resolve();
+      }
     });
   } catch {
     // Silently fail - cache is optional

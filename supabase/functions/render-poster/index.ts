@@ -195,6 +195,20 @@ const FONT_SIZE_MULTIPLIERS: Record<string, number> = {
   large: 1.2,
 };
 
+// Font stacks for SVG rendering - must match posterTypography.ts
+const FONT_STACKS: Record<string, string> = {
+  mono: '"Roboto Mono", ui-monospace, monospace',
+  sans: 'Inter, system-ui, sans-serif',
+  serif: '"Cormorant Garamond", Georgia, serif',
+  display: '"Bebas Neue", Impact, sans-serif',
+  elegant: '"Playfair Display", Georgia, serif',
+  condensed: 'Oswald, "Arial Narrow", sans-serif',
+  script: '"Dancing Script", cursive',
+  retro: '"Righteous", cursive',
+  minimal: '"Raleway", sans-serif',
+  brutalist: '"Space Grotesk", sans-serif',
+};
+
 // Gradient fade positions from Python script (lines 150-182)
 // create_gradient_fade: top gradient at y=0.75-1.0, bottom at y=0.0-0.25
 const GRADIENT_CONFIG = {
@@ -867,6 +881,9 @@ function generateSVG(request: RenderRequest, data: {
   const countryText = request.country.toUpperCase();
   const coordsText = formatCoordinates(request.latitude, request.longitude);
   
+  // Get font family from request or fallback to mono
+  const fontFamily = FONT_STACKS[request.fontFamily] || FONT_STACKS.mono;
+  
   // City name with letter spacing - auto-scale to fit width (only if showCity)
   if (request.showCity !== false) {
     const cityScale = getTextScale('city');
@@ -887,7 +904,7 @@ function generateSVG(request: RenderRequest, data: {
     const adjustedLetterSpacing = TRACKING.title * adjustedTitleSize;
     
     const transform = isVertical ? ` transform="rotate(-90, ${cityPos.x.toFixed(1)}, ${cityPos.y.toFixed(1)})"` : '';
-    svg += `<text x="${cityPos.x.toFixed(1)}" y="${cityPos.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${adjustedTitleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.title}" letter-spacing="${adjustedLetterSpacing.toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif"${transform}>${cityText}</text>`;
+    svg += `<text x="${cityPos.x.toFixed(1)}" y="${cityPos.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${adjustedTitleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.title}" letter-spacing="${adjustedLetterSpacing.toFixed(1)}px" font-family="${fontFamily}"${transform}>${cityText}</text>`;
     
     // Decorative line between city and country (only if no custom position)
     if (!request.textOverrides?.city?.position) {
@@ -904,7 +921,7 @@ function generateSVG(request: RenderRequest, data: {
     const countryFontSize = subtitleSize * countryScale;
     
     const transform = isVertical ? ` transform="rotate(-90, ${countryPos.x.toFixed(1)}, ${countryPos.y.toFixed(1)})"` : '';
-    svg += `<text x="${countryPos.x.toFixed(1)}" y="${countryPos.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${countryFontSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.subtitle}" letter-spacing="${(TRACKING.subtitle * countryFontSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif"${transform}>${countryText}</text>`;
+    svg += `<text x="${countryPos.x.toFixed(1)}" y="${countryPos.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${countryFontSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.subtitle}" letter-spacing="${(TRACKING.subtitle * countryFontSize).toFixed(1)}px" font-family="${fontFamily}"${transform}>${countryText}</text>`;
   }
   
   // Coordinates (only if showCoordinates)
@@ -916,11 +933,11 @@ function generateSVG(request: RenderRequest, data: {
     const coordsFontSize = coordsSize * coordsScale;
     
     const transform = isVertical ? ` transform="rotate(-90, ${coordsPos.x.toFixed(1)}, ${coordsPos.y.toFixed(1)})"` : '';
-    svg += `<text x="${coordsPos.x.toFixed(1)}" y="${coordsPos.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${coordsFontSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.coords}" letter-spacing="${(TRACKING.coords * coordsFontSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif" opacity="0.7"${transform}>${coordsText}</text>`;
+    svg += `<text x="${coordsPos.x.toFixed(1)}" y="${coordsPos.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${coordsFontSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.coords}" letter-spacing="${(TRACKING.coords * coordsFontSize).toFixed(1)}px" font-family="${fontFamily}" opacity="0.7"${transform}>${coordsText}</text>`;
   }
   
   // Attribution
-  svg += `<text x="${width - 10}" y="${height - 10}" text-anchor="end" fill="${textColor}" font-size="${attrSize.toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif" opacity="0.5">© OpenStreetMap contributors</text>`;
+  svg += `<text x="${width - 10}" y="${height - 10}" text-anchor="end" fill="${textColor}" font-size="${attrSize.toFixed(1)}px" font-family="${fontFamily}" opacity="0.5">© OpenStreetMap contributors</text>`;
   
   svg += '</svg>';
   
