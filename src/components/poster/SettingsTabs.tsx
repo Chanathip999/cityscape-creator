@@ -16,9 +16,9 @@ interface SettingsTabsProps {
 type TabId = 'text' | 'colors' | 'layers';
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: 'layers', label: 'Ebenen', icon: Move },
   { id: 'text', label: 'Text', icon: Type },
   { id: 'colors', label: 'Farben', icon: Palette },
-  { id: 'layers', label: 'Ebenen', icon: Move },
 ];
 
 const LAYER_OPTIONS: { id: keyof LayerVisibility; label: string; icon: React.ElementType; colorKey: keyof LayerColors; premium?: boolean; premiumPrice?: string }[] = [
@@ -35,7 +35,7 @@ const LAYER_OPTIONS: { id: keyof LayerVisibility; label: string; icon: React.Ele
 const QUICK_RATIOS: AspectRatioId[] = ['3:4', '4:3', '9:16', '16:9', '1:1'];
 
 export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
-  const [activeTab, setActiveTab] = useState<TabId>('text');
+  const [activeTab, setActiveTab] = useState<TabId>('layers');
 
   const handleLayerToggle = (layerId: keyof LayerVisibility) => {
     onConfigUpdate({
