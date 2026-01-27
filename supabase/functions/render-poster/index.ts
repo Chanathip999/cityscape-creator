@@ -223,6 +223,23 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
   } : { r: 0, g: 0, b: 0 };
 }
 
+// Adjust color for forests (slightly darker than parks)
+function adjustForestColor(hexColor: string): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hexColor);
+  if (!result) return hexColor;
+  
+  let r = parseInt(result[1], 16);
+  let g = parseInt(result[2], 16);
+  let b = parseInt(result[3], 16);
+  
+  // Darken by 20 and boost green slightly
+  r = Math.max(0, r - 20);
+  g = Math.max(0, Math.min(255, g - 10));
+  b = Math.max(0, b - 25);
+  
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Overpass Data Fetching with Tile-based approach for large areas
 // ─────────────────────────────────────────────────────────────────────────────
@@ -234,7 +251,10 @@ const MAX_TILES = 3; // Reduced to prevent memory exceeded errors
 interface TileResult {
   streets: StreetSegment[];
   railways: [number, number][][];
+  aeroways: [number, number][][];
+  coastlines: [number, number][][];
   water: [number, number][][];
+  forests: [number, number][][];
   parks: [number, number][][];
 }
 
@@ -288,12 +308,16 @@ async function fetchSingleTile(
   
   if (includeWaterParks) {
     overpassQuery = `
-      [out:json][timeout:25];
+      [out:json][timeout:30];
       (
         way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
         way["railway"~"^(rail|light_rail|subway|tram)$"](${bbox});
+        way["aeroway"~"^(runway|taxiway)$"](${bbox});
+        way["natural"="coastline"](${bbox});
         way["natural"="water"](${bbox});
         way["waterway"~"^(river|canal|riverbank)$"](${bbox});
+        way["landuse"="forest"](${bbox});
+        way["natural"="wood"](${bbox});
         way["leisure"="park"](${bbox});
         way["landuse"~"^(grass|meadow)$"](${bbox});
       );
@@ -305,6 +329,7 @@ async function fetchSingleTile(
       (
         way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
         way["railway"~"^(rail|light_rail|subway|tram)$"](${bbox});
+        way["aeroway"~"^(runway|taxiway)$"](${bbox});
       );
       out geom;
     `;
@@ -332,7 +357,7 @@ async function fetchSingleTile(
 
   if (!response || !response.ok) {
     console.error('Tile fetch failed, returning empty');
-    return { streets: [], railways: [], water: [], parks: [] };
+    return { streets: [], railways: [], aeroways: [], coastlines: [], water: [], forests: [], parks: [] };
   }
 
   const osmData = await response.json();
@@ -347,7 +372,10 @@ async function fetchSingleTile(
   for (const st of activeStreetTypes) coordsByType.set(st.type, []);
 
   const railwayLines: [number, number][][] = [];
+  const aerowayLines: [number, number][][] = [];
+  const coastlineLines: [number, number][][] = [];
   const waterPolygons: [number, number][][] = [];
+  const forestPolygons: [number, number][][] = [];
   const parkPolygons: [number, number][][] = [];
 
   for (const element of elements) {
@@ -382,6 +410,28 @@ async function fetchSingleTile(
       if (points.length >= 2) {
         railwayLines.push(points);
       }
+    } else if (tags.aeroway) {
+      // Parse aeroway lines (runways, taxiways)
+      const points: [number, number][] = [];
+      for (const pt of geom) {
+        if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+          points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+        }
+      }
+      if (points.length >= 2) {
+        aerowayLines.push(points);
+      }
+    } else if (tags.natural === 'coastline') {
+      // Parse coastlines
+      const points: [number, number][] = [];
+      for (const pt of geom) {
+        if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+          points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+        }
+      }
+      if (points.length >= 2) {
+        coastlineLines.push(points);
+      }
     } else if (tags.natural === 'water' || tags.waterway) {
       const points: [number, number][] = [];
       for (const pt of geom) {
@@ -391,6 +441,17 @@ async function fetchSingleTile(
       }
       if (points.length >= 3) {
         waterPolygons.push(points);
+      }
+    } else if (tags.landuse === 'forest' || tags.natural === 'wood') {
+      // Parse forests
+      const points: [number, number][] = [];
+      for (const pt of geom) {
+        if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+          points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+        }
+      }
+      if (points.length >= 3) {
+        forestPolygons.push(points);
       }
     } else if (tags.leisure === 'park' || tags.landuse === 'grass' || tags.landuse === 'meadow') {
       const points: [number, number][] = [];
@@ -410,11 +471,27 @@ async function fetchSingleTile(
     coordinates: coordsByType.get(st.type) || [],
   }));
 
-  return { streets, railways: railwayLines, water: waterPolygons, parks: parkPolygons };
+  return { 
+    streets, 
+    railways: railwayLines, 
+    aeroways: aerowayLines, 
+    coastlines: coastlineLines,
+    water: waterPolygons, 
+    forests: forestPolygons,
+    parks: parkPolygons 
+  };
 }
 
 function mergeResults(results: TileResult[]): TileResult {
-  const merged: TileResult = { streets: [], railways: [], water: [], parks: [] };
+  const merged: TileResult = { 
+    streets: [], 
+    railways: [], 
+    aeroways: [], 
+    coastlines: [],
+    water: [], 
+    forests: [],
+    parks: [] 
+  };
   const streetsByType = new Map<string, [number, number][][]>();
 
   for (const result of results) {
@@ -424,7 +501,10 @@ function mergeResults(results: TileResult[]): TileResult {
       streetsByType.set(street.type, existing);
     }
     merged.railways.push(...result.railways);
+    merged.aeroways.push(...result.aeroways);
+    merged.coastlines.push(...result.coastlines);
     merged.water.push(...result.water);
+    merged.forests.push(...result.forests);
     merged.parks.push(...result.parks);
   }
 
@@ -439,12 +519,15 @@ function mergeResults(results: TileResult[]): TileResult {
 async function fetchStreetData(lat: number, lng: number, distance: number): Promise<{
   streets: StreetSegment[];
   railways: [number, number][][];
+  aeroways: [number, number][][];
+  coastlines: [number, number][][];
   water: [number, number][][];
+  forests: [number, number][][];
   parks: [number, number][][];
 }> {
   // Use core street types only to reduce memory usage
   const activeStreetTypes = ALL_STREET_TYPES.slice(0, 6); // Exclude 'path' type
-  const includeWaterParks = distance <= 8000; // Reduced threshold
+  const includeWaterParks = distance <= 10000; // Include layers for reasonable distances
 
   const tiles = calculateTiles(lat, lng, distance);
   console.log(`Fetching ${tiles.length} tiles for distance ${distance}m`);
@@ -467,7 +550,10 @@ async function fetchStreetData(lat: number, lng: number, distance: number): Prom
 function generateSVG(request: RenderRequest, data: {
   streets: StreetSegment[];
   railways: [number, number][][];
+  aeroways: [number, number][][];
+  coastlines: [number, number][][];
   water: [number, number][][];
+  forests: [number, number][][];
   parks: [number, number][][];
 }): string {
   const aspectConfig = ASPECT_RATIOS[request.aspectRatio] || ASPECT_RATIOS['3:4'];
@@ -521,17 +607,22 @@ function generateSVG(request: RenderRequest, data: {
   // Background
   svg += `<rect width="${width}" height="${height}" fill="${theme.bg}"/>`;
   
-  // Layer 1: Parks (z-order 2 in Python)
-  for (const polygon of data.parks) {
-    if (polygon.length < 3) continue;
-    const points = polygon.map(([lat, lng]) => {
+  // Layer 0.5: Coastlines (z-order 0.5 - first layer)
+  const coastlineColor = theme.water; // Use water color for coastlines
+  const coastlineStrokeWidth = 0.8 * scaleFactor;
+  
+  for (const polyline of data.coastlines) {
+    if (polyline.length < 2) continue;
+    
+    const d = polyline.map(([lat, lng], i) => {
       const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
     }).join(' ');
-    svg += `<polygon points="${points}" fill="${theme.parks}"/>`;
+    
+    svg += `<path d="${d}" stroke="${coastlineColor}" stroke-width="${coastlineStrokeWidth.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
   }
   
-  // Layer 2: Water (z-order 1 in Python)
+  // Layer 1: Water (z-order 1)
   for (const polygon of data.water) {
     if (polygon.length < 3) continue;
     const points = polygon.map(([lat, lng]) => {
@@ -541,7 +632,45 @@ function generateSVG(request: RenderRequest, data: {
     svg += `<polygon points="${points}" fill="${theme.water}"/>`;
   }
   
-  // Layer 3: Railways (z-order 2.5 - between parks and streets)
+  // Layer 1.5: Forests (z-order 1.5)
+  // Use a slightly darker/different shade of parks color for forests
+  const forestColor = adjustForestColor(theme.parks);
+  
+  for (const polygon of data.forests) {
+    if (polygon.length < 3) continue;
+    const points = polygon.map(([lat, lng]) => {
+      const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(' ');
+    svg += `<polygon points="${points}" fill="${forestColor}"/>`;
+  }
+  
+  // Layer 2: Parks (z-order 2)
+  for (const polygon of data.parks) {
+    if (polygon.length < 3) continue;
+    const points = polygon.map(([lat, lng]) => {
+      const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(' ');
+    svg += `<polygon points="${points}" fill="${theme.parks}"/>`;
+  }
+  
+  // Layer 2.3: Aeroways (z-order 2.3 - runways and taxiways in yellow)
+  const aerowayColor = '#E8D44D'; // Yellow color for aeroways (matching frontend)
+  const aerowayStrokeWidth = 1.5 * scaleFactor;
+  
+  for (const polyline of data.aeroways) {
+    if (polyline.length < 2) continue;
+    
+    const d = polyline.map(([lat, lng], i) => {
+      const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(' ');
+    
+    svg += `<path d="${d}" stroke="${aerowayColor}" stroke-width="${aerowayStrokeWidth.toFixed(2)}" stroke-linecap="butt" stroke-linejoin="miter" fill="none"/>`;
+  }
+  
+  // Layer 2.5: Railways (z-order 2.5 - between aeroways and streets)
   const railwayColor = theme.railway || theme.roadPrimary;
   const railwayStrokeWidth = RAILWAY_WIDTH * scaleFactor;
   
@@ -556,7 +685,7 @@ function generateSVG(request: RenderRequest, data: {
     svg += `<path d="${d}" stroke="${railwayColor}" stroke-width="${railwayStrokeWidth.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
   }
   
-  // Layer 4: Streets (z-order 3 in Python) - draw in order: service -> motorway
+  // Layer 3: Streets (z-order 3) - draw in order: service -> motorway
   const streetOrder = ['service', 'residential', 'tertiary', 'secondary', 'primary', 'motorway'];
   
   for (const streetType of streetOrder) {
