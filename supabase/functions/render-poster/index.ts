@@ -525,9 +525,16 @@ async function fetchStreetData(lat: number, lng: number, distance: number): Prom
   forests: [number, number][][];
   parks: [number, number][][];
 }> {
-  // Use core street types only to reduce memory usage
-  const activeStreetTypes = ALL_STREET_TYPES.slice(0, 6); // Exclude 'path' type
-  const includeWaterParks = distance <= 10000; // Include layers for reasonable distances
+  // Adaptive street type selection to stay within edge runtime CPU limits.
+  // Dense areas (large cities) can exceed CPU when rendering thousands of small service/residential segments.
+  // We keep major roads always; optionally skip the most expensive minor categories for large radii.
+  const includeMinorRoads = distance <= 6500;
+  // Major + residential always; service roads are the most expensive at large radius.
+  const activeStreetTypes = includeMinorRoads
+    ? ALL_STREET_TYPES.slice(0, 6) // motorway..service (exclude 'path')
+    : ALL_STREET_TYPES.slice(0, 5); // motorway..residential (exclude 'service' + 'path')
+
+  const includeWaterParks = distance <= 9000; // Keep layers for reasonable distances
 
   const tiles = calculateTiles(lat, lng, distance);
   console.log(`Fetching ${tiles.length} tiles for distance ${distance}m`);
@@ -610,16 +617,19 @@ function generateSVG(request: RenderRequest, data: {
   // Layer 0.5: Coastlines (z-order 0.5 - first layer)
   const coastlineColor = theme.water; // Use water color for coastlines
   const coastlineStrokeWidth = 0.8 * scaleFactor;
-  
-  for (const polyline of data.coastlines) {
-    if (polyline.length < 2) continue;
-    
-    const d = polyline.map(([lat, lng], i) => {
-      const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
-    }).join(' ');
-    
-    svg += `<path d="${d}" stroke="${coastlineColor}" stroke-width="${coastlineStrokeWidth.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+  {
+    const dParts: string[] = [];
+    for (const polyline of data.coastlines) {
+      if (polyline.length < 2) continue;
+      for (let i = 0; i < polyline.length; i++) {
+        const [lat, lng] = polyline[i];
+        const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
+        dParts.push(`${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`);
+      }
+    }
+    if (dParts.length) {
+      svg += `<path d="${dParts.join(' ')}" stroke="${coastlineColor}" stroke-width="${coastlineStrokeWidth.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+    }
   }
   
   // Layer 1: Water (z-order 1)
@@ -659,52 +669,64 @@ function generateSVG(request: RenderRequest, data: {
   const aerowayColor = '#E8D44D'; // Yellow color for aeroways (matching frontend)
   const aerowayStrokeWidth = 1.5 * scaleFactor;
   
-  for (const polyline of data.aeroways) {
-    if (polyline.length < 2) continue;
-    
-    const d = polyline.map(([lat, lng], i) => {
-      const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
-    }).join(' ');
-    
-    svg += `<path d="${d}" stroke="${aerowayColor}" stroke-width="${aerowayStrokeWidth.toFixed(2)}" stroke-linecap="butt" stroke-linejoin="miter" fill="none"/>`;
+  {
+    const dParts: string[] = [];
+    for (const polyline of data.aeroways) {
+      if (polyline.length < 2) continue;
+      for (let i = 0; i < polyline.length; i++) {
+        const [lat, lng] = polyline[i];
+        const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
+        dParts.push(`${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`);
+      }
+    }
+    if (dParts.length) {
+      svg += `<path d="${dParts.join(' ')}" stroke="${aerowayColor}" stroke-width="${aerowayStrokeWidth.toFixed(2)}" stroke-linecap="butt" stroke-linejoin="miter" fill="none"/>`;
+    }
   }
   
   // Layer 2.5: Railways (z-order 2.5 - between aeroways and streets)
   const railwayColor = theme.railway || theme.roadPrimary;
   const railwayStrokeWidth = RAILWAY_WIDTH * scaleFactor;
   
-  for (const polyline of data.railways) {
-    if (polyline.length < 2) continue;
-    
-    const d = polyline.map(([lat, lng], i) => {
-      const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
-    }).join(' ');
-    
-    svg += `<path d="${d}" stroke="${railwayColor}" stroke-width="${railwayStrokeWidth.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+  {
+    const dParts: string[] = [];
+    for (const polyline of data.railways) {
+      if (polyline.length < 2) continue;
+      for (let i = 0; i < polyline.length; i++) {
+        const [lat, lng] = polyline[i];
+        const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
+        dParts.push(`${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`);
+      }
+    }
+    if (dParts.length) {
+      svg += `<path d="${dParts.join(' ')}" stroke="${railwayColor}" stroke-width="${railwayStrokeWidth.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+    }
   }
   
   // Layer 3: Streets (z-order 3) - draw in order: service -> motorway
   const streetOrder = ['service', 'residential', 'tertiary', 'secondary', 'primary', 'motorway'];
   
   for (const streetType of streetOrder) {
-    const segment = data.streets.find(s => s.type === streetType);
-    if (!segment) continue;
-    
+    const segment = data.streets.find((s) => s.type === streetType);
+    if (!segment || segment.coordinates.length === 0) continue;
+
     const color = getStreetColor(streetType, theme);
     const baseLineWidth = STREET_WIDTHS[streetType] || 0.4;
     const strokeWidth = baseLineWidth * scaleFactor;
-    
+
+    // Performance: combine all polylines of same style into a single path string.
+    const dParts: string[] = [];
     for (const polyline of segment.coordinates) {
       if (polyline.length < 2) continue;
-      
-      const d = polyline.map(([lat, lng], i) => {
+      for (let i = 0; i < polyline.length; i++) {
+        const [lat, lng] = polyline[i];
         const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
-        return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
-      }).join(' ');
-      
-      svg += `<path d="${d}" stroke="${color}" stroke-width="${strokeWidth.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+        dParts.push(`${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`);
+      }
+    }
+
+    if (dParts.length) {
+      svg += `<path d="${dParts.join(' ')}" stroke="${color}" stroke-width="${strokeWidth.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
     }
   }
   
@@ -781,8 +803,9 @@ Deno.serve(async (req) => {
     // Fetch only slightly beyond the crop area. Too large here explodes street count and hits memory limits.
     const aspectCompensation = Math.max(aspectConfig.height, aspectConfig.width) / Math.min(aspectConfig.height, aspectConfig.width);
     const compensatedDistance = Math.ceil(request.distance * aspectCompensation);
-    // Limit fetch distance more aggressively to prevent memory exceeded errors
-    const fetchDistance = Math.min(8000, Math.ceil(Math.max(request.distance, compensatedDistance) * 1.1));
+    // Limit fetch distance more aggressively to prevent CPU/memory exceeded errors.
+    // Large radii in dense cities can exceed edge runtime limits, especially at 4K+ exports.
+    const fetchDistance = Math.min(6500, Math.ceil(Math.max(request.distance, compensatedDistance) * 1.05));
 
     const data = await fetchStreetData(request.latitude, request.longitude, fetchDistance);
     
