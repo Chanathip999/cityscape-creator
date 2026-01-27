@@ -42,17 +42,17 @@ const STREET_WIDTHS: Record<string, number> = {
   secondary_link: 0.45,
   tertiary: 0.42,
   tertiary_link: 0.38,
-  residential: 0.38,
-  living_street: 0.38,
-  unclassified: 0.38,
-  service: 0.32,
-  pedestrian: 0.28,
-  footway: 0.24,
-  path: 0.24,
-  cycleway: 0.24,
-  track: 0.24,
-  steps: 0.2,
-  bridleway: 0.24,
+  residential: 0.4,
+  living_street: 0.4,
+  unclassified: 0.4,
+  service: 0.34,
+  pedestrian: 0.29,
+  footway: 0.25,
+  path: 0.25,
+  cycleway: 0.25,
+  track: 0.25,
+  steps: 0.21,
+  bridleway: 0.25,
 };
 
 // Railway width (z-order 2.5 in Python, between parks and roads)
@@ -185,15 +185,27 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     // Apply zoom to effective distance
     const effectiveDistance = distance / zoom;
 
-    let halfX = effectiveDistance / metersPerDegreeLng;
-    let halfY = effectiveDistance / metersPerDegreeLat;
+    // IMPORTANT: Keep a true 90° orthographic feel by ensuring the same meter-per-pixel
+    // scale on both axes.
+    //
+    // The previous implementation adjusted *degrees* directly (halfX/halfY), which
+    // introduces distortion at higher latitudes (e.g. Berlin/NY) because degrees
+    // of longitude represent fewer meters than degrees of latitude.
+    //
+    // Correct approach: adjust in meters first, then convert to degrees per axis.
+    let halfWidthMeters = effectiveDistance;
+    let halfHeightMeters = effectiveDistance;
 
-    // Adjust bounds based on aspect ratio
     if (aspectValue > 1) {
-      halfY = halfX / aspectValue;
+      // wide: keep width, reduce height
+      halfHeightMeters = halfWidthMeters / aspectValue;
     } else if (aspectValue < 1) {
-      halfX = halfY * aspectValue;
+      // tall: keep height, reduce width
+      halfWidthMeters = halfHeightMeters * aspectValue;
     }
+
+    const halfX = halfWidthMeters / metersPerDegreeLng;
+    const halfY = halfHeightMeters / metersPerDegreeLat;
 
     // Apply pan offset (convert from pixel offset to degree offset)
     const panDegreesX = (panOffset.x / canvasWidth) * (halfX * 2);
