@@ -1,12 +1,38 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { getCachedTile, setCachedTile, getTileCacheKey, clearOldCache } from '@/lib/streetDataCache';
+import {
+  getCachedTile,
+  setCachedTile,
+  clearOldCache,
+  getTileCacheKey,
+} from '@/lib/streetDataCache';
 import { withConcurrencyLimit, getCurrentInFlight } from '@/lib/fetchSemaphore';
-import type { LayerVisibility } from '@/types/poster';
 
+// Types
 export interface StreetSegment {
   type: 'motorway' | 'primary' | 'secondary' | 'tertiary' | 'residential' | 'service' | 'path';
-  coordinates: [number, number][][]; // Array of polylines
+  coordinates: [number, number][][];
+}
+
+interface TileResult {
+  streets: StreetSegment[];
+  railways: [number, number][][];
+  aeroways: [number, number][][];
+  coastlines: [number, number][][];
+  water: [number, number][][];
+  parks: [number, number][][];
+  forests: [number, number][][];
+  buildings: [number, number][][];
+}
+
+interface LayerVisibility {
+  water?: boolean;
+  forests?: boolean;
+  parks?: boolean;
+  railways?: boolean;
+  aeroways?: boolean;
+  coastlines?: boolean;
+  buildings?: boolean;
 }
 
 interface UseStreetDataProps {
@@ -31,31 +57,14 @@ interface UseStreetDataResult {
   error: string | null;
 }
 
-interface TileResult {
-  streets: StreetSegment[];
-  railways: [number, number][][];
-  aeroways: [number, number][][];
-  coastlines: [number, number][][];
-  water: [number, number][][];
-  parks: [number, number][][];
-  forests: [number, number][][];
-  buildings: [number, number][][];
-}
-
-// ============================================================================
-// OPTIMIZED CONFIGURATION - faster loading with reduced default layers
-// ============================================================================
-// Tile radii - keep under backend's 3500m cap
+// REDUCED tile limits and batch sizes to prevent Overpass API overload
+// 40 concurrent requests was causing 504 timeouts and BOOT_ERRORs
+const MAX_TILES_STREETS = 25;
+const MAX_TILES_BUILDINGS = 16;
+const STREET_BATCH_SIZE = 6;  // Much smaller batches to reduce API pressure
+const BUILDING_BATCH_SIZE = 4;
 const MAX_STREET_TILE_RADIUS = 3500;
 const MAX_BUILDING_TILE_RADIUS = 2000;
-
-// Maximum tiles for full coverage
-const MAX_TILES_STREETS = 36;
-const MAX_TILES_BUILDINGS = 64;
-
-// Very aggressive batch sizes - semaphore prevents overload
-const STREET_BATCH_SIZE = 36;
-const BUILDING_BATCH_SIZE = 24;
 
 // Calculate tiles needed for a given area - ensures center is always included
 function calculateTiles(params: {
@@ -207,7 +216,6 @@ export const useStreetData = ({
   const runIdRef = useRef(0);
 
   // Single tile fetch with retry - wrapped in semaphore for global concurrency control
-  // Now supports priority parameter for progressive loading
   const fetchTileWithRetry = useCallback(async (
     runId: number,
     tileLat: number,
@@ -216,7 +224,7 @@ export const useStreetData = ({
     skipService: boolean,
     fetchBuildings: boolean,
     buildingsOnly: boolean,
-    priority: 0 | 1 | 2 = 0, // 0 = all, 1 = essential, 2 = details
+    priority: 0 | 1 | 2 = 0,
     tileLayerVisibility?: LayerVisibility,
     retries = 3
   ): Promise<TileResult | null> => {
@@ -251,7 +259,7 @@ export const useStreetData = ({
               skipService,
               includeBuildings: fetchBuildings,
               buildingsOnly,
-              priority, // NEW: Send priority to backend
+              priority,
               layerVisibility: lv,
             },
           });
@@ -262,7 +270,8 @@ export const useStreetData = ({
             const isWorkerLimit = errorStr.includes('WORKER_LIMIT') || errorStr.includes('546');
             
             if (attempt < retries) {
-              const baseDelay = isWorkerLimit ? 600 : isBootError ? 400 : 150;
+              // Longer delays to give Overpass API time to recover
+              const baseDelay = isWorkerLimit ? 800 : isBootError ? 600 : 300;
               const delay = baseDelay * Math.pow(1.5, attempt);
               console.log(`Retry ${attempt + 1}/${retries} after ${delay}ms (in-flight: ${getCurrentInFlight()})`);
               await new Promise(r => setTimeout(r, delay));
@@ -293,7 +302,7 @@ export const useStreetData = ({
           const isWorkerLimit = errorStr.includes('WORKER_LIMIT') || errorStr.includes('546');
           
           if (attempt < retries) {
-            const baseDelay = isWorkerLimit ? 600 : isBootError ? 400 : 150;
+            const baseDelay = isWorkerLimit ? 800 : isBootError ? 600 : 300;
             const delay = baseDelay * Math.pow(1.5, attempt);
             console.log(`Retry ${attempt + 1}/${retries} after ${delay}ms (exception)`);
             await new Promise(r => setTimeout(r, delay));
@@ -343,17 +352,10 @@ export const useStreetData = ({
           setForests(layerVisibility?.forests ? merged.forests : []);
         };
 
-        // We only ever ADD results during a run. This prevents the perceived
-        // "details disappear and then reappear" flicker caused by overwriting
-        // state with smaller intermediate results.
+        // Progressive results - only ever ADD, never overwrite with smaller sets
         const progressiveResults: TileResult[] = [];
 
-        // =========================================================================
-        // ULTRA-FAST FIRST PAINT:
-        // Before we even compute the full tile grid, fetch ONE small-radius center
-        // request (priority=1). This massively improves perceived performance when
-        // Overpass is slow for large bboxes.
-        // =========================================================================
+        // FAST FIRST PAINT: Fetch a small center preview first
         const previewRadius = Math.min(1200, Math.max(600, Math.floor(distance * 0.35)));
 
         const previewFull = await fetchTileWithRetry(
@@ -361,10 +363,10 @@ export const useStreetData = ({
           latitude,
           longitude,
           previewRadius,
-          /* skipService */ false,
-          /* fetchBuildings */ false,
-          /* buildingsOnly */ false,
-          /* priority */ 0,
+          false,
+          false,
+          false,
+          0,
           layerVisibility,
         );
 
@@ -420,14 +422,13 @@ export const useStreetData = ({
           console.log(`⚡ CENTER full in ${(performance.now() - startTime).toFixed(0)}ms`);
         }
 
-        // PHASE 1B: All tiles FULL detail in parallel
+        // PHASE 1B: Remaining tiles in small batches with delays between
         const remainingTiles = streetTiles.slice(1);
-        const fullResults: TileResult[] = [];
-        // Seed with whatever we already have, so batches only ever add to it.
-        fullResults.push(...progressiveResults);
+        const fullResults: TileResult[] = [...progressiveResults];
         
         for (let i = 0; i < remainingTiles.length; i += STREET_BATCH_SIZE) {
           if (runId !== runIdRef.current) break;
+          
           const batch = remainingTiles.slice(i, i + STREET_BATCH_SIZE);
           const batchResults = await Promise.all(
             batch.map(tile =>
@@ -439,58 +440,63 @@ export const useStreetData = ({
             if (result) fullResults.push(result);
           }
           
-          // Progressive update
+          // Progressive update after each batch
           const merged = mergeResults(fullResults);
           applyMergedState(merged);
+          
+          // Small delay between batches to reduce API pressure
+          if (i + STREET_BATCH_SIZE < remainingTiles.length) {
+            await new Promise(r => setTimeout(r, 50));
+          }
         }
         
         const fullTime = performance.now() - startTime;
         console.log(`✅ FULL detail complete: ${fullResults.length} tiles in ${fullTime.toFixed(0)}ms`);
 
-        const streetFetchPromise = Promise.resolve(fullResults);
-
-        // PROGRESSIVE BUILDING FETCH: Update UI after each batch
-        const buildingFetchPromise = (async () => {
-          if (!includeBuildings) return [];
-          const allResults: TileResult[] = [];
+        // PROGRESSIVE BUILDING FETCH
+        if (includeBuildings && buildingTiles.length > 0) {
+          const buildingResults: TileResult[] = [];
           
           for (let i = 0; i < buildingTiles.length; i += BUILDING_BATCH_SIZE) {
             if (runId !== runIdRef.current) break;
+            
             const batch = buildingTiles.slice(i, i + BUILDING_BATCH_SIZE);
             const batchResults = await Promise.all(
               batch.map(tile =>
-                 fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, true, true, 0, layerVisibility)
+                fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, true, true, 0, layerVisibility)
               )
             );
             
             const validResults = batchResults.filter((r): r is TileResult => r !== null);
-            allResults.push(...validResults);
+            buildingResults.push(...validResults);
             
             // Progressive update
             if (validResults.length > 0) {
-              const progressiveMerge = mergeResults(allResults);
+              const progressiveMerge = mergeResults(buildingResults);
               setBuildings(progressiveMerge.buildings);
+            }
+            
+            // Small delay between batches
+            if (i + BUILDING_BATCH_SIZE < buildingTiles.length) {
+              await new Promise(r => setTimeout(r, 50));
             }
           }
           
-          return allResults;
-        })();
-
-        // Wait for both to complete simultaneously
-        const [streetResults, buildingResults] = await Promise.all([
-          streetFetchPromise,
-          buildingFetchPromise
-        ]);
+          if (buildingResults.length > 0) {
+            const finalBuildingMerge = mergeResults(buildingResults);
+            console.log(`🏢 Buildings: ${finalBuildingMerge.buildings.length} from ${buildingResults.length} tiles`);
+          }
+        }
 
         if (runId !== runIdRef.current) return;
 
-        if (streetResults.length === 0) {
+        if (fullResults.length === 0) {
           setError('Failed to fetch street data');
           return;
         }
 
         // Final merge and state update
-        const merged = mergeResults(streetResults);
+        const merged = mergeResults(fullResults);
         
         const totalTime = performance.now() - startTime;
         console.log(`✅ COMPLETE: ${merged.streets.reduce((sum, s) => sum + s.coordinates.length, 0)} streets in ${totalTime.toFixed(0)}ms`);
@@ -503,11 +509,6 @@ export const useStreetData = ({
         setParks(layerVisibility?.parks ? merged.parks : []);
         setForests(layerVisibility?.forests ? merged.forests : []);
         
-        if (buildingResults.length > 0) {
-          const finalBuildingMerge = mergeResults(buildingResults);
-          console.log(`🏢 Buildings: ${finalBuildingMerge.buildings.length} from ${buildingResults.length} tiles`);
-        }
-        
         lastParamsRef.current = paramsKey;
 
       } catch (err) {
@@ -516,7 +517,7 @@ export const useStreetData = ({
       } finally {
         setIsLoading(false);
       }
-    }, 30); // Reduced debounce for faster response
+    }, 50); // Slightly increased debounce for stability
 
     return () => {
       if (fetchTimeoutRef.current) {

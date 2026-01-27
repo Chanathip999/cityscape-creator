@@ -1,10 +1,10 @@
 /**
  * Global Concurrency Limiter (Semaphore)
  * Prevents WORKER_LIMIT / BOOT_ERROR by capping in-flight requests globally.
- * Even with high batch sizes, we never exceed MAX_CONCURRENT requests at once.
+ * REDUCED to 12 to prevent Overpass API overload (was 40, caused 504 timeouts)
  */
 
-const MAX_CONCURRENT = 40; // Extremely aggressive for maximum parallelism
+const MAX_CONCURRENT = 12;
 
 let inFlight = 0;
 const queue: Array<() => void> = [];
@@ -35,3 +35,19 @@ export function getCurrentInFlight(): number {
 export function getQueueLength(): number {
   return queue.length;
 }
+
+// Legacy exports for backward compatibility
+export const acquireFetchSlot = async (): Promise<void> => {
+  if (inFlight >= MAX_CONCURRENT) {
+    await new Promise<void>((resolve) => {
+      queue.push(resolve);
+    });
+  }
+  inFlight++;
+};
+
+export const releaseFetchSlot = (): void => {
+  inFlight--;
+  const next = queue.shift();
+  if (next) next();
+};

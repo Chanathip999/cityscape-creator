@@ -51,62 +51,52 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
   const baseFonts = getScaledFontSizes(containerHeight, config.fontSize);
   const fontSizeScale = config.fontSizeScale || 1;
 
-  // Always sync textOverrides with adaptive TEXT_POSITIONS when format/typography changes
-  // This keeps text properly positioned across different aspect ratios
-  const prevPositionsRef = useRef({ title: 0, subtitle: 0, coords: 0 });
+  // Track aspect ratio to detect format changes
+  const prevAspectRatioRef = useRef(config.aspectRatio);
   
+  // CRITICAL: Always sync textOverrides when aspect ratio changes
+  // This ensures text positions adapt to different formats without overlapping
   useEffect(() => {
-    const positionsChanged = 
-      prevPositionsRef.current.title !== TEXT_POSITIONS.title ||
-      prevPositionsRef.current.subtitle !== TEXT_POSITIONS.subtitle ||
-      prevPositionsRef.current.coords !== TEXT_POSITIONS.coords;
+    const aspectRatioChanged = prevAspectRatioRef.current !== config.aspectRatio;
     
-    // Update if no overrides exist OR if positions changed AND user hasn't manually moved elements
-    const hasCustomPosition = (id: 'city' | 'country' | 'coordinates') => {
-      const override = config.textOverrides?.[id];
-      if (!override?.position) return false;
-      // Check if position differs significantly from previous default (user moved it)
-      const prevDefault = id === 'city' ? prevPositionsRef.current.title 
-        : id === 'country' ? prevPositionsRef.current.subtitle 
-        : prevPositionsRef.current.coords;
-      return Math.abs(override.position.y - prevDefault) > 0.01;
-    };
-    
-    if (!config.textOverrides || (positionsChanged && !hasCustomPosition('city') && !hasCustomPosition('country') && !hasCustomPosition('coordinates'))) {
+    // ALWAYS reset positions when aspect ratio changes - this prevents overlapping
+    if (aspectRatioChanged || !config.textOverrides) {
+      console.log(`📐 Format changed: ${prevAspectRatioRef.current} → ${config.aspectRatio}, resetting text positions`);
+      
       onConfigUpdate({
         textOverrides: {
           city: { 
             ...config.textOverrides?.city,
-            position: { x: config.textOverrides?.city?.position?.x ?? 0.5, y: TEXT_POSITIONS.title } 
+            position: { x: 0.5, y: TEXT_POSITIONS.title },
+            // Preserve other properties like scale, orientation
           },
           country: { 
             ...config.textOverrides?.country,
-            position: { x: config.textOverrides?.country?.position?.x ?? 0.5, y: TEXT_POSITIONS.subtitle } 
+            position: { x: 0.5, y: TEXT_POSITIONS.subtitle },
           },
           coordinates: { 
             ...config.textOverrides?.coordinates,
-            position: { x: config.textOverrides?.coordinates?.position?.x ?? 0.5, y: TEXT_POSITIONS.coords } 
+            position: { x: 0.5, y: TEXT_POSITIONS.coords },
           },
         },
       });
     }
     
-    prevPositionsRef.current = { 
-      title: TEXT_POSITIONS.title, 
-      subtitle: TEXT_POSITIONS.subtitle, 
-      coords: TEXT_POSITIONS.coords 
-    };
-  }, [
-    config.aspectRatio, // Re-sync when aspect ratio changes
-    containerHeight,
-    config.fontSize,
-    config.fontSizeScale,
-    config.textPosition,
-    TEXT_POSITIONS.title,
-    TEXT_POSITIONS.subtitle,
-    TEXT_POSITIONS.coords,
-    onConfigUpdate,
-  ]);
+    prevAspectRatioRef.current = config.aspectRatio;
+  }, [config.aspectRatio]); // Only trigger on aspect ratio change
+  
+  // Separate effect to initialize if missing (on first load)
+  useEffect(() => {
+    if (!config.textOverrides) {
+      onConfigUpdate({
+        textOverrides: {
+          city: { position: { x: 0.5, y: TEXT_POSITIONS.title } },
+          country: { position: { x: 0.5, y: TEXT_POSITIONS.subtitle } },
+          coordinates: { position: { x: 0.5, y: TEXT_POSITIONS.coords } },
+        },
+      });
+    }
+  }, []);
 
   const getElementConfig = useCallback((elementId: 'city' | 'country' | 'coordinates'): TextElementConfig => {
     return config.textOverrides?.[elementId] || {};
