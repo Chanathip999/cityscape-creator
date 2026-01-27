@@ -9,6 +9,22 @@ const corsHeaders = {
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
+interface TextPositionOffset {
+  x: number;
+  y: number;
+}
+
+interface TextElementConfig {
+  position?: TextPositionOffset;
+  scale?: number;
+}
+
+interface TextOverrides {
+  city?: TextElementConfig;
+  country?: TextElementConfig;
+  coordinates?: TextElementConfig;
+}
+
 interface RenderRequest {
   city: string;
   country: string;
@@ -43,6 +59,7 @@ interface RenderRequest {
   showCountry?: boolean;
   showCoordinates?: boolean;
   textPosition?: 'bottom' | 'center' | 'top';
+  textOverrides?: TextOverrides; // Custom text positions and sizes
   layerVisibility?: {
     water: boolean;
     forests: boolean;
@@ -822,6 +839,22 @@ function generateSVG(request: RenderRequest, data: {
   // Get text positions based on textPosition setting
   const TEXT_POSITIONS = getTextPositions(request.textPosition);
   
+  // Helper functions for text override support
+  const getTextPos = (elementId: 'city' | 'country' | 'coordinates', defaultY: number) => {
+    const override = request.textOverrides?.[elementId];
+    if (override?.position) {
+      return {
+        x: override.position.x * width,
+        y: override.position.y * height,
+      };
+    }
+    return { x: width / 2, y: height * defaultY };
+  };
+
+  const getTextScale = (elementId: 'city' | 'country' | 'coordinates') => {
+    return request.textOverrides?.[elementId]?.scale || 1;
+  };
+  
   // Layer 5: Typography (z-order 11 in Python)
   const cityText = request.city.toUpperCase();
   const countryText = request.country.toUpperCase();
@@ -829,32 +862,45 @@ function generateSVG(request: RenderRequest, data: {
   
   // City name with letter spacing - auto-scale to fit width (only if showCity)
   if (request.showCity !== false) {
+    const cityScale = getTextScale('city');
+    const cityPos = getTextPos('city', TEXT_POSITIONS.title);
+    
     const charWidth = titleSize * 0.6;
     const letterSpacing = TRACKING.title * titleSize;
     const estimatedTextWidth = cityText.length * charWidth + (cityText.length - 1) * letterSpacing;
     const maxTextWidth = width * 0.9;
     
-    let adjustedTitleSize = titleSize;
+    let adjustedTitleSize = titleSize * cityScale;
     if (estimatedTextWidth > maxTextWidth) {
       const scaleFactor = maxTextWidth / estimatedTextWidth;
-      adjustedTitleSize = titleSize * scaleFactor;
+      adjustedTitleSize = adjustedTitleSize * scaleFactor;
     }
     const adjustedLetterSpacing = TRACKING.title * adjustedTitleSize;
     
-    svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.title}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${adjustedTitleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.title}" letter-spacing="${adjustedLetterSpacing.toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif">${cityText}</text>`;
+    svg += `<text x="${cityPos.x.toFixed(1)}" y="${cityPos.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${adjustedTitleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.title}" letter-spacing="${adjustedLetterSpacing.toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif">${cityText}</text>`;
     
-    // Decorative line between city and country
-    svg += `<line x1="${(width - lineLength) / 2}" y1="${height * TEXT_POSITIONS.decorativeLine}" x2="${(width + lineLength) / 2}" y2="${height * TEXT_POSITIONS.decorativeLine}" stroke="${textColor}" stroke-width="${lineWidth.toFixed(2)}" opacity="0.6"/>`;
+    // Decorative line between city and country (only if no custom position)
+    if (!request.textOverrides?.city?.position) {
+      svg += `<line x1="${(width - lineLength) / 2}" y1="${height * TEXT_POSITIONS.decorativeLine}" x2="${(width + lineLength) / 2}" y2="${height * TEXT_POSITIONS.decorativeLine}" stroke="${textColor}" stroke-width="${lineWidth.toFixed(2)}" opacity="0.6"/>`;
+    }
   }
   
   // Country (only if showCountry)
   if (request.showCountry !== false) {
-    svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.subtitle}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${subtitleSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.subtitle}" letter-spacing="${(TRACKING.subtitle * subtitleSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif">${countryText}</text>`;
+    const countryScale = getTextScale('country');
+    const countryPos = getTextPos('country', TEXT_POSITIONS.subtitle);
+    const countryFontSize = subtitleSize * countryScale;
+    
+    svg += `<text x="${countryPos.x.toFixed(1)}" y="${countryPos.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${countryFontSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.subtitle}" letter-spacing="${(TRACKING.subtitle * countryFontSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif">${countryText}</text>`;
   }
   
   // Coordinates (only if showCoordinates)
   if (request.showCoordinates !== false) {
-    svg += `<text x="${width / 2}" y="${height * TEXT_POSITIONS.coords}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${coordsSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.coords}" letter-spacing="${(TRACKING.coords * coordsSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif" opacity="0.7">${coordsText}</text>`;
+    const coordsScale = getTextScale('coordinates');
+    const coordsPos = getTextPos('coordinates', TEXT_POSITIONS.coords);
+    const coordsFontSize = coordsSize * coordsScale;
+    
+    svg += `<text x="${coordsPos.x.toFixed(1)}" y="${coordsPos.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${coordsFontSize.toFixed(1)}px" font-weight="${FONT_WEIGHTS.coords}" letter-spacing="${(TRACKING.coords * coordsFontSize).toFixed(1)}px" font-family="system-ui, -apple-system, sans-serif" opacity="0.7">${coordsText}</text>`;
   }
   
   // Attribution

@@ -58,6 +58,7 @@ export const useRenderPoster = (): UseRenderPosterResult => {
           showCountry: config.showCountry,
           showCoordinates: config.showCoordinates,
           textPosition: config.textPosition,
+          textOverrides: config.textOverrides, // Pass text overrides for custom positions
           // Layer visibility for consistent rendering
           layerVisibility: config.layerVisibility,
           layerColors: config.layerColors,

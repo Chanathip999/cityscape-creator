@@ -500,7 +500,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       ctx.fillRect(0, height - fadeHeight, width, fadeHeight);
     }
 
-    // z=11: Typography (text labels)
+    // z=11: Typography (text labels) - Use textOverrides if available
     const textColor = config.customTextColor || theme.text;
     const fontStack = FONT_STACKS[fontFamily];
     const baseFonts = getScaledFontSizes(height, fontSize);
@@ -516,13 +516,32 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
+    // Helper to get text position with override support
+    const getTextPos = (elementId: 'city' | 'country' | 'coordinates', defaultY: number) => {
+      const override = config.textOverrides?.[elementId];
+      if (override?.position) {
+        return {
+          x: override.position.x * width,
+          y: override.position.y * height,
+        };
+      }
+      return { x: width / 2, y: height * defaultY };
+    };
+
+    const getTextScale = (elementId: 'city' | 'country' | 'coordinates') => {
+      return config.textOverrides?.[elementId]?.scale || 1;
+    };
+
     // City name with dynamic size adjustment (only if showCity is true)
     if (showCity) {
+      const cityScale = getTextScale('city');
+      const cityPos = getTextPos('city', TEXT_POSITIONS.title);
+      
       const cityCharCount = city.length;
-      let adjustedTitleSize = scaledFonts.title;
+      let adjustedTitleSize = scaledFonts.title * cityScale;
       if (cityCharCount > 10) {
         const lengthFactor = 10 / cityCharCount;
-        adjustedTitleSize = Math.max(scaledFonts.title * lengthFactor, 20 * (height / 1000));
+        adjustedTitleSize = Math.max(adjustedTitleSize * lengthFactor, 20 * (height / 1000));
       }
 
       const cityText = formatDisplayText(city);
@@ -530,49 +549,59 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       drawTextWithTracking(
         ctx,
         cityText,
-        width / 2,
-        height * TEXT_POSITIONS.title,
+        cityPos.x,
+        cityPos.y,
         TRACKING.title,
         adjustedTitleSize
       );
 
-      // Decorative line (only show if city is shown)
-      const lineLength = width * 0.15;
-      const decoLineWidth = adjustedTitleSize * 0.02;
-      ctx.strokeStyle = textColor;
-      ctx.lineWidth = decoLineWidth;
-      ctx.globalAlpha = 0.6;
-      ctx.beginPath();
-      ctx.moveTo((width - lineLength) / 2, height * TEXT_POSITIONS.decorativeLine);
-      ctx.lineTo((width + lineLength) / 2, height * TEXT_POSITIONS.decorativeLine);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
+      // Decorative line (only show if city is shown and no custom position)
+      if (!config.textOverrides?.city?.position) {
+        const lineLength = width * 0.15;
+        const decoLineWidth = adjustedTitleSize * 0.02;
+        ctx.strokeStyle = textColor;
+        ctx.lineWidth = decoLineWidth;
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.moveTo((width - lineLength) / 2, height * TEXT_POSITIONS.decorativeLine);
+        ctx.lineTo((width + lineLength) / 2, height * TEXT_POSITIONS.decorativeLine);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
     }
 
     // Country (only if showCountry is true)
     if (showCountry) {
-      ctx.font = `${FONT_WEIGHTS.subtitle} ${scaledFonts.subtitle}px ${fontStack}`;
+      const countryScale = getTextScale('country');
+      const countryPos = getTextPos('country', TEXT_POSITIONS.subtitle);
+      const countryFontSize = scaledFonts.subtitle * countryScale;
+      
+      ctx.font = `${FONT_WEIGHTS.subtitle} ${countryFontSize}px ${fontStack}`;
       drawTextWithTracking(
         ctx,
         formatDisplayText(countryLabel || country),
-        width / 2,
-        height * TEXT_POSITIONS.subtitle,
+        countryPos.x,
+        countryPos.y,
         TRACKING.subtitle,
-        scaledFonts.subtitle
+        countryFontSize
       );
     }
 
     // Coordinates (only if showCoordinates is true)
     if (showCoordinates) {
+      const coordsScale = getTextScale('coordinates');
+      const coordsPos = getTextPos('coordinates', TEXT_POSITIONS.coords);
+      const coordsFontSize = scaledFonts.coords * coordsScale;
+      
       ctx.globalAlpha = 0.7;
-      ctx.font = `${FONT_WEIGHTS.coords} ${scaledFonts.coords}px ${fontStack}`;
+      ctx.font = `${FONT_WEIGHTS.coords} ${coordsFontSize}px ${fontStack}`;
       drawTextWithTracking(
         ctx,
         formatCoordinates(latitude, longitude),
-        width / 2,
-        height * TEXT_POSITIONS.coords,
+        coordsPos.x,
+        coordsPos.y,
         TRACKING.coords,
-        scaledFonts.coords
+        coordsFontSize
       );
       ctx.globalAlpha = 1;
     }
