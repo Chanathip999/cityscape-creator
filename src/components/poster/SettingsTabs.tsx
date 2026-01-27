@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { PosterConfig, FontFamily, FontSize, LayerVisibility, FONT_FAMILIES, FONT_SIZES, AspectRatioId, ASPECT_RATIOS, TextPosition, TEXT_POSITIONS_OPTIONS } from '@/types/poster';
+import { PosterConfig, FontFamily, FontSize, LayerVisibility, LayerColors, FONT_FAMILIES, FONT_SIZES, AspectRatioId, ASPECT_RATIOS, TextPosition, TEXT_POSITIONS_OPTIONS } from '@/types/poster';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
+import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Type, Palette, Move, Check, Waves, Trees, TreeDeciduous, Train, Plane, MapPin, Blend } from 'lucide-react';
+import { Type, Palette, Move, Check, Waves, Trees, TreeDeciduous, Train, Plane, MapPin, Blend, Building } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SettingsTabsProps {
@@ -20,13 +21,14 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'layers', label: 'Ebenen', icon: Move },
 ];
 
-const LAYER_OPTIONS: { id: keyof LayerVisibility; label: string; icon: React.ElementType }[] = [
-  { id: 'water', label: 'Wasser', icon: Waves },
-  { id: 'forests', label: 'Wälder', icon: Trees },
-  { id: 'parks', label: 'Parks', icon: TreeDeciduous },
-  { id: 'railways', label: 'Zugstrecken', icon: Train },
-  { id: 'aeroways', label: 'Flughäfen', icon: Plane },
-  { id: 'coastlines', label: 'Küstenlinien', icon: MapPin },
+const LAYER_OPTIONS: { id: keyof LayerVisibility; label: string; icon: React.ElementType; colorKey: keyof LayerColors }[] = [
+  { id: 'water', label: 'Wasser', icon: Waves, colorKey: 'water' },
+  { id: 'forests', label: 'Wälder', icon: Trees, colorKey: 'forests' },
+  { id: 'parks', label: 'Parks', icon: TreeDeciduous, colorKey: 'parks' },
+  { id: 'railways', label: 'Zugstrecken', icon: Train, colorKey: 'railways' },
+  { id: 'aeroways', label: 'Flughäfen', icon: Plane, colorKey: 'aeroways' },
+  { id: 'coastlines', label: 'Küstenlinien', icon: MapPin, colorKey: 'coastlines' },
+  { id: 'buildings', label: 'Gebäude', icon: Building, colorKey: 'buildings' },
 ];
 
 // Common aspect ratios for quick selection
@@ -42,6 +44,33 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
         [layerId]: !config.layerVisibility[layerId],
       },
     });
+  };
+
+  const handleLayerColorChange = (colorKey: keyof LayerColors, color: string) => {
+    onConfigUpdate({
+      layerColors: {
+        ...config.layerColors,
+        [colorKey]: color,
+      },
+    });
+  };
+
+  const resetLayerColors = () => {
+    onConfigUpdate({ layerColors: {} });
+  };
+
+  // Get default color for a layer from theme
+  const getLayerDefaultColor = (colorKey: keyof LayerColors): string => {
+    switch (colorKey) {
+      case 'water': return config.theme.water;
+      case 'forests': return config.theme.parks; // forests use parks color darkened
+      case 'parks': return config.theme.parks;
+      case 'railways': return config.theme.railway || config.theme.text;
+      case 'aeroways': return config.theme.roadService || '#666666';
+      case 'coastlines': return config.theme.water;
+      case 'buildings': return config.theme.roadTertiary;
+      default: return '#888888';
+    }
   };
 
   return (
@@ -89,9 +118,9 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
               </Select>
             </div>
 
-            {/* Font Size */}
+            {/* Font Size Preset */}
             <div className="space-y-2">
-              <Label>Schriftgröße</Label>
+              <Label>Schriftgröße Preset</Label>
               <div className="flex gap-2">
                 {FONT_SIZES.map((size) => (
                   <button
@@ -108,6 +137,23 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Font Size Fine-Tuning Slider */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Feineinstellung</Label>
+                <span className="text-sm text-muted-foreground">{Math.round((config.fontSizeScale || 1) * 100)}%</span>
+              </div>
+              <Slider
+                value={[(config.fontSizeScale || 1) * 100]}
+                min={50}
+                max={200}
+                step={5}
+                onValueChange={([value]) => onConfigUpdate({ fontSizeScale: value / 100 })}
+                className="w-full"
+              />
+              <p className="text-xs text-muted-foreground">50% bis 200% des Preset-Werts</p>
             </div>
 
             {/* Text Position */}
@@ -243,21 +289,61 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
 
         {activeTab === 'layers' && (
           <>
-            {/* Layer Toggles */}
-            <div className="space-y-2">
-              {LAYER_OPTIONS.map(({ id, label, icon: Icon }) => (
-                <div key={id} className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-3">
-                    <Icon className="w-4 h-4 text-muted-foreground" />
-                    <Label className="font-normal">{label}</Label>
+            {/* Layer Toggles with Color Pickers */}
+            <div className="space-y-3">
+              {LAYER_OPTIONS.map(({ id, label, icon: Icon, colorKey }) => {
+                const isEnabled = config.layerVisibility[id];
+                const customColor = config.layerColors?.[colorKey];
+                const defaultColor = getLayerDefaultColor(colorKey);
+                
+                return (
+                  <div key={id} className="space-y-2">
+                    <div className="flex items-center justify-between py-2">
+                      <div className="flex items-center gap-3">
+                        <Icon className="w-4 h-4 text-muted-foreground" />
+                        <Label className="font-normal">{label}</Label>
+                      </div>
+                      <Switch
+                        checked={isEnabled}
+                        onCheckedChange={() => handleLayerToggle(id)}
+                      />
+                    </div>
+                    {isEnabled && (
+                      <div className="flex items-center gap-2 pl-7">
+                        <input
+                          type="color"
+                          value={customColor || defaultColor}
+                          onChange={(e) => handleLayerColorChange(colorKey, e.target.value)}
+                          className="w-8 h-8 rounded border border-border cursor-pointer"
+                        />
+                        <Input
+                          value={customColor || defaultColor}
+                          onChange={(e) => handleLayerColorChange(colorKey, e.target.value)}
+                          placeholder={defaultColor}
+                          className="h-8 flex-1 font-mono text-sm"
+                        />
+                        {customColor && (
+                          <button
+                            onClick={() => handleLayerColorChange(colorKey, '')}
+                            className="text-xs text-muted-foreground hover:text-foreground px-2"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <Switch
-                    checked={config.layerVisibility[id]}
-                    onCheckedChange={() => handleLayerToggle(id)}
-                  />
-                </div>
-              ))}
+                );
+              })}
             </div>
+
+            {/* Reset All Layer Colors */}
+            <button
+              onClick={resetLayerColors}
+              className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Alle Ebenenfarben zurücksetzen
+            </button>
 
             {/* Format/Aspect Ratio */}
             <div className="space-y-3 pt-4 border-t border-border">

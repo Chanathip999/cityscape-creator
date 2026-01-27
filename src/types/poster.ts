@@ -46,6 +46,7 @@ export interface LayerVisibility {
   railways: boolean;
   aeroways: boolean;
   coastlines: boolean;
+  buildings: boolean;
 }
 
 export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
@@ -55,7 +56,24 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
   railways: true,
   aeroways: true,
   coastlines: true,
+  buildings: false,
 };
+
+// Custom layer colors (optional overrides)
+export interface LayerColors {
+  water?: string;
+  forests?: string;
+  parks?: string;
+  railways?: string;
+  aeroways?: string;
+  coastlines?: string;
+  buildings?: string;
+}
+
+export const DEFAULT_LAYER_COLORS: LayerColors = {};
+
+// Font size scale (0.5 to 2.0, 1.0 = medium)
+export type FontSizeScale = number;
 
 export interface PosterConfig {
   city: string;
@@ -69,6 +87,7 @@ export interface PosterConfig {
   height: number;
   fontFamily: FontFamily;
   fontSize: FontSize;
+  fontSizeScale: FontSizeScale; // Fine-tuning 0.5 - 2.0
   orientation: PosterOrientation;
   aspectRatio: AspectRatioId;
   customTextColor?: string;
@@ -77,6 +96,7 @@ export interface PosterConfig {
   coloredStreets?: boolean;
   renderMode: RenderMode;
   layerVisibility: LayerVisibility;
+  layerColors: LayerColors; // Custom layer colors
   showCoordinates: boolean;
   showCountry: boolean;
   showCity: boolean;
@@ -332,11 +352,13 @@ export const DEFAULT_CONFIG: PosterConfig = {
   height: 16,
   fontFamily: 'mono',
   fontSize: 'medium',
+  fontSizeScale: 1.0,
   orientation: 'vertical',
   aspectRatio: '3:4',
   coloredStreets: false,
   renderMode: 'vector',
   layerVisibility: DEFAULT_LAYER_VISIBILITY,
+  layerColors: DEFAULT_LAYER_COLORS,
   showCoordinates: true,
   showCountry: true,
   showCity: true,
