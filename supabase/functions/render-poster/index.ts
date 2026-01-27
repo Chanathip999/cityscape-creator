@@ -330,9 +330,10 @@ function adjustForestColor(hexColor: string): string {
 // Overpass Data Fetching with Tile-based approach for large areas
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MAX_TILE_RADIUS = 5000; // 5km per tile for stability
-// Increased tile count for full coverage matching preview
-const MAX_TILES = 9; // More tiles for better coverage
+// OPTIMIZED: Single tile for most requests to prevent CPU timeout
+// Edge runtime has ~50s CPU limit - multiple tiles with parsing can exceed this
+const MAX_TILE_RADIUS = 12000; // 12km single tile covers most use cases
+const MAX_TILES = 4; // Reduced from 9 to prevent CPU timeout
 
 interface TileResult {
   streets: StreetSegment[];
@@ -346,35 +347,35 @@ interface TileResult {
 }
 
 function calculateTiles(lat: number, lng: number, distance: number): { lat: number; lng: number; radius: number }[] {
-  // Always use single tile for small areas
-  if (distance <= MAX_TILE_RADIUS * 1.2) {
-    return [{ lat, lng, radius: Math.min(distance, MAX_TILE_RADIUS) }];
+  // Use single larger tile for most cases to minimize CPU time
+  if (distance <= MAX_TILE_RADIUS) {
+    return [{ lat, lng, radius: distance }];
   }
 
+  // For very large areas, use fewer but larger tiles
   const tiles: { lat: number; lng: number; radius: number }[] = [];
   tiles.push({ lat, lng, radius: MAX_TILE_RADIUS });
 
-  const tileSpacing = MAX_TILE_RADIUS * 1.4;
-  const metersPerDegreeLat = 111320;
-  const metersPerDegreeLng = 111320 * Math.cos(lat * Math.PI / 180);
-  const latStep = tileSpacing / metersPerDegreeLat;
-  const lngStep = tileSpacing / metersPerDegreeLng;
+  // Only add cardinal tiles if really needed
+  if (distance > MAX_TILE_RADIUS * 1.5) {
+    const tileSpacing = MAX_TILE_RADIUS * 1.2;
+    const metersPerDegreeLat = 111320;
+    const metersPerDegreeLng = 111320 * Math.cos(lat * Math.PI / 180);
+    const latStep = tileSpacing / metersPerDegreeLat;
+    const lngStep = tileSpacing / metersPerDegreeLng;
 
-  // Cardinal directions for better coverage
-  const offsets = [
-    { dLat: latStep, dLng: 0 },      // N
-    { dLat: -latStep, dLng: 0 },     // S
-    { dLat: 0, dLng: lngStep },      // E
-    { dLat: 0, dLng: -lngStep },     // W
-    { dLat: latStep, dLng: lngStep },    // NE
-    { dLat: latStep, dLng: -lngStep },   // NW
-    { dLat: -latStep, dLng: lngStep },   // SE
-    { dLat: -latStep, dLng: -lngStep },  // SW
-  ];
+    // Only 4 cardinal directions (reduced from 8)
+    const offsets = [
+      { dLat: latStep, dLng: 0 },      // N
+      { dLat: -latStep, dLng: 0 },     // S
+      { dLat: 0, dLng: lngStep },      // E
+      { dLat: 0, dLng: -lngStep },     // W
+    ];
 
-  for (const offset of offsets) {
-    if (tiles.length < MAX_TILES) {
-      tiles.push({ lat: lat + offset.dLat, lng: lng + offset.dLng, radius: MAX_TILE_RADIUS });
+    for (const offset of offsets) {
+      if (tiles.length < MAX_TILES) {
+        tiles.push({ lat: lat + offset.dLat, lng: lng + offset.dLng, radius: MAX_TILE_RADIUS * 0.8 });
+      }
     }
   }
 
@@ -400,32 +401,26 @@ async function fetchSingleTile(
   const highwayTags = activeStreetTypes.flatMap(st => st.tags);
   const bbox = `${south.toFixed(5)},${west.toFixed(5)},${north.toFixed(5)},${east.toFixed(5)}`;
   
+  // OPTIMIZED: Shorter timeout and simplified query to prevent CPU timeout
   let overpassQuery: string;
   
   if (includeWaterParks) {
     overpassQuery = `
-      [out:json][timeout:30];
+      [out:json][timeout:25];
       (
         way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
-        way["railway"~"^(rail|light_rail|subway|tram)$"](${bbox});
-        way["aeroway"~"^(runway|taxiway)$"](${bbox});
-        way["natural"="coastline"](${bbox});
+        way["railway"~"^(rail|light_rail)$"](${bbox});
         way["natural"="water"](${bbox});
-        way["waterway"~"^(river|canal|riverbank)$"](${bbox});
-        way["landuse"="forest"](${bbox});
-        way["natural"="wood"](${bbox});
-        way["leisure"="park"](${bbox});
-        way["landuse"~"^(grass|meadow)$"](${bbox});
+        way["waterway"~"^(river|canal)$"](${bbox});
       );
       out geom;
     `;
   } else {
     overpassQuery = `
-      [out:json][timeout:20];
+      [out:json][timeout:15];
       (
         way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
-        way["railway"~"^(rail|light_rail|subway|tram)$"](${bbox});
-        way["aeroway"~"^(runway|taxiway)$"](${bbox});
+        way["railway"~"^(rail|light_rail)$"](${bbox});
       );
       out geom;
     `;
@@ -634,27 +629,27 @@ async function fetchStreetData(lat: number, lng: number, distance: number): Prom
   parks: [number, number][][];
   buildings: [number, number][][];
 }> {
-  // Adaptive street type selection to stay within edge runtime CPU limits.
-  // Dense areas (large cities) can exceed CPU when rendering thousands of small service/residential segments.
-  // We keep major roads always; optionally skip the most expensive minor categories for large radii.
-  const includeMinorRoads = distance <= 6500;
-  // Major + residential always; service roads are the most expensive at large radius.
+  // OPTIMIZED: More aggressive road type filtering to reduce CPU time
+  // Skip minor roads for larger distances to stay within CPU limits
+  const includeMinorRoads = distance <= 4000;
   const activeStreetTypes = includeMinorRoads
-    ? ALL_STREET_TYPES.slice(0, 6) // motorway..service (exclude 'path')
-    : ALL_STREET_TYPES.slice(0, 5); // motorway..residential (exclude 'service' + 'path')
+    ? ALL_STREET_TYPES.slice(0, 5) // motorway..residential (no service/path)
+    : ALL_STREET_TYPES.slice(0, 4); // motorway..tertiary only for large areas
 
-  const includeWaterParks = distance <= 9000; // Keep layers for reasonable distances
+  const includeWaterParks = distance <= 6000; // Reduced threshold
 
   const tiles = calculateTiles(lat, lng, distance);
-  console.log(`Fetching ${tiles.length} tiles for distance ${distance}m`);
+  console.log(`Fetching ${tiles.length} tiles for distance ${distance}m (minor=${includeMinorRoads}, water=${includeWaterParks})`);
 
-  // Fetch tiles SEQUENTIALLY to reduce peak memory usage
-  const results: TileResult[] = [];
-
-  for (const tile of tiles) {
-    const result = await fetchSingleTile(tile.lat, tile.lng, tile.radius, activeStreetTypes, includeWaterParks);
-    results.push(result);
+  // For single tile, fetch directly
+  if (tiles.length === 1) {
+    return await fetchSingleTile(tiles[0].lat, tiles[0].lng, tiles[0].radius, activeStreetTypes, includeWaterParks);
   }
+
+  // For multiple tiles, fetch in parallel but limit concurrency
+  const results = await Promise.all(
+    tiles.map(tile => fetchSingleTile(tile.lat, tile.lng, tile.radius, activeStreetTypes, includeWaterParks))
+  );
 
   return mergeResults(results);
 }
