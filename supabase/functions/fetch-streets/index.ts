@@ -41,8 +41,8 @@ interface StreetData {
 const roundCoord = (n: number): number => Math.round(n * 100000) / 100000;
 
 // Threshold: if count query returns more than this, use reduced mode
-// Higher threshold to allow more detail (like reference images)
-const ELEMENT_COUNT_THRESHOLD = 50000;
+// Threshold for reduced mode
+const ELEMENT_COUNT_THRESHOLD = 40000;
 
 const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
