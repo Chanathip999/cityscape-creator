@@ -41,8 +41,9 @@ interface StreetData {
 const roundCoord = (n: number): number => Math.round(n * 100000) / 100000;
 
 // Threshold: if count query returns more than this, use reduced mode
-// Threshold for reduced mode
+// Threshold for reduced mode - much lower when buildings requested
 const ELEMENT_COUNT_THRESHOLD = 40000;
+const ELEMENT_COUNT_THRESHOLD_WITH_BUILDINGS = 20000; // Lower threshold for buildings
 
 // More Overpass endpoints for better load distribution and reliability
 const OVERPASS_URLS = [
@@ -254,11 +255,17 @@ Deno.serve(async (req) => {
 
     // CRITICAL FIX: Check element count BEFORE fetching full data to avoid memory crashes
     console.log('Checking element count...');
-    const estimatedCount = await getElementCount(bbox, highwayTags, includeBuildings);
-    console.log(`Estimated element count: ${estimatedCount}`);
+    // Don't include buildings in count query - check separately
+    const estimatedCount = await getElementCount(bbox, highwayTags, false);
+    console.log(`Estimated element count (without buildings): ${estimatedCount}`);
 
-    let useReducedMode = estimatedCount > ELEMENT_COUNT_THRESHOLD;
+    // Use stricter threshold when buildings are requested
+    const threshold = includeBuildings ? ELEMENT_COUNT_THRESHOLD_WITH_BUILDINGS : ELEMENT_COUNT_THRESHOLD;
+    let useReducedMode = estimatedCount > threshold;
     let includePolygons = !useReducedMode;
+    
+    // CRITICAL: Skip buildings entirely in reduced mode or very dense areas
+    const actuallyIncludeBuildings = includeBuildings && estimatedCount < ELEMENT_COUNT_THRESHOLD_WITH_BUILDINGS;
 
     // For reduced mode, also use core streets only (no service/paths)
     const finalHighwayTags = useReducedMode 
@@ -266,12 +273,16 @@ Deno.serve(async (req) => {
       : highwayTags;
 
     if (useReducedMode) {
-      console.log(`Using REDUCED mode for dense area (${estimatedCount} elements estimated)`);
+      console.log(`Using REDUCED mode for dense area (${estimatedCount} elements, threshold: ${threshold})`);
     } else {
-      console.log(`Using FULL mode (${estimatedCount} elements estimated)`);
+      console.log(`Using FULL mode (${estimatedCount} elements, threshold: ${threshold})`);
+    }
+    
+    if (includeBuildings && !actuallyIncludeBuildings) {
+      console.log('Buildings skipped due to density - area too complex');
     }
 
-    const query = buildQuery({ bbox, highwayTags: finalHighwayTags, includePolygons, includeBuildings });
+    const query = buildQuery({ bbox, highwayTags: finalHighwayTags, includePolygons, includeBuildings: actuallyIncludeBuildings });
     const elements = await fetchOverpass(query);
 
     if (elements === null) {
