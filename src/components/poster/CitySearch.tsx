@@ -59,7 +59,7 @@ export const CitySearch = ({ onCitySelect }: CitySearchProps) => {
       } finally {
         setIsLoading(false);
       }
-    }, 300); // 300ms debounce
+    }, 100); // 100ms debounce for instant feel
 
     return () => {
       if (debounceRef.current) {

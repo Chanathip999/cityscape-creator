@@ -178,49 +178,61 @@ export const useStreetData = ({
   const lastParamsRef = useRef<string>('');
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const fetchTile = useCallback(async (
+  const fetchTileWithRetry = useCallback(async (
     tileLat: number,
     tileLng: number,
     tileRadius: number,
-    skipService: boolean
+    skipService: boolean,
+    retries = 2
   ): Promise<TileResult | null> => {
     const cacheKey = getTileCacheKey(tileLat, tileLng, tileRadius);
     
-    // Try IndexedDB cache first (24h TTL)
+    // Try IndexedDB cache first (24h TTL) - instant!
     const cached = await getCachedTile(cacheKey);
     if (cached) {
-      console.log('IndexedDB cache hit:', cacheKey);
       return cached as TileResult;
     }
     
-    try {
-      const { data, error: fnError } = await supabase.functions.invoke('fetch-streets', {
-        body: { lat: tileLat, lng: tileLng, distance: tileRadius, skipService },
-      });
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const { data, error: fnError } = await supabase.functions.invoke('fetch-streets', {
+          body: { lat: tileLat, lng: tileLng, distance: tileRadius, skipService },
+        });
 
-      if (fnError) {
-        console.error('Tile fetch error:', fnError);
+        if (fnError) {
+          if (attempt < retries) {
+            // Wait before retry with exponential backoff
+            await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
+            continue;
+          }
+          console.error('Tile fetch error after retries:', fnError);
+          return null;
+        }
+
+        const result: TileResult = {
+          streets: data?.streets || [],
+          railways: data?.railways || [],
+          aeroways: data?.aeroways || [],
+          coastlines: data?.coastlines || [],
+          water: data?.water || [],
+          parks: data?.parks || [],
+          forests: data?.forests || [],
+        };
+        
+        // Cache in IndexedDB for future use
+        await setCachedTile(cacheKey, result);
+        
+        return result;
+      } catch (err) {
+        if (attempt < retries) {
+          await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
+          continue;
+        }
+        console.error('Tile fetch exception:', err);
         return null;
       }
-
-      const result: TileResult = {
-        streets: data?.streets || [],
-        railways: data?.railways || [],
-        aeroways: data?.aeroways || [],
-        coastlines: data?.coastlines || [],
-        water: data?.water || [],
-        parks: data?.parks || [],
-        forests: data?.forests || [],
-      };
-      
-      // Cache in IndexedDB for future use
-      await setCachedTile(cacheKey, result);
-      
-      return result;
-    } catch (err) {
-      console.error('Tile fetch exception:', err);
-      return null;
     }
+    return null;
   }, []);
 
   useEffect(() => {
@@ -255,15 +267,20 @@ export const useStreetData = ({
         const skipService = false;
         console.log(`Fetching ${tiles.length} tile(s) for area (skipService: ${skipService})`);
 
-        // OPTIMIZATION: Fetch ALL tiles in parallel for maximum speed
-        // IndexedDB cache hits are instant, only uncached tiles go to network
+        // Smart batching: fetch in small concurrent batches to avoid rate limiting
+        // while still being much faster than sequential
+        const BATCH_SIZE = 5;
         const results: TileResult[] = [];
-        const batchResults = await Promise.all(
-          tiles.map(tile => fetchTile(tile.lat, tile.lng, tile.radius, skipService))
-        );
         
-        for (const result of batchResults) {
-          if (result) results.push(result);
+        for (let i = 0; i < tiles.length; i += BATCH_SIZE) {
+          const batch = tiles.slice(i, i + BATCH_SIZE);
+          const batchResults = await Promise.all(
+            batch.map(tile => fetchTileWithRetry(tile.lat, tile.lng, tile.radius, skipService))
+          );
+          
+          for (const result of batchResults) {
+            if (result) results.push(result);
+          }
         }
 
         if (results.length === 0) {
@@ -301,7 +318,7 @@ export const useStreetData = ({
         clearTimeout(fetchTimeoutRef.current);
       }
     };
-  }, [latitude, longitude, distance, enabled, fetchTile]);
+  }, [latitude, longitude, distance, enabled, fetchTileWithRetry]);
 
   return { streets, railways, aeroways, coastlines, water, parks, forests, isLoading, error };
 };
