@@ -28,20 +28,24 @@ interface RenderRequest {
     roadTertiary: string;
     roadResidential: string;
     roadService: string;
+    railway?: string;
   };
   fontFamily: string;
   fontSize: string;
   customTextColor?: string;
   width?: number;
   height?: number;
-  showGradients?: boolean; // Enable/disable gradient fades
-  showDecorativeLine?: boolean; // Enable/disable line between city and country
+  showGradients?: boolean;
+  showDecorativeLine?: boolean;
 }
 
 interface StreetSegment {
   type: string;
   coordinates: [number, number][][];
 }
+
+// Railway width
+const RAILWAY_WIDTH = 0.6;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants from maptoposter Python script
@@ -229,6 +233,7 @@ const MAX_TILES = 3; // Reduced to prevent memory exceeded errors
 
 interface TileResult {
   streets: StreetSegment[];
+  railways: [number, number][][];
   water: [number, number][][];
   parks: [number, number][][];
 }
@@ -286,6 +291,7 @@ async function fetchSingleTile(
       [out:json][timeout:25];
       (
         way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
+        way["railway"~"^(rail|light_rail|subway|tram)$"](${bbox});
         way["natural"="water"](${bbox});
         way["waterway"~"^(river|canal|riverbank)$"](${bbox});
         way["leisure"="park"](${bbox});
@@ -298,6 +304,7 @@ async function fetchSingleTile(
       [out:json][timeout:20];
       (
         way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
+        way["railway"~"^(rail|light_rail|subway|tram)$"](${bbox});
       );
       out geom;
     `;
@@ -325,7 +332,7 @@ async function fetchSingleTile(
 
   if (!response || !response.ok) {
     console.error('Tile fetch failed, returning empty');
-    return { streets: [], water: [], parks: [] };
+    return { streets: [], railways: [], water: [], parks: [] };
   }
 
   const osmData = await response.json();
@@ -339,6 +346,7 @@ async function fetchSingleTile(
   const coordsByType = new Map<string, [number, number][][]>();
   for (const st of activeStreetTypes) coordsByType.set(st.type, []);
 
+  const railwayLines: [number, number][][] = [];
   const waterPolygons: [number, number][][] = [];
   const parkPolygons: [number, number][][] = [];
 
@@ -362,6 +370,17 @@ async function fetchSingleTile(
       }
       if (points.length >= 2) {
         coordsByType.get(type)?.push(points);
+      }
+    } else if (tags.railway) {
+      // Parse railway lines
+      const points: [number, number][] = [];
+      for (const pt of geom) {
+        if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+          points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+        }
+      }
+      if (points.length >= 2) {
+        railwayLines.push(points);
       }
     } else if (tags.natural === 'water' || tags.waterway) {
       const points: [number, number][] = [];
@@ -391,11 +410,11 @@ async function fetchSingleTile(
     coordinates: coordsByType.get(st.type) || [],
   }));
 
-  return { streets, water: waterPolygons, parks: parkPolygons };
+  return { streets, railways: railwayLines, water: waterPolygons, parks: parkPolygons };
 }
 
 function mergeResults(results: TileResult[]): TileResult {
-  const merged: TileResult = { streets: [], water: [], parks: [] };
+  const merged: TileResult = { streets: [], railways: [], water: [], parks: [] };
   const streetsByType = new Map<string, [number, number][][]>();
 
   for (const result of results) {
@@ -404,6 +423,7 @@ function mergeResults(results: TileResult[]): TileResult {
       existing.push(...street.coordinates);
       streetsByType.set(street.type, existing);
     }
+    merged.railways.push(...result.railways);
     merged.water.push(...result.water);
     merged.parks.push(...result.parks);
   }
@@ -418,6 +438,7 @@ function mergeResults(results: TileResult[]): TileResult {
 
 async function fetchStreetData(lat: number, lng: number, distance: number): Promise<{
   streets: StreetSegment[];
+  railways: [number, number][][];
   water: [number, number][][];
   parks: [number, number][][];
 }> {
@@ -445,6 +466,7 @@ async function fetchStreetData(lat: number, lng: number, distance: number): Prom
 
 function generateSVG(request: RenderRequest, data: {
   streets: StreetSegment[];
+  railways: [number, number][][];
   water: [number, number][][];
   parks: [number, number][][];
 }): string {
@@ -519,7 +541,22 @@ function generateSVG(request: RenderRequest, data: {
     svg += `<polygon points="${points}" fill="${theme.water}"/>`;
   }
   
-  // Layer 3: Streets (z-order 3 in Python) - draw in order: service -> motorway
+  // Layer 3: Railways (z-order 2.5 - between parks and streets)
+  const railwayColor = theme.railway || theme.roadPrimary;
+  const railwayStrokeWidth = RAILWAY_WIDTH * scaleFactor;
+  
+  for (const polyline of data.railways) {
+    if (polyline.length < 2) continue;
+    
+    const d = polyline.map(([lat, lng], i) => {
+      const { x, y } = toCanvasCoords(lat, lng, width, height, bounds);
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(' ');
+    
+    svg += `<path d="${d}" stroke="${railwayColor}" stroke-width="${railwayStrokeWidth.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+  }
+  
+  // Layer 4: Streets (z-order 3 in Python) - draw in order: service -> motorway
   const streetOrder = ['service', 'residential', 'tertiary', 'secondary', 'primary', 'motorway'];
   
   for (const streetType of streetOrder) {

@@ -45,6 +45,7 @@ export const useRenderPoster = (): UseRenderPosterResult => {
             roadTertiary: config.theme.roadTertiary,
             roadResidential: config.theme.roadResidential,
             roadService: config.theme.roadService,
+            railway: config.theme.railway,
           },
           fontFamily: config.fontFamily,
           fontSize: config.fontSize,
