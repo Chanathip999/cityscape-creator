@@ -44,18 +44,26 @@ const roundCoord = (n: number): number => Math.round(n * 100000) / 100000;
 // Threshold for reduced mode
 const ELEMENT_COUNT_THRESHOLD = 40000;
 
+// More Overpass endpoints for better load distribution and reliability
 const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.openstreetmap.ru/api/interpreter',
 ];
 
-// Quick count query to estimate payload size before fetching full data
+// Pick a random endpoint to distribute load
+function getRandomEndpoint(): string {
+  return OVERPASS_URLS[Math.floor(Math.random() * OVERPASS_URLS.length)];
+}
+
+// Quick count query with shorter timeout - skip if it fails
 async function getElementCount(bbox: string, highwayTags: string[]): Promise<number> {
   const railwayRegex = RAILWAY_TYPES.join('|');
   const aerowayRegex = AEROWAY_TYPES.join('|');
   
   const countQuery = `
-    [out:json][timeout:10];
+    [out:json][timeout:5];
     (
       way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
       way["railway"~"^(${railwayRegex})$"](${bbox});
@@ -70,26 +78,36 @@ async function getElementCount(bbox: string, highwayTags: string[]): Promise<num
     out count;
   `;
 
-  for (const url of OVERPASS_URLS) {
+  // Try random endpoint first to distribute load
+  const endpoints = [...OVERPASS_URLS].sort(() => Math.random() - 0.5);
+  
+  for (const url of endpoints.slice(0, 2)) { // Only try 2 endpoints for count
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `data=${encodeURIComponent(countQuery)}`,
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
         const count = data?.elements?.[0]?.tags?.total || data?.elements?.[0]?.tags?.ways || 0;
         return parseInt(count, 10) || 0;
       }
+      await response.text(); // Consume body
     } catch (e) {
-      console.error('Count query failed:', url, e);
+      // Silent fail - we'll use default
     }
   }
 
-  // If count fails, assume it's large to be safe
-  return ELEMENT_COUNT_THRESHOLD + 1;
+  // Skip count check and fetch directly with full mode
+  return 0;
 }
 
 function buildQuery(params: {
@@ -133,23 +151,43 @@ function buildQuery(params: {
 }
 
 async function fetchOverpass(query: string): Promise<any[] | null> {
-  for (const url of OVERPASS_URLS) {
+  // Shuffle endpoints to distribute load
+  const endpoints = [...OVERPASS_URLS].sort(() => Math.random() - 0.5);
+  
+  for (const url of endpoints) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout
+      
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `data=${encodeURIComponent(query)}`,
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
         return data?.elements || [];
       }
 
+      // Rate limited - try next endpoint
+      if (response.status === 429) {
+        console.log(`Rate limited on ${url}, trying next...`);
+        await response.text(); // Consume body
+        continue;
+      }
+
       const errorText = await response.text();
-      console.error('Overpass error:', url, response.status, errorText.substring(0, 200));
+      console.error('Overpass error:', url, response.status, errorText.substring(0, 100));
     } catch (e) {
-      console.error('Overpass fetch failed:', url, e);
+      if (e instanceof Error && e.name === 'AbortError') {
+        console.log(`Timeout on ${url}, trying next...`);
+        continue;
+      }
+      console.error('Overpass fetch failed:', url);
     }
   }
 
