@@ -321,25 +321,37 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
             onDoubleClick={(e) => handleDoubleClick(e, element.id, element.editable)}
           >
             {isEditing && element.editable ? (
-              <input
-                type="text"
-                value={element.id === 'city' ? config.city : (config.countryLabel || config.country)}
-                onChange={(e) => handleTextChange(e, element.id as 'city' | 'country')}
-                onBlur={handleTextBlur}
-                onKeyDown={handleKeyDown}
-                autoFocus
-                size={(element.id === 'city' ? config.city.length : (config.countryLabel || config.country).length) + 2}
-                className="bg-transparent border-none outline-none text-center caret-primary"
-                style={{
-                  color: textColor,
-                  fontSize: `${fontSize}px`,
-                  fontWeight,
-                  letterSpacing,
-                  textTransform: 'uppercase',
-                  writingMode: isVertical ? 'vertical-rl' : 'horizontal-tb',
-                  textOrientation: isVertical ? 'mixed' : undefined,
-                }}
-              />
+              (() => {
+                // Calculate proper width including letter-spacing
+                const currentValue = element.id === 'city' ? config.city : (config.countryLabel || config.country);
+                const charCount = Math.max(currentValue.length, 3);
+                // Each character takes ~0.65em + letter-spacing
+                const letterSpacingEm = element.id === 'city' ? 0.3 : 0.15;
+                const charWidth = 0.65 + letterSpacingEm;
+                const calculatedWidth = charCount * charWidth * fontSize + fontSize * 2; // Extra padding
+                
+                return (
+                  <input
+                    type="text"
+                    value={currentValue}
+                    onChange={(e) => handleTextChange(e, element.id as 'city' | 'country')}
+                    onBlur={handleTextBlur}
+                    onKeyDown={handleKeyDown}
+                    autoFocus
+                    className="bg-transparent border-none outline-none text-center caret-primary"
+                    style={{
+                      color: textColor,
+                      fontSize: `${fontSize}px`,
+                      fontWeight,
+                      letterSpacing,
+                      textTransform: 'uppercase',
+                      width: `${calculatedWidth}px`,
+                      writingMode: isVertical ? 'vertical-rl' : 'horizontal-tb',
+                      textOrientation: isVertical ? 'mixed' : undefined,
+                    }}
+                  />
+                );
+              })()
             ) : (
               <span
                 className={`select-none whitespace-nowrap px-1 py-0.5 rounded-sm transition-shadow ${
