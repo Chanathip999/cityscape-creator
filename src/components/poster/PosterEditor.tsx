@@ -1,13 +1,11 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme } from '@/types/poster';
-import { PosterPreview } from './PosterPreview';
 import { CanvasPosterPreview } from './CanvasPosterPreview';
 import { ThemeSelector } from './ThemeSelector';
 import { CitySearch } from './CitySearch';
 import { ZoomControls } from './ZoomControls';
 import { AIPromptInput } from './AIPromptInput';
-import { RenderModeSelector } from './RenderModeSelector';
 import { SettingsTabs } from './SettingsTabs';
 import { ClearCacheButton } from './ClearCacheButton';
 import { ExportDialog } from './ExportDialog';
@@ -17,32 +15,36 @@ import { Label } from '@/components/ui/label';
 import { Map } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
-export const PosterEditor = () => {
+interface PosterEditorProps {
+  onConfigChange?: (config: PosterConfig) => void;
+}
+
+export const PosterEditor = ({ onConfigChange }: PosterEditorProps) => {
   const [config, setConfig] = useState<PosterConfig>(DEFAULT_CONFIG);
   const posterRef = useRef<HTMLDivElement>(null);
 
   const handleCitySelect = (city: string, country: string, lat: number, lon: number) => {
-    setConfig((prev) => ({
-      ...prev,
-      city,
-      country,
-      latitude: lat,
-      longitude: lon,
-    }));
+    setConfig((prev) => {
+      const newConfig = { ...prev, city, country, latitude: lat, longitude: lon };
+      onConfigChange?.(newConfig);
+      return newConfig;
+    });
   };
 
   const handleThemeChange = (theme: PosterTheme) => {
-    setConfig((prev) => ({
-      ...prev,
-      theme,
-    }));
+    setConfig((prev) => {
+      const newConfig = { ...prev, theme };
+      onConfigChange?.(newConfig);
+      return newConfig;
+    });
   };
 
   const handleDistanceChange = (distance: number) => {
-    setConfig((prev) => ({
-      ...prev,
-      distance,
-    }));
+    setConfig((prev) => {
+      const newConfig = { ...prev, distance };
+      onConfigChange?.(newConfig);
+      return newConfig;
+    });
   };
 
   const handleConfigUpdate = (updates: Partial<PosterConfig>) => {
@@ -56,6 +58,7 @@ export const PosterEditor = () => {
         }
       }
       
+      onConfigChange?.(newConfig);
       return newConfig;
     });
   };
@@ -130,26 +133,14 @@ export const PosterEditor = () => {
                 onThemeChange={handleThemeChange}
               />
 
-              <Separator />
-
-              {/* Render Mode Selector */}
-              <RenderModeSelector
-                renderMode={config.renderMode}
-                onRenderModeChange={(mode) => handleConfigUpdate({ renderMode: mode })}
-              />
-
-              {/* Settings Tabs - Only for vector mode */}
-              {config.renderMode === 'vector' && (
-                <SettingsTabs config={config} onConfigUpdate={handleConfigUpdate} />
-              )}
+              {/* Settings Tabs */}
+              <SettingsTabs config={config} onConfigUpdate={handleConfigUpdate} />
 
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
-                  💡 {config.renderMode === 'vector' 
-                    ? 'Vektor-Modus: Nur Straßen werden als scharfe Linien gezeichnet.'
-                    : 'Tile-Modus: Karten-Tiles von OpenStreetMap mit Details.'}
+                  💡 Vektor-Modus: Stilisierte Straßen als scharfe Vektorgrafik.
                 </p>
-                {config.renderMode === 'vector' && <ClearCacheButton />}
+                <ClearCacheButton />
               </div>
             </motion.div>
           </div>
@@ -162,11 +153,7 @@ export const PosterEditor = () => {
               transition={{ delay: 0.2 }}
               className="max-w-lg mx-auto relative"
             >
-              {config.renderMode === 'vector' ? (
-                <CanvasPosterPreview config={config} containerRef={posterRef} />
-              ) : (
-                <PosterPreview config={config} containerRef={posterRef} />
-              )}
+              <CanvasPosterPreview config={config} containerRef={posterRef} />
               
               {/* Zoom Controls overlay */}
               <ZoomControls

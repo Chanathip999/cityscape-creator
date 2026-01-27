@@ -22,7 +22,7 @@ export type PosterOrientation = 'vertical' | 'horizontal';
 export type AspectRatioId = '1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '9:16' | '16:9' | '6:19' | '19:6';
 export type ExportFormat = 'png' | 'jpeg';
 export type ExportResolution = 'fullhd' | '4k' | '8k';
-export type RenderMode = 'tiles' | 'vector';
+export type RenderMode = 'vector';
 
 export interface AspectRatio {
   id: string;
@@ -308,8 +308,7 @@ export const FONT_SIZES: { id: FontSize; name: string }[] = [
 ];
 
 export const RENDER_MODES: { id: RenderMode; name: string; description: string }[] = [
-  { id: 'tiles', name: 'Detailliert', description: 'Karten-Tiles mit Gebäuden, Parks & Wasser' },
-  { id: 'vector', name: 'Minimalistisch', description: 'Nur Straßen als Vektorgrafik' },
+  { id: 'vector', name: 'Minimalistisch', description: 'Stilisierte Vektorgrafik' },
 ];
 
 export const DEFAULT_CONFIG: PosterConfig = {
