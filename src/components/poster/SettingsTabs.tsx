@@ -22,11 +22,13 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
 ];
 
 const LAYER_OPTIONS: { id: keyof LayerVisibility; label: string; icon: React.ElementType; colorKey: keyof LayerColors; premium?: boolean; premiumPrice?: string }[] = [
+  // Default ON layers first
   { id: 'water', label: 'Wasser', icon: Waves, colorKey: 'water' },
-  { id: 'forests', label: 'Wälder', icon: Trees, colorKey: 'forests' },
   { id: 'parks', label: 'Parks', icon: TreeDeciduous, colorKey: 'parks' },
   { id: 'railways', label: 'Zugstrecken', icon: Train, colorKey: 'railways' },
   { id: 'aeroways', label: 'Flughäfen', icon: Plane, colorKey: 'aeroways' },
+  // Default OFF layers at bottom
+  { id: 'forests', label: 'Wälder', icon: Trees, colorKey: 'forests' },
   { id: 'coastlines', label: 'Küstenlinien', icon: MapPin, colorKey: 'coastlines' },
   { id: 'buildings', label: 'Gebäude', icon: Building, colorKey: 'buildings', premium: true, premiumPrice: '+€1,99 (ab 4K)' },
 ];
@@ -369,41 +371,6 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
               Alle Ebenenfarben zurücksetzen
             </button>
 
-            {/* Format/Aspect Ratio */}
-            <div className="space-y-3 pt-4 border-t border-border">
-              <Label>Format</Label>
-              <div className="flex gap-2">
-                {QUICK_RATIOS.map((ratioId) => {
-                  const ratio = ASPECT_RATIOS.find(r => r.id === ratioId);
-                  if (!ratio) return null;
-                  
-                  return (
-                    <button
-                      key={ratioId}
-                      onClick={() => onConfigUpdate({ aspectRatio: ratioId })}
-                      className={cn(
-                        'relative flex-1 aspect-square rounded-lg border-2 flex flex-col items-center justify-center gap-1 transition-all',
-                        config.aspectRatio === ratioId
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border hover:border-primary/50'
-                      )}
-                    >
-                      {config.aspectRatio === ratioId && (
-                        <Check className="absolute top-1 right-1 w-3 h-3 text-primary" />
-                      )}
-                      <div 
-                        className="bg-muted-foreground/30 rounded-sm"
-                        style={{
-                          width: ratio.width > ratio.height ? '60%' : `${(ratio.width / ratio.height) * 60}%`,
-                          height: ratio.height > ratio.width ? '60%' : `${(ratio.height / ratio.width) * 60}%`,
-                        }}
-                      />
-                      <span className="text-xs text-muted-foreground">{ratioId}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           </>
         )}
       </div>

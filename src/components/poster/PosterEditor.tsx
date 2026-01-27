@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme } from '@/types/poster';
+import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, AspectRatioId } from '@/types/poster';
 import { CanvasPosterPreview } from './CanvasPosterPreview';
 import { TextOverlay } from './TextOverlay';
 import { ThemeSelector } from './ThemeSelector';
+import { AspectRatioSelector } from './AspectRatioSelector';
 import { CitySearch } from './CitySearch';
 import { ZoomControls } from './ZoomControls';
 import { AIPromptInput } from './AIPromptInput';
@@ -132,7 +133,13 @@ export const PosterEditor = ({ initialConfig, onConfigChange }: PosterEditorProp
                 onThemeChange={handleThemeChange}
               />
 
-              {/* Settings Tabs */}
+              {/* Format / Aspect Ratio Selector - directly under Theme */}
+              <AspectRatioSelector
+                aspectRatio={config.aspectRatio}
+                onAspectRatioChange={(ratio: AspectRatioId) => handleConfigUpdate({ aspectRatio: ratio })}
+              />
+
+              <Separator />
               <SettingsTabs config={config} onConfigUpdate={handleConfigUpdate} />
 
               <div className="flex items-center justify-between">
