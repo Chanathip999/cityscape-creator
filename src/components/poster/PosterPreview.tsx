@@ -227,8 +227,10 @@ export const PosterPreview = ({ config, onLocationChange, interactive = false, c
   return (
     <div
       ref={containerRef}
-      className={`relative w-full ${getAspectClass()} overflow-hidden`}
+      className={`relative w-full ${getAspectClass()} overflow-hidden select-none`}
       style={{ backgroundColor: theme.bg }}
+      onContextMenu={(e) => e.preventDefault()}
+      onDragStart={(e) => e.preventDefault()}
     >
       {/* Map layer */}
       <div
