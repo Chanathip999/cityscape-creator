@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.render-poster]
 verify_jwt = false
+
+[functions.create-checkout]
+verify_jwt = false
+
+[functions.verify-payment]
+verify_jwt = false
