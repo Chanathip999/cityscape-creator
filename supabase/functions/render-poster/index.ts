@@ -204,30 +204,62 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Overpass Data Fetching
+// Overpass Data Fetching with Tile-based approach for large areas
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function fetchStreetData(lat: number, lng: number, distance: number): Promise<{
+const MAX_TILE_RADIUS = 5000; // 5km per tile for stability
+const MAX_TILES = 9; // Max 9 tiles (3x3 grid)
+
+interface TileResult {
   streets: StreetSegment[];
   water: [number, number][][];
   parks: [number, number][][];
-}> {
-  const radius = Math.min(12000, Math.max(2500, distance));
-  const includeWaterParks = distance <= 10000;
-  
-  const activeStreetTypes = distance > 12000
-    ? ALL_STREET_TYPES.slice(0, 4)
-    : distance > 8000
-      ? ALL_STREET_TYPES.slice(0, 5)
-      : ALL_STREET_TYPES;
+}
 
-  const latDelta = radius / 111320;
-  const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));
+function calculateTiles(lat: number, lng: number, distance: number): { lat: number; lng: number; radius: number }[] {
+  if (distance <= MAX_TILE_RADIUS) {
+    return [{ lat, lng, radius: distance }];
+  }
+
+  const tiles: { lat: number; lng: number; radius: number }[] = [];
+  tiles.push({ lat, lng, radius: MAX_TILE_RADIUS });
+
+  const tileSpacing = MAX_TILE_RADIUS * 1.6;
+  const numTilesPerSide = Math.ceil(distance / tileSpacing);
   
-  const south = lat - latDelta;
-  const north = lat + latDelta;
-  const west = lng - lngDelta;
-  const east = lng + lngDelta;
+  if (numTilesPerSide <= 1) return tiles;
+
+  const metersPerDegreeLat = 111320;
+  const metersPerDegreeLng = 111320 * Math.cos(lat * Math.PI / 180);
+  const latStep = tileSpacing / metersPerDegreeLat;
+  const lngStep = tileSpacing / metersPerDegreeLng;
+
+  // Add surrounding tiles in a grid pattern
+  for (let row = -1; row <= 1 && tiles.length < MAX_TILES; row++) {
+    for (let col = -1; col <= 1 && tiles.length < MAX_TILES; col++) {
+      if (row === 0 && col === 0) continue; // Skip center (already added)
+      tiles.push({ lat: lat + row * latStep, lng: lng + col * lngStep, radius: MAX_TILE_RADIUS });
+    }
+  }
+
+  console.log(`Created ${tiles.length} tiles for ${distance}m radius`);
+  return tiles;
+}
+
+async function fetchSingleTile(
+  tileLat: number,
+  tileLng: number,
+  radius: number,
+  activeStreetTypes: typeof ALL_STREET_TYPES,
+  includeWaterParks: boolean
+): Promise<TileResult> {
+  const latDelta = radius / 111320;
+  const lngDelta = radius / (111320 * Math.cos(tileLat * Math.PI / 180));
+  
+  const south = tileLat - latDelta;
+  const north = tileLat + latDelta;
+  const west = tileLng - lngDelta;
+  const east = tileLng + lngDelta;
 
   const highwayTags = activeStreetTypes.flatMap(st => st.tags);
   const bbox = `${south.toFixed(5)},${west.toFixed(5)},${north.toFixed(5)},${east.toFixed(5)}`;
@@ -277,7 +309,8 @@ async function fetchStreetData(lat: number, lng: number, distance: number): Prom
   }
 
   if (!response || !response.ok) {
-    throw new Error('Overpass API unavailable');
+    console.error('Tile fetch failed, returning empty');
+    return { streets: [], water: [], parks: [] };
   }
 
   const osmData = await response.json();
@@ -344,6 +377,55 @@ async function fetchStreetData(lat: number, lng: number, distance: number): Prom
   }));
 
   return { streets, water: waterPolygons, parks: parkPolygons };
+}
+
+function mergeResults(results: TileResult[]): TileResult {
+  const merged: TileResult = { streets: [], water: [], parks: [] };
+  const streetsByType = new Map<string, [number, number][][]>();
+
+  for (const result of results) {
+    for (const street of result.streets) {
+      const existing = streetsByType.get(street.type) || [];
+      existing.push(...street.coordinates);
+      streetsByType.set(street.type, existing);
+    }
+    merged.water.push(...result.water);
+    merged.parks.push(...result.parks);
+  }
+
+  merged.streets = Array.from(streetsByType.entries()).map(([type, coordinates]) => ({
+    type,
+    coordinates,
+  }));
+
+  return merged;
+}
+
+async function fetchStreetData(lat: number, lng: number, distance: number): Promise<{
+  streets: StreetSegment[];
+  water: [number, number][][];
+  parks: [number, number][][];
+}> {
+  // ALWAYS use all street types to ensure fine streets are visible in exports
+  const activeStreetTypes = ALL_STREET_TYPES;
+  const includeWaterParks = distance <= 10000;
+
+  const tiles = calculateTiles(lat, lng, distance);
+  console.log(`Fetching ${tiles.length} tiles for distance ${distance}m`);
+
+  // Fetch tiles in parallel (max 3 at a time to avoid rate limits)
+  const results: TileResult[] = [];
+  const BATCH_SIZE = 3;
+
+  for (let i = 0; i < tiles.length; i += BATCH_SIZE) {
+    const batch = tiles.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.all(
+      batch.map(tile => fetchSingleTile(tile.lat, tile.lng, tile.radius, activeStreetTypes, includeWaterParks))
+    );
+    results.push(...batchResults);
+  }
+
+  return mergeResults(results);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
