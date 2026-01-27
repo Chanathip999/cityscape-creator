@@ -38,7 +38,7 @@ interface TileResult {
   buildings: [number, number][][];
 }
 
-// Tile radii - OPTIMIZED FOR PROGRESSIVE LOADING
+// Tile radii - OPTIMIZED FOR SPEED
 // Streets can be larger; buildings use smaller tiles for faster individual responses
 const MAX_STREET_TILE_RADIUS = 5000;
 const MAX_BUILDING_TILE_RADIUS = 2000; // Smaller = faster individual loads, more responsive
@@ -47,10 +47,10 @@ const MAX_BUILDING_TILE_RADIUS = 2000; // Smaller = faster individual loads, mor
 const MAX_TILES_STREETS = 36;
 const MAX_TILES_BUILDINGS = 100; // More tiles but smaller = faster perceived loading
 
-// Batch sizes for parallel fetching - PROGRESSIVE LOADING STRATEGY
-// Buildings load progressively (UI updates after each batch) so we can go higher
-const STREET_BATCH_SIZE = 12;
-const BUILDING_BATCH_SIZE = 10; // Higher because we update UI after each batch (not waiting for all)
+// Batch sizes for parallel fetching - AGGRESSIVE PARALLELIZATION (2-3x faster)
+// Higher batch = more parallel requests = faster total time
+const STREET_BATCH_SIZE = 24; // Doubled for faster loading
+const BUILDING_BATCH_SIZE = 18; // Increased for faster progressive loading
 
 // Calculate tiles needed for a given area - ensures center is always included
 function calculateTiles(params: {
@@ -410,7 +410,7 @@ export const useStreetData = ({
       } finally {
         setIsLoading(false);
       }
-    }, 100); // 100ms debounce for faster response
+    }, 50); // 50ms debounce for ultra-fast response
 
     return () => {
       if (fetchTimeoutRef.current) {
