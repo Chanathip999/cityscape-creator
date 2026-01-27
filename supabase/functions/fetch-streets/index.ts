@@ -5,16 +5,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Street types - full detail including pedestrian paths for maximum detail
-const ALL_STREET_TYPES = [
+// Street types - reduced set for dense cities
+const CORE_STREET_TYPES = [
   { type: 'motorway', tags: ['motorway', 'motorway_link'] },
   { type: 'primary', tags: ['trunk', 'trunk_link', 'primary', 'primary_link'] },
   { type: 'secondary', tags: ['secondary', 'secondary_link'] },
   { type: 'tertiary', tags: ['tertiary', 'tertiary_link'] },
   { type: 'residential', tags: ['residential', 'living_street', 'unclassified'] },
+];
+
+// Additional street types for less dense areas
+const EXTRA_STREET_TYPES = [
   { type: 'service', tags: ['service', 'pedestrian'] },
   { type: 'path', tags: ['footway', 'path', 'cycleway', 'track', 'steps', 'bridleway'] },
 ];
+
+const ALL_STREET_TYPES = [...CORE_STREET_TYPES, ...EXTRA_STREET_TYPES];
 
 // Simple in-memory cache for recent queries (TTL: 10 minutes for stability)
 const cache = new Map<string, { data: unknown; timestamp: number }>();
@@ -31,43 +37,73 @@ interface StreetData {
   coordinates: [number, number][][];
 }
 
-interface RailwayData {
-  type: 'railway';
-  coordinates: [number, number][][]; // Array of polylines
-}
-
-interface WaterData {
-  type: 'water';
-  polygons: [number, number][][]; // Array of polygon rings
-}
-
-interface ParkData {
-  type: 'park';
-  polygons: [number, number][][];
-}
-
 // Round coordinate to reduce JSON size while maintaining ~1m precision
-// 5 decimals = ~1.1m precision (sufficient for smooth curves)
 const roundCoord = (n: number): number => Math.round(n * 100000) / 100000;
 
-type OverpassMode = 'full' | 'reduced';
+// Threshold: if count query returns more than this, use reduced mode
+const ELEMENT_COUNT_THRESHOLD = 25000;
 
-const OVERPASS_ELEMENT_HARD_LIMIT = 30000; // beyond this we often hit memory/worker limits in dense cities
+const OVERPASS_URLS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
 
-function buildOverpassQuery(params: {
+// Quick count query to estimate payload size before fetching full data
+async function getElementCount(bbox: string, highwayTags: string[]): Promise<number> {
+  const railwayRegex = RAILWAY_TYPES.join('|');
+  const aerowayRegex = AEROWAY_TYPES.join('|');
+  
+  const countQuery = `
+    [out:json][timeout:15];
+    (
+      way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
+      way["railway"~"^(${railwayRegex})$"](${bbox});
+      way["aeroway"~"^(${aerowayRegex})$"](${bbox});
+      way["natural"="water"](${bbox});
+      way["natural"="coastline"](${bbox});
+      way["waterway"~"^(river|stream|canal|drain)$"](${bbox});
+      way["leisure"="park"](${bbox});
+      way["landuse"~"^(grass|meadow|forest)$"](${bbox});
+      way["natural"~"^(wood|beach)$"](${bbox});
+    );
+    out count;
+  `;
+
+  for (const url of OVERPASS_URLS) {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(countQuery)}`,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const count = data?.elements?.[0]?.tags?.total || data?.elements?.[0]?.tags?.ways || 0;
+        return parseInt(count, 10) || 0;
+      }
+    } catch (e) {
+      console.error('Count query failed:', url, e);
+    }
+  }
+
+  // If count fails, assume it's large to be safe
+  return ELEMENT_COUNT_THRESHOLD + 1;
+}
+
+function buildQuery(params: {
   bbox: string;
   highwayTags: string[];
-  mode: OverpassMode;
+  includePolygons: boolean;
 }): string {
-  const { bbox, highwayTags, mode } = params;
+  const { bbox, highwayTags, includePolygons } = params;
   const railwayRegex = RAILWAY_TYPES.join('|');
   const aerowayRegex = AEROWAY_TYPES.join('|');
 
-  // “Reduced” mode purpose: guarantee *some* center data instead of failing hard.
-  // We intentionally drop the heaviest layers in dense cities.
-  if (mode === 'reduced') {
+  if (!includePolygons) {
+    // Reduced mode: only linear features (roads, railways, aeroways)
     return `
-      [out:json][timeout:35];
+      [out:json][timeout:30];
       (
         way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
         way["railway"~"^(${railwayRegex})$"](${bbox});
@@ -77,7 +113,7 @@ function buildOverpassQuery(params: {
     `;
   }
 
-  // Full detail
+  // Full mode with all features
   return `
     [out:json][timeout:45];
     (
@@ -95,42 +131,28 @@ function buildOverpassQuery(params: {
   `;
 }
 
-async function fetchOverpassElements(query: string): Promise<{ elements: any[] } | { error: string }>{
-  const overpassUrls = [
-    'https://overpass-api.de/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter',
-  ];
-
-  let lastErrorText = '';
-
-  for (const overpassUrl of overpassUrls) {
+async function fetchOverpass(query: string): Promise<any[] | null> {
+  for (const url of OVERPASS_URLS) {
     try {
-      const response = await fetch(overpassUrl, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `data=${encodeURIComponent(query)}`,
       });
 
-      if (!response.ok) {
-        lastErrorText = await response.text();
-        console.error(
-          'Overpass API error:',
-          overpassUrl,
-          response.status,
-          lastErrorText.substring(0, 200)
-        );
-        continue;
+      if (response.ok) {
+        const data = await response.json();
+        return data?.elements || [];
       }
 
-      const osmData = await response.json();
-      const elements = osmData?.elements || [];
-      return { elements };
+      const errorText = await response.text();
+      console.error('Overpass error:', url, response.status, errorText.substring(0, 200));
     } catch (e) {
-      console.error('Overpass fetch failed:', overpassUrl, e);
+      console.error('Overpass fetch failed:', url, e);
     }
   }
 
-  return { error: lastErrorText || 'Overpass request failed' };
+  return null;
 }
 
 Deno.serve(async (req) => {
@@ -148,7 +170,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create cache key (rounded to 3 decimals for nearby hits)
+    // Create cache key
     const cacheKey = `${lat.toFixed(3)}-${lng.toFixed(3)}-${distance}-${skipService}`;
     const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -162,17 +184,8 @@ Deno.serve(async (req) => {
     console.log(`Fetching streets for lat=${lat}, lng=${lng}, distance=${distance}m, skipService=${skipService}`);
 
     const distanceNum = Number(distance);
-
-    // Keep radius within safe limits - 5km max per tile
     const radius = Math.min(5000, Math.max(2000, distanceNum));
 
-    // Filter street types - skip service roads if requested (they're 60% of data)
-    const activeStreetTypes = skipService 
-      ? ALL_STREET_TYPES.filter(st => st.type !== 'service')
-      : ALL_STREET_TYPES;
-    console.log(`Using ${activeStreetTypes.length} street types (skipService: ${skipService})`);
-
-    // Always include all features for maximum detail
     const latDelta = radius / 111320;
     const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));
     
@@ -180,18 +193,40 @@ Deno.serve(async (req) => {
     const north = lat + latDelta;
     const west = lng - lngDelta;
     const east = lng + lngDelta;
-
-    const highwayTags = activeStreetTypes.flatMap(st => st.tags);
     const bbox = `${south.toFixed(5)},${west.toFixed(5)},${north.toFixed(5)},${east.toFixed(5)}`;
-    const fullQuery = buildOverpassQuery({ bbox, highwayTags, mode: 'full' });
-    console.log('Sending Overpass query (full)...');
 
-    let elements: any[] = [];
-    const fullResp = await fetchOverpassElements(fullQuery);
-    if ('error' in fullResp) {
-      // Fallback: return last cached data (even if stale) so the preview doesn't look randomly cut.
+    // Determine which street types to use
+    const activeStreetTypes = skipService 
+      ? CORE_STREET_TYPES 
+      : ALL_STREET_TYPES;
+    const highwayTags = activeStreetTypes.flatMap(st => st.tags);
+
+    // CRITICAL FIX: Check element count BEFORE fetching full data to avoid memory crashes
+    console.log('Checking element count...');
+    const estimatedCount = await getElementCount(bbox, highwayTags);
+    console.log(`Estimated element count: ${estimatedCount}`);
+
+    let useReducedMode = estimatedCount > ELEMENT_COUNT_THRESHOLD;
+    let includePolygons = !useReducedMode;
+
+    // For reduced mode, also use core streets only (no service/paths)
+    const finalHighwayTags = useReducedMode 
+      ? CORE_STREET_TYPES.flatMap(st => st.tags)
+      : highwayTags;
+
+    if (useReducedMode) {
+      console.log(`Using REDUCED mode for dense area (${estimatedCount} elements estimated)`);
+    } else {
+      console.log(`Using FULL mode (${estimatedCount} elements estimated)`);
+    }
+
+    const query = buildQuery({ bbox, highwayTags: finalHighwayTags, includePolygons });
+    const elements = await fetchOverpass(query);
+
+    if (elements === null) {
+      // Fallback to stale cache
       if (cached) {
-        console.log('Overpass unavailable; serving stale cache for:', cacheKey);
+        console.log('Overpass unavailable; serving stale cache');
         return new Response(
           JSON.stringify(cached.data),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'stale' } }
@@ -199,39 +234,14 @@ Deno.serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ error: 'Overpass API unavailable, try again' }),
+        JSON.stringify({ error: 'Overpass API unavailable' }),
         { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    elements = fullResp.elements;
-    console.log(`Received ${elements.length} elements from Overpass (full)`);
+    console.log(`Received ${elements.length} elements from Overpass`);
 
-    // If the payload is huge (Berlin etc.), retry a reduced query to avoid WORKER_LIMIT/memory crashes.
-    if (elements.length > OVERPASS_ELEMENT_HARD_LIMIT) {
-      console.log(
-        `Overpass payload too large (${elements.length}). Retrying in reduced mode to avoid compute/memory limits...`
-      );
-
-      // Reduced highway tags: drop the densest categories first.
-      // - service roads (huge in cities)
-      // - pedestrian/path network (also huge)
-      const reducedStreetTypes = ALL_STREET_TYPES
-        .filter((st) => st.type !== 'service' && st.type !== 'path')
-        .map((st) => st.tags)
-        .flat();
-
-      const reducedQuery = buildOverpassQuery({ bbox, highwayTags: reducedStreetTypes, mode: 'reduced' });
-      const reducedResp = await fetchOverpassElements(reducedQuery);
-      if (!('error' in reducedResp)) {
-        elements = reducedResp.elements;
-        console.log(`Received ${elements.length} elements from Overpass (reduced)`);
-      } else {
-        console.warn('Reduced mode Overpass failed; continuing with full elements (may still fail).');
-      }
-    }
-
-    // Build a fast tag->type lookup to avoid N(types) scans per element
+    // Build tag->type lookup
     const tagToType = new Map<string, string>();
     for (const st of activeStreetTypes) {
       for (const tag of st.tags) tagToType.set(tag, st.type);
@@ -241,13 +251,8 @@ Deno.serve(async (req) => {
     const coordsByType = new Map<string, [number, number][][]>();
     for (const st of activeStreetTypes) coordsByType.set(st.type, []);
 
-    // Process railways (z-order 2.5 in maptoposter)
     const railwayLines: [number, number][][] = [];
-    
-    // Process aeroways (runways, taxiways)
     const aerowayLines: [number, number][][] = [];
-
-    // Process water, coastlines, and parks/forests
     const waterPolygons: [number, number][][] = [];
     const coastlineLines: [number, number][][] = [];
     const parkPolygons: [number, number][][] = [];
@@ -261,15 +266,13 @@ Deno.serve(async (req) => {
 
       const tags = element.tags || {};
 
-      // Check if it's a highway
       if (tags.highway) {
         const type = tagToType.get(tags.highway);
         if (!type) continue;
 
         const points: [number, number][] = [];
-        for (let i = 0; i < geom.length; i++) {
-          const pt = geom[i];
-          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+        for (const pt of geom) {
+          if (pt?.lat !== undefined && pt?.lon !== undefined) {
             points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
           }
         }
@@ -278,11 +281,10 @@ Deno.serve(async (req) => {
           coordsByType.get(type)?.push(points);
         }
       }
-      // Check if it's a railway (any type - rail, tram, subway, etc.)
       else if (tags.railway && RAILWAY_TYPES.includes(tags.railway)) {
         const points: [number, number][] = [];
         for (const pt of geom) {
-          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+          if (pt?.lat !== undefined && pt?.lon !== undefined) {
             points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
           }
         }
@@ -290,11 +292,10 @@ Deno.serve(async (req) => {
           railwayLines.push(points);
         }
       }
-      // Check if it's water or waterway
       else if (tags.natural === 'water' || tags.waterway) {
         const points: [number, number][] = [];
         for (const pt of geom) {
-          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+          if (pt?.lat !== undefined && pt?.lon !== undefined) {
             points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
           }
         }
@@ -302,11 +303,10 @@ Deno.serve(async (req) => {
           waterPolygons.push(points);
         }
       }
-      // Check if it's a coastline
       else if (tags.natural === 'coastline') {
         const points: [number, number][] = [];
         for (const pt of geom) {
-          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+          if (pt?.lat !== undefined && pt?.lon !== undefined) {
             points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
           }
         }
@@ -314,11 +314,10 @@ Deno.serve(async (req) => {
           coastlineLines.push(points);
         }
       }
-      // Check if it's an aeroway (runway, taxiway)
       else if (tags.aeroway && AEROWAY_TYPES.includes(tags.aeroway)) {
         const points: [number, number][] = [];
         for (const pt of geom) {
-          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+          if (pt?.lat !== undefined && pt?.lon !== undefined) {
             points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
           }
         }
@@ -326,11 +325,10 @@ Deno.serve(async (req) => {
           aerowayLines.push(points);
         }
       }
-      // Check if it's a park
       else if (tags.leisure === 'park' || tags.landuse === 'grass' || tags.landuse === 'meadow' || tags.natural === 'beach') {
         const points: [number, number][] = [];
         for (const pt of geom) {
-          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+          if (pt?.lat !== undefined && pt?.lon !== undefined) {
             points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
           }
         }
@@ -338,11 +336,10 @@ Deno.serve(async (req) => {
           parkPolygons.push(points);
         }
       }
-      // Check if it's forest/wood
       else if (tags.landuse === 'forest' || tags.natural === 'wood') {
         const points: [number, number][] = [];
         for (const pt of geom) {
-          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+          if (pt?.lat !== undefined && pt?.lon !== undefined) {
             points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
           }
         }
