@@ -89,8 +89,10 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     theme,
     fontFamily,
     fontSize,
+    fontSizeScale = 1,
     aspectRatio,
     layerVisibility,
+    layerColors = {},
     customRoadColor,
     customBackgroundColor,
     showCoordinates,
@@ -282,7 +284,8 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
 
     // z=0.5: Draw coastlines (land-water boundaries)
     if (layerVisibility.coastlines && coastlines && coastlines.length > 0) {
-      ctx.strokeStyle = theme.water;
+      const coastlineColor = layerColors.coastlines || theme.water;
+      ctx.strokeStyle = coastlineColor;
       ctx.lineWidth = Math.max(2, 3 * (width / 864));
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -304,8 +307,9 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
 
     // z=1: Draw water (below parks)
     if (layerVisibility.water && water && water.length > 0) {
-      ctx.fillStyle = theme.water;
-      ctx.strokeStyle = theme.water;
+      const waterColor = layerColors.water || theme.water;
+      ctx.fillStyle = waterColor;
+      ctx.strokeStyle = waterColor;
       ctx.lineWidth = Math.max(1, 2 * (width / 864));
       
       for (const polygon of water) {
@@ -332,8 +336,8 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
 
     // z=1.5: Draw forests (below parks, above water)
     if (layerVisibility.forests && forests && forests.length > 0) {
-      // Slightly darker/greener than parks
-      const forestColor = adjustColor(theme.parks, -20, 10);
+      // Use custom forest color or derive from parks color
+      const forestColor = layerColors.forests || adjustColor(theme.parks, -20, 10);
       ctx.fillStyle = forestColor;
       
       for (const polygon of forests) {
@@ -354,7 +358,8 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
 
     // z=2: Draw parks (above water/forests)
     if (layerVisibility.parks && parks && parks.length > 0) {
-      ctx.fillStyle = theme.parks;
+      const parksColor = layerColors.parks || theme.parks;
+      ctx.fillStyle = parksColor;
       for (const polygon of parks) {
         if (polygon.length < 3) continue;
         
@@ -373,8 +378,8 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
 
     // z=2.3: Draw aeroways (runways, taxiways)
     if (layerVisibility.aeroways && aeroways && aeroways.length > 0) {
-      // Runways are typically gray/dark
-      ctx.strokeStyle = theme.roadService || '#666666';
+      const aerowaysColor = layerColors.aeroways || theme.roadService || '#666666';
+      ctx.strokeStyle = aerowaysColor;
       ctx.lineWidth = Math.max(3, 6 * (width / 864));
       ctx.lineCap = 'butt';
       ctx.lineJoin = 'miter';
@@ -396,7 +401,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
 
     // z=2.5: Draw railways (between parks and roads)
     if (layerVisibility.railways && railways && railways.length > 0) {
-      const railwayColor = theme.railway || theme.text;
+      const railwayColor = layerColors.railways || theme.railway || theme.text;
       const railwayWidth = Math.max(0.5, RAILWAY_WIDTH * (width / 864));
       
       ctx.strokeStyle = railwayColor;
@@ -470,7 +475,14 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     // z=11: Typography (text labels)
     const textColor = config.customTextColor || theme.text;
     const fontStack = FONT_STACKS[fontFamily];
-    const scaledFonts = getScaledFontSizes(height, fontSize);
+    const baseFonts = getScaledFontSizes(height, fontSize);
+    // Apply fontSizeScale multiplier (0.5 - 2.0)
+    const scaledFonts = {
+      title: baseFonts.title * fontSizeScale,
+      subtitle: baseFonts.subtitle * fontSizeScale,
+      coords: baseFonts.coords * fontSizeScale,
+      attribution: baseFonts.attribution, // Attribution size stays fixed
+    };
 
     ctx.fillStyle = textColor;
     ctx.textAlign = 'center';
