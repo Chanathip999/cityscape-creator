@@ -14,7 +14,7 @@ import { useStreetData } from '@/hooks/useStreetData';
 import {
   FONT_STACKS,
   TRACKING,
-  TEXT_POSITIONS,
+  getTextPositions,
   FONT_WEIGHTS,
   formatCoordinates,
   formatDisplayText,
@@ -95,8 +95,13 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     customBackgroundColor,
     showCoordinates,
     showCountry,
+    showCity,
     showGradients,
+    textPosition,
   } = config;
+
+  // Get text positions based on textPosition setting
+  const TEXT_POSITIONS = getTextPositions(textPosition);
 
   // Get aspect ratio dimensions
   const aspectRatioConfig = ASPECT_RATIOS.find((r) => r.id === aspectRatio) || ASPECT_RATIOS[1];
@@ -471,36 +476,38 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // City name with dynamic size adjustment
-    const cityCharCount = city.length;
-    let adjustedTitleSize = scaledFonts.title;
-    if (cityCharCount > 10) {
-      const lengthFactor = 10 / cityCharCount;
-      adjustedTitleSize = Math.max(scaledFonts.title * lengthFactor, 20 * (height / 1000));
+    // City name with dynamic size adjustment (only if showCity is true)
+    if (showCity) {
+      const cityCharCount = city.length;
+      let adjustedTitleSize = scaledFonts.title;
+      if (cityCharCount > 10) {
+        const lengthFactor = 10 / cityCharCount;
+        adjustedTitleSize = Math.max(scaledFonts.title * lengthFactor, 20 * (height / 1000));
+      }
+
+      const cityText = formatDisplayText(city);
+      ctx.font = `${FONT_WEIGHTS.title} ${adjustedTitleSize}px ${fontStack}`;
+      drawTextWithTracking(
+        ctx,
+        cityText,
+        width / 2,
+        height * TEXT_POSITIONS.title,
+        TRACKING.title,
+        adjustedTitleSize
+      );
+
+      // Decorative line (only show if city is shown)
+      const lineLength = width * 0.15;
+      const decoLineWidth = adjustedTitleSize * 0.02;
+      ctx.strokeStyle = textColor;
+      ctx.lineWidth = decoLineWidth;
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.moveTo((width - lineLength) / 2, height * TEXT_POSITIONS.decorativeLine);
+      ctx.lineTo((width + lineLength) / 2, height * TEXT_POSITIONS.decorativeLine);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
     }
-
-    const cityText = formatDisplayText(city);
-    ctx.font = `${FONT_WEIGHTS.title} ${adjustedTitleSize}px ${fontStack}`;
-    drawTextWithTracking(
-      ctx,
-      cityText,
-      width / 2,
-      height * TEXT_POSITIONS.title,
-      TRACKING.title,
-      adjustedTitleSize
-    );
-
-    // Decorative line
-    const lineLength = width * 0.15;
-    const decoLineWidth = adjustedTitleSize * 0.02;
-    ctx.strokeStyle = textColor;
-    ctx.lineWidth = decoLineWidth;
-    ctx.globalAlpha = 0.6;
-    ctx.beginPath();
-    ctx.moveTo((width - lineLength) / 2, height * TEXT_POSITIONS.decorativeLine);
-    ctx.lineTo((width + lineLength) / 2, height * TEXT_POSITIONS.decorativeLine);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
 
     // Country (only if showCountry is true)
     if (showCountry) {
