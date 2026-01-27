@@ -5,15 +5,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Street types - core roads only to reduce memory usage
-// footway/path/cycleway removed as they cause memory overflow in dense cities
+// Street types - full detail including pedestrian paths for maximum detail
 const ALL_STREET_TYPES = [
   { type: 'motorway', tags: ['motorway', 'motorway_link'] },
   { type: 'primary', tags: ['trunk', 'trunk_link', 'primary', 'primary_link'] },
   { type: 'secondary', tags: ['secondary', 'secondary_link'] },
   { type: 'tertiary', tags: ['tertiary', 'tertiary_link'] },
   { type: 'residential', tags: ['residential', 'living_street', 'unclassified'] },
-  { type: 'service', tags: ['service', 'pedestrian'] }, // Removed footway, path, cycleway, track, steps
+  { type: 'service', tags: ['service', 'pedestrian'] },
+  { type: 'path', tags: ['footway', 'path', 'cycleway', 'track', 'steps', 'bridleway'] },
 ];
 
 // Simple in-memory cache for recent queries (TTL: 60 seconds)

@@ -64,6 +64,13 @@ const STREET_WIDTHS: Record<string, number> = {
   living_street: 0.4,
   unclassified: 0.4,
   service: 0.3,
+  pedestrian: 0.25,
+  footway: 0.2,
+  path: 0.2,
+  cycleway: 0.2,
+  track: 0.2,
+  steps: 0.15,
+  bridleway: 0.2,
 };
 
 const ASPECT_RATIOS: Record<string, { width: number; height: number }> = {
@@ -136,7 +143,8 @@ const ALL_STREET_TYPES = [
   { type: 'secondary', tags: ['secondary', 'secondary_link'] },
   { type: 'tertiary', tags: ['tertiary', 'tertiary_link'] },
   { type: 'residential', tags: ['residential', 'living_street', 'unclassified'] },
-  { type: 'service', tags: ['service'] },
+  { type: 'service', tags: ['service', 'pedestrian'] },
+  { type: 'path', tags: ['footway', 'path', 'cycleway', 'track', 'steps', 'bridleway'] },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
