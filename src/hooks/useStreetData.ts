@@ -333,6 +333,21 @@ export const useStreetData = ({
       clearOldCache();
 
       try {
+        const applyMergedState = (merged: TileResult) => {
+          setStreets(merged.streets);
+          setRailways(layerVisibility?.railways ? merged.railways : []);
+          setAeroways(layerVisibility?.aeroways ? merged.aeroways : []);
+          setWater(layerVisibility?.water ? merged.water : []);
+          setCoastlines(layerVisibility?.coastlines ? merged.coastlines : []);
+          setParks(layerVisibility?.parks ? merged.parks : []);
+          setForests(layerVisibility?.forests ? merged.forests : []);
+        };
+
+        // We only ever ADD results during a run. This prevents the perceived
+        // "details disappear and then reappear" flicker caused by overwriting
+        // state with smaller intermediate results.
+        const progressiveResults: TileResult[] = [];
+
         // =========================================================================
         // ULTRA-FAST FIRST PAINT:
         // Before we even compute the full tile grid, fetch ONE small-radius center
@@ -356,9 +371,8 @@ export const useStreetData = ({
         if (runId !== runIdRef.current) return;
 
         if (previewFull) {
-          setStreets(previewFull.streets);
-          setWater(previewFull.water);
-          setCoastlines(previewFull.coastlines);
+          progressiveResults.push(previewFull);
+          applyMergedState(mergeResults(progressiveResults));
           console.log(`⚡ PREVIEW full (r=${previewRadius}m) in ${(performance.now() - startTime).toFixed(0)}ms`);
         }
 
@@ -401,19 +415,16 @@ export const useStreetData = ({
         if (runId !== runIdRef.current) return;
         
         if (centerFullResult) {
-          setStreets(centerFullResult.streets);
-          setWater(centerFullResult.water);
-          setCoastlines(centerFullResult.coastlines);
-          setRailways(centerFullResult.railways);
-          setAeroways(centerFullResult.aeroways);
-          setParks(centerFullResult.parks);
-          setForests(centerFullResult.forests);
+          progressiveResults.push(centerFullResult);
+          applyMergedState(mergeResults(progressiveResults));
           console.log(`⚡ CENTER full in ${(performance.now() - startTime).toFixed(0)}ms`);
         }
 
         // PHASE 1B: All tiles FULL detail in parallel
         const remainingTiles = streetTiles.slice(1);
-        const fullResults: TileResult[] = centerFullResult ? [centerFullResult] : [];
+        const fullResults: TileResult[] = [];
+        // Seed with whatever we already have, so batches only ever add to it.
+        fullResults.push(...progressiveResults);
         
         for (let i = 0; i < remainingTiles.length; i += STREET_BATCH_SIZE) {
           if (runId !== runIdRef.current) break;
@@ -430,13 +441,7 @@ export const useStreetData = ({
           
           // Progressive update
           const merged = mergeResults(fullResults);
-          setStreets(merged.streets);
-          setRailways(merged.railways);
-          setAeroways(merged.aeroways);
-          setWater(merged.water);
-          setCoastlines(merged.coastlines);
-          setParks(merged.parks);
-          setForests(merged.forests);
+          applyMergedState(merged);
         }
         
         const fullTime = performance.now() - startTime;
@@ -491,12 +496,12 @@ export const useStreetData = ({
         console.log(`✅ COMPLETE: ${merged.streets.reduce((sum, s) => sum + s.coordinates.length, 0)} streets in ${totalTime.toFixed(0)}ms`);
 
         setStreets(merged.streets);
-        setRailways(merged.railways);
-        setAeroways(merged.aeroways);
-        setCoastlines(merged.coastlines);
-        setWater(merged.water);
-        setParks(merged.parks);
-        setForests(merged.forests);
+        setRailways(layerVisibility?.railways ? merged.railways : []);
+        setAeroways(layerVisibility?.aeroways ? merged.aeroways : []);
+        setCoastlines(layerVisibility?.coastlines ? merged.coastlines : []);
+        setWater(layerVisibility?.water ? merged.water : []);
+        setParks(layerVisibility?.parks ? merged.parks : []);
+        setForests(layerVisibility?.forests ? merged.forests : []);
         
         if (buildingResults.length > 0) {
           const finalBuildingMerge = mergeResults(buildingResults);

@@ -24,7 +24,7 @@ const getInitialConfig = (): PosterConfig => {
     if (savedConfig) {
       const parsed = JSON.parse(savedConfig);
       // Always merge with current defaults to pick up new properties
-      return {
+      const merged: PosterConfig = {
         ...DEFAULT_CONFIG,
         ...parsed,
         layerVisibility: {
@@ -32,6 +32,14 @@ const getInitialConfig = (): PosterConfig => {
           ...parsed.layerVisibility,
         },
       };
+
+      // Hard-enforce new default: Parks OFF (prevents stale configs from re-enabling it)
+      merged.layerVisibility = {
+        ...merged.layerVisibility,
+        parks: false,
+      };
+
+      return merged;
     }
   } catch {
     // Ignore parse errors
