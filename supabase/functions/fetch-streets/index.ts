@@ -156,6 +156,44 @@ async function getElementCount(
   return 0;
 }
 
+// Buildings-only count query (fast + small response) to avoid memory crashes in dense areas
+async function getBuildingCount(bbox: string): Promise<number> {
+  const countQuery = `
+    [out:json][timeout:5];
+    way["building"](${bbox});
+    out count;
+  `;
+
+  const endpoints = [...OVERPASS_URLS].sort(() => Math.random() - 0.5);
+  for (const url of endpoints.slice(0, 2)) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(countQuery)}`,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        const count = data?.elements?.[0]?.tags?.total || data?.elements?.[0]?.tags?.ways || 0;
+        return parseInt(count, 10) || 0;
+      }
+
+      await response.text();
+    } catch {
+      // ignore and try next
+    }
+  }
+
+  return 0;
+}
+
 function buildQuery(params: {
   bbox: string;
   highwayTags: string[];
@@ -380,6 +418,27 @@ Deno.serve(async (req) => {
 
     // FAST PATH: buildings-only mode to avoid large mixed payloads & memory spikes
     if (buildingsOnly) {
+      // Density guard: skip buildings in extremely dense areas to prevent memory crashes
+      const buildingCount = await getBuildingCount(bbox);
+      // If count check failed (0), we still proceed, but we cap processing later.
+      if (buildingCount > 12000) {
+        console.log(`Buildings-only: SKIP (too dense: ${buildingCount} buildings in bbox)`);
+        const responseData = {
+          streets: [],
+          railways: [],
+          aeroways: [],
+          coastlines: [],
+          water: [],
+          parks: [],
+          forests: [],
+          buildings: [],
+        };
+
+        return new Response(JSON.stringify(responseData), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       const query = buildQuery({
         bbox,
         highwayTags: [],
@@ -398,7 +457,10 @@ Deno.serve(async (req) => {
       }
 
       const buildingPolygons: [number, number][][] = [];
+      // Hard cap to avoid memory spikes while processing huge building responses.
+      const MAX_BUILDING_POLYGONS = 5000;
       for (const element of elements) {
+        if (buildingPolygons.length >= MAX_BUILDING_POLYGONS) break;
         if (element.type !== 'way') continue;
         const geom = element.geometry;
         if (!geom || geom.length < 3) continue;
