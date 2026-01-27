@@ -127,11 +127,12 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   // Too high increases tile count and backend load.
   const fetchDistance = Math.max(distance, compensatedDistance) * 1.5;
 
-  const { streets, railways, aeroways, coastlines, water, parks, forests, isLoading, error } = useStreetData({
+  const { streets, railways, aeroways, coastlines, water, parks, forests, buildings, isLoading, error } = useStreetData({
     latitude,
     longitude,
     distance: fetchDistance,
     enabled: true,
+    includeBuildings: layerVisibility.buildings,
   });
 
   // Reset pan/zoom when location or aspect ratio changes
@@ -421,6 +422,29 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
           ctx.lineTo(point.x, point.y);
         }
         ctx.stroke();
+      }
+    }
+
+    // z=2.8: Draw buildings (between parks and roads)
+    if (layerVisibility.buildings && buildings && buildings.length > 0) {
+      const buildingColor = layerColors.buildings || theme.roadTertiary || '#888888';
+      ctx.fillStyle = buildingColor;
+      ctx.strokeStyle = buildingColor;
+      ctx.lineWidth = Math.max(0.5, 1 * (width / 864));
+      
+      for (const polygon of buildings) {
+        if (polygon.length < 3) continue;
+        
+        ctx.beginPath();
+        const start = toCanvasCoords(polygon[0][0], polygon[0][1], width, height, bounds);
+        ctx.moveTo(start.x, start.y);
+        
+        for (let i = 1; i < polygon.length; i++) {
+          const point = toCanvasCoords(polygon[i][0], polygon[i][1], width, height, bounds);
+          ctx.lineTo(point.x, point.y);
+        }
+        ctx.closePath();
+        ctx.fill();
       }
     }
 

@@ -11,6 +11,7 @@ interface UseStreetDataProps {
   longitude: number;
   distance: number;
   enabled?: boolean;
+  includeBuildings?: boolean;
 }
 
 interface UseStreetDataResult {
@@ -21,6 +22,7 @@ interface UseStreetDataResult {
   water: [number, number][][];
   parks: [number, number][][];
   forests: [number, number][][];
+  buildings: [number, number][][];
   isLoading: boolean;
   error: string | null;
 }
@@ -33,6 +35,7 @@ interface TileResult {
   water: [number, number][][];
   parks: [number, number][][];
   forests: [number, number][][];
+  buildings: [number, number][][];
 }
 
 // Maximum radius per tile - use 5km for efficiency
@@ -127,6 +130,7 @@ function mergeResults(results: TileResult[]): TileResult {
     water: [],
     parks: [],
     forests: [],
+    buildings: [],
   };
 
   // Create maps to aggregate streets by type
@@ -147,6 +151,7 @@ function mergeResults(results: TileResult[]): TileResult {
     merged.water.push(...result.water);
     merged.parks.push(...result.parks);
     merged.forests.push(...result.forests);
+    merged.buildings.push(...(result.buildings || []));
   }
 
   // Convert back to StreetSegment array
@@ -163,6 +168,7 @@ export const useStreetData = ({
   longitude,
   distance,
   enabled = true,
+  includeBuildings = false,
 }: UseStreetDataProps): UseStreetDataResult => {
   const [streets, setStreets] = useState<StreetSegment[]>([]);
   const [railways, setRailways] = useState<[number, number][][]>([]);
@@ -171,6 +177,7 @@ export const useStreetData = ({
   const [water, setWater] = useState<[number, number][][]>([]);
   const [parks, setParks] = useState<[number, number][][]>([]);
   const [forests, setForests] = useState<[number, number][][]>([]);
+  const [buildings, setBuildings] = useState<[number, number][][]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -183,9 +190,10 @@ export const useStreetData = ({
     tileLng: number,
     tileRadius: number,
     skipService: boolean,
+    fetchBuildings: boolean,
     retries = 1
   ): Promise<TileResult | null> => {
-    const cacheKey = getTileCacheKey(tileLat, tileLng, tileRadius);
+    const cacheKey = getTileCacheKey(tileLat, tileLng, tileRadius) + (fetchBuildings ? '-bld' : '');
     
     // Try IndexedDB cache first (24h TTL) - instant!
     const cached = await getCachedTile(cacheKey);
@@ -196,7 +204,7 @@ export const useStreetData = ({
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         const { data, error: fnError } = await supabase.functions.invoke('fetch-streets', {
-          body: { lat: tileLat, lng: tileLng, distance: tileRadius, skipService },
+          body: { lat: tileLat, lng: tileLng, distance: tileRadius, skipService, includeBuildings: fetchBuildings },
         });
 
         if (fnError) {
@@ -217,6 +225,7 @@ export const useStreetData = ({
           water: data?.water || [],
           parks: data?.parks || [],
           forests: data?.forests || [],
+          buildings: data?.buildings || [],
         };
         
         // Cache in IndexedDB for future use
@@ -238,7 +247,7 @@ export const useStreetData = ({
   useEffect(() => {
     if (!enabled) return;
 
-    const paramsKey = `${latitude.toFixed(4)}-${longitude.toFixed(4)}-${distance}`;
+    const paramsKey = `${latitude.toFixed(4)}-${longitude.toFixed(4)}-${distance}-${includeBuildings}`;
     
     if (paramsKey === lastParamsRef.current) return;
 
@@ -265,7 +274,7 @@ export const useStreetData = ({
         // Always fetch all street types including service for maximum detail
         // The tile-based approach handles this efficiently
         const skipService = false;
-        console.log(`Fetching ${tiles.length} tile(s) for area (skipService: ${skipService})`);
+        console.log(`Fetching ${tiles.length} tile(s) for area (skipService: ${skipService}, buildings: ${includeBuildings})`);
 
         // Smart batching: fetch in small concurrent batches to avoid rate limiting
         // while still being much faster than sequential
@@ -275,7 +284,7 @@ export const useStreetData = ({
         for (let i = 0; i < tiles.length; i += BATCH_SIZE) {
           const batch = tiles.slice(i, i + BATCH_SIZE);
           const batchResults = await Promise.all(
-            batch.map(tile => fetchTileWithRetry(tile.lat, tile.lng, tile.radius, skipService))
+            batch.map(tile => fetchTileWithRetry(tile.lat, tile.lng, tile.radius, skipService, includeBuildings))
           );
           
           for (const result of batchResults) {
@@ -303,6 +312,7 @@ export const useStreetData = ({
         setWater(merged.water);
         setParks(merged.parks);
         setForests(merged.forests);
+        setBuildings(merged.buildings);
         lastParamsRef.current = paramsKey;
 
       } catch (err) {
@@ -318,7 +328,7 @@ export const useStreetData = ({
         clearTimeout(fetchTimeoutRef.current);
       }
     };
-  }, [latitude, longitude, distance, enabled, fetchTileWithRetry]);
+  }, [latitude, longitude, distance, enabled, includeBuildings, fetchTileWithRetry]);
 
-  return { streets, railways, aeroways, coastlines, water, parks, forests, isLoading, error };
+  return { streets, railways, aeroways, coastlines, water, parks, forests, buildings, isLoading, error };
 };
