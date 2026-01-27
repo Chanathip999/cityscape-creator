@@ -413,20 +413,30 @@ async function fetchSingleTile(
     queryParts.push(`way["waterway"~"^(river|canal)$"](${bbox});`);
   }
   
-  // Coastlines (skip for memory optimization)
-  // Coastlines disabled in export to save memory
+  // Coastlines (ONLY if explicitly enabled by user)
+  if (layerVisibility?.coastlines) {
+    queryParts.push(`way["natural"="coastline"](${bbox});`);
+    console.log('Coastlines enabled, adding to query');
+  }
   
-  // Parks (skip for memory optimization in export)
-  // Parks disabled in export to save memory
+  // Parks (ONLY if explicitly enabled by user)
+  if (layerVisibility?.parks) {
+    queryParts.push(`way["leisure"="park"](${bbox});`);
+    queryParts.push(`way["landuse"~"^(grass|meadow)$"](${bbox});`);
+    console.log('Parks enabled, adding to query');
+  }
   
-  // Forests (skip for memory optimization in export)
-  // Forests disabled in export to save memory
+  // Forests (ONLY if explicitly enabled by user)
+  if (layerVisibility?.forests) {
+    queryParts.push(`way["landuse"="forest"](${bbox});`);
+    queryParts.push(`way["natural"="wood"](${bbox});`);
+    console.log('Forests enabled, adding to query');
+  }
   
   // Buildings (only if enabled AND not skipped due to distance/density)
   const shouldFetchBuildings = layerVisibility?.buildings && !skipBuildings;
   if (shouldFetchBuildings) {
-    // Use count query first to check density (prevents OOM on dense cities)
-    console.log('Buildings requested, will fetch with limit');
+    console.log('Buildings enabled, adding to query with limit');
     queryParts.push(`way["building"](${bbox});`);
   }
   
