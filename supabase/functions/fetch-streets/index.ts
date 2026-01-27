@@ -43,21 +43,19 @@ interface StreetData {
 }
 
 // Round coordinate to reduce JSON size while maintaining good visual fidelity.
-// 4 decimals ~ 11m at equator; for poster-style vector lines this is typically sufficient
-// and reduces payload + memory pressure significantly.
-const roundCoord = (n: number): number => Math.round(n * 10000) / 10000;
+// 3 decimals ~ 111m at equator - more aggressive compression to reduce memory
+const roundCoord = (n: number): number => Math.round(n * 1000) / 1000;
 
-// Threshold: if count query returns more than this, use reduced mode
-// Tuned to preserve fine street detail (paths/service) in most cases.
-const ELEMENT_COUNT_THRESHOLD = 50000;
-const ELEMENT_COUNT_THRESHOLD_WITH_BUILDINGS = 35000;
+// AGGRESSIVE thresholds to prevent memory crashes in dense cities (Tokyo, NYC, etc.)
+const ELEMENT_COUNT_THRESHOLD = 25000;
+const ELEMENT_COUNT_THRESHOLD_WITH_BUILDINGS = 15000;
+// Max elements to process before early termination
+const MAX_ELEMENTS_TO_PROCESS = 30000;
 
-// More Overpass endpoints for better load distribution and reliability
+// Overpass endpoints - fewer to reduce connection overhead
 const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
-  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-  'https://overpass.openstreetmap.ru/api/interpreter',
 ];
 
 // Pick a random endpoint to distribute load
@@ -169,10 +167,10 @@ function buildQuery(params: {
   const railwayRegex = RAILWAY_TYPES.join('|');
   const aerowayRegex = AEROWAY_TYPES.join('|');
 
-  // OPTIMIZATION: Buildings-only query for parallel fetching
+  // OPTIMIZATION: Buildings-only query with VERY short timeout and limit
   if (buildingsOnly) {
     return `
-      [out:json][timeout:12];
+      [out:json][timeout:8][maxsize:10485760];
       way["building"](${bbox});
       out geom;
     `;
@@ -182,9 +180,9 @@ function buildQuery(params: {
   const buildingQuery = includeBuildings ? `way["building"](${bbox});` : '';
 
   if (!includePolygons) {
-    // Reduced mode: only linear features (roads, railways, aeroways) - shorter timeout
+    // Reduced mode: only linear features - short timeout
     return `
-      [out:json][timeout:15];
+      [out:json][timeout:10][maxsize:15728640];
       (
         way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
         way["railway"~"^(${railwayRegex})$"](${bbox});
@@ -195,9 +193,9 @@ function buildQuery(params: {
     `;
   }
 
-  // Full mode with all features - shorter timeout for speed
+  // Full mode - conservative timeout and memory limit
   return `
-    [out:json][timeout:18];
+    [out:json][timeout:12][maxsize:20971520];
     (
       way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
       way["railway"~"^(${railwayRegex})$"](${bbox});
@@ -290,7 +288,8 @@ async function fetchOverpass(query: string): Promise<any[] | null> {
   for (const url of endpoints) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout
+      // REDUCED timeout to prevent function timeout (was 25s)
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
       
       const response = await fetch(url, {
         method: 'POST',
@@ -303,18 +302,24 @@ async function fetchOverpass(query: string): Promise<any[] | null> {
 
       if (response.ok) {
         const data = await response.json();
-        return data?.elements || [];
+        const elements = data?.elements || [];
+        // MEMORY GUARD: Limit elements processed to prevent OOM
+        if (elements.length > MAX_ELEMENTS_TO_PROCESS) {
+          console.log(`Truncating ${elements.length} elements to ${MAX_ELEMENTS_TO_PROCESS}`);
+          return elements.slice(0, MAX_ELEMENTS_TO_PROCESS);
+        }
+        return elements;
       }
 
-      // Rate limited - try next endpoint
-      if (response.status === 429) {
-        console.log(`Rate limited on ${url}, trying next...`);
+      // Rate limited or server error - try next endpoint
+      if (response.status === 429 || response.status >= 500) {
+        console.log(`Error ${response.status} on ${url}, trying next...`);
         await response.text(); // Consume body
         continue;
       }
 
       const errorText = await response.text();
-      console.error('Overpass error:', url, response.status, errorText.substring(0, 100));
+      console.error('Overpass error:', url, response.status, errorText.substring(0, 80));
     } catch (e) {
       if (e instanceof Error && e.name === 'AbortError') {
         console.log(`Timeout on ${url}, trying next...`);
@@ -324,7 +329,8 @@ async function fetchOverpass(query: string): Promise<any[] | null> {
     }
   }
 
-  return null;
+  // Return empty instead of null to prevent black gaps
+  return [];
 }
 
 Deno.serve(async (req) => {
@@ -359,9 +365,9 @@ Deno.serve(async (req) => {
     );
 
     const distanceNum = Number(distance);
-    // HARD CAP: large 5km Overpass queries can return 50k+ ways in dense cities and
-    // exceed the function memory limit. Client tiling handles coverage.
-    const radius = Math.min(3500, Math.max(1500, distanceNum));
+    // HARD CAP: Reduced max radius to prevent memory issues in dense cities
+    // Client tiling provides full coverage with smaller tiles
+    const radius = Math.min(2500, Math.max(1000, distanceNum));
 
     const latDelta = radius / 111320;
     const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));
@@ -497,7 +503,8 @@ Deno.serve(async (req) => {
     }
     
     // Allow buildings even in moderately dense areas - but be conservative
-    const actuallyIncludeBuildings = includeBuildings && estimatedCount < 25000;
+    // VERY conservative threshold for buildings to prevent memory crashes
+    const actuallyIncludeBuildings = includeBuildings && estimatedCount < 10000;
 
     // For reduced mode, also use core streets only (no service/paths)
     const finalHighwayTags = useReducedMode 
