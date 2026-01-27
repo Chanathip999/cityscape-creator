@@ -50,6 +50,89 @@ interface ParkData {
 // 5 decimals = ~1.1m precision (sufficient for smooth curves)
 const roundCoord = (n: number): number => Math.round(n * 100000) / 100000;
 
+type OverpassMode = 'full' | 'reduced';
+
+const OVERPASS_ELEMENT_HARD_LIMIT = 30000; // beyond this we often hit memory/worker limits in dense cities
+
+function buildOverpassQuery(params: {
+  bbox: string;
+  highwayTags: string[];
+  mode: OverpassMode;
+}): string {
+  const { bbox, highwayTags, mode } = params;
+  const railwayRegex = RAILWAY_TYPES.join('|');
+  const aerowayRegex = AEROWAY_TYPES.join('|');
+
+  // “Reduced” mode purpose: guarantee *some* center data instead of failing hard.
+  // We intentionally drop the heaviest layers in dense cities.
+  if (mode === 'reduced') {
+    return `
+      [out:json][timeout:35];
+      (
+        way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
+        way["railway"~"^(${railwayRegex})$"](${bbox});
+        way["aeroway"~"^(${aerowayRegex})$"](${bbox});
+      );
+      out geom;
+    `;
+  }
+
+  // Full detail
+  return `
+    [out:json][timeout:45];
+    (
+      way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
+      way["railway"~"^(${railwayRegex})$"](${bbox});
+      way["aeroway"~"^(${aerowayRegex})$"](${bbox});
+      way["natural"="water"](${bbox});
+      way["natural"="coastline"](${bbox});
+      way["waterway"~"^(river|stream|canal|drain)$"](${bbox});
+      way["leisure"="park"](${bbox});
+      way["landuse"~"^(grass|meadow|forest)$"](${bbox});
+      way["natural"~"^(wood|beach)$"](${bbox});
+    );
+    out geom;
+  `;
+}
+
+async function fetchOverpassElements(query: string): Promise<{ elements: any[] } | { error: string }>{
+  const overpassUrls = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+  ];
+
+  let lastErrorText = '';
+
+  for (const overpassUrl of overpassUrls) {
+    try {
+      const response = await fetch(overpassUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(query)}`,
+      });
+
+      if (!response.ok) {
+        lastErrorText = await response.text();
+        console.error(
+          'Overpass API error:',
+          overpassUrl,
+          response.status,
+          lastErrorText.substring(0, 200)
+        );
+        continue;
+      }
+
+      const osmData = await response.json();
+      const elements = osmData?.elements || [];
+      return { elements };
+    } catch (e) {
+      console.error('Overpass fetch failed:', overpassUrl, e);
+    }
+  }
+
+  return { error: lastErrorText || 'Overpass request failed' };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -100,55 +183,12 @@ Deno.serve(async (req) => {
 
     const highwayTags = activeStreetTypes.flatMap(st => st.tags);
     const bbox = `${south.toFixed(5)},${west.toFixed(5)},${north.toFixed(5)},${east.toFixed(5)}`;
-    
-    // Build comprehensive query with all features
-    // z-order: z=3 roads, z=2.5 railways, z=2 parks/forests, z=1 water, z=0 bg
-    const railwayRegex = RAILWAY_TYPES.join('|');
-    const aerowayRegex = AEROWAY_TYPES.join('|');
-    
-    const overpassQuery = `
-      [out:json][timeout:45];
-      (
-        way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
-        way["railway"~"^(${railwayRegex})$"](${bbox});
-        way["aeroway"~"^(${aerowayRegex})$"](${bbox});
-        way["natural"="water"](${bbox});
-        way["natural"="coastline"](${bbox});
-        way["waterway"~"^(river|stream|canal|drain)$"](${bbox});
-        way["leisure"="park"](${bbox});
-        way["landuse"~"^(grass|meadow|forest)$"](${bbox});
-        way["natural"~"^(wood|beach)$"](${bbox});
-      );
-      out geom;
-    `;
+    const fullQuery = buildOverpassQuery({ bbox, highwayTags, mode: 'full' });
+    console.log('Sending Overpass query (full)...');
 
-    console.log('Sending Overpass query...');
-
-    const overpassUrls = [
-      'https://overpass-api.de/api/interpreter',
-      'https://overpass.kumi.systems/api/interpreter',
-    ];
-
-    let response: Response | null = null;
-    let lastErrorText = '';
-
-    for (const overpassUrl of overpassUrls) {
-      try {
-        response = await fetch(overpassUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `data=${encodeURIComponent(overpassQuery)}`,
-        });
-
-        if (response.ok) break;
-        lastErrorText = await response.text();
-        console.error('Overpass API error:', overpassUrl, response.status, lastErrorText.substring(0, 200));
-      } catch (e) {
-        console.error('Overpass fetch failed:', overpassUrl, e);
-      }
-    }
-
-    if (!response || !response.ok) {
+    let elements: any[] = [];
+    const fullResp = await fetchOverpassElements(fullQuery);
+    if ('error' in fullResp) {
       // Fallback: return last cached data (even if stale) so the preview doesn't look randomly cut.
       if (cached) {
         console.log('Overpass unavailable; serving stale cache for:', cacheKey);
@@ -164,9 +204,32 @@ Deno.serve(async (req) => {
       );
     }
 
-    const osmData = await response.json();
-    const elements = osmData.elements || [];
-    console.log(`Received ${elements.length} elements from Overpass`);
+    elements = fullResp.elements;
+    console.log(`Received ${elements.length} elements from Overpass (full)`);
+
+    // If the payload is huge (Berlin etc.), retry a reduced query to avoid WORKER_LIMIT/memory crashes.
+    if (elements.length > OVERPASS_ELEMENT_HARD_LIMIT) {
+      console.log(
+        `Overpass payload too large (${elements.length}). Retrying in reduced mode to avoid compute/memory limits...`
+      );
+
+      // Reduced highway tags: drop the densest categories first.
+      // - service roads (huge in cities)
+      // - pedestrian/path network (also huge)
+      const reducedStreetTypes = ALL_STREET_TYPES
+        .filter((st) => st.type !== 'service' && st.type !== 'path')
+        .map((st) => st.tags)
+        .flat();
+
+      const reducedQuery = buildOverpassQuery({ bbox, highwayTags: reducedStreetTypes, mode: 'reduced' });
+      const reducedResp = await fetchOverpassElements(reducedQuery);
+      if (!('error' in reducedResp)) {
+        elements = reducedResp.elements;
+        console.log(`Received ${elements.length} elements from Overpass (reduced)`);
+      } else {
+        console.warn('Reduced mode Overpass failed; continuing with full elements (may still fail).');
+      }
+    }
 
     // Build a fast tag->type lookup to avoid N(types) scans per element
     const tagToType = new Map<string, string>();
