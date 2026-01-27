@@ -3,22 +3,30 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Street types - all types for maximum detail like reference
-const CORE_STREET_TYPES = [
+// =============================================================================
+// PRIORITY-BASED STREET LOADING
+// Priority 1 (essential): Motorways, primary roads, water - loads FIRST for fast preview
+// Priority 2 (detailed): Secondary, tertiary, residential, parks, forests - loads AFTER
+// =============================================================================
+
+// Priority 1: Essential features for fast first paint
+const PRIORITY_1_STREET_TYPES = [
   { type: 'motorway', tags: ['motorway', 'motorway_link'] },
   { type: 'primary', tags: ['trunk', 'trunk_link', 'primary', 'primary_link'] },
+];
+
+// Priority 2: Detailed features loaded progressively
+const PRIORITY_2_STREET_TYPES = [
   { type: 'secondary', tags: ['secondary', 'secondary_link'] },
   { type: 'tertiary', tags: ['tertiary', 'tertiary_link'] },
   { type: 'residential', tags: ['residential', 'living_street', 'unclassified'] },
   { type: 'service', tags: ['service', 'pedestrian'] },
-];
-
-// Additional fine-detail street types
-const EXTRA_STREET_TYPES = [
   { type: 'path', tags: ['footway', 'path', 'cycleway', 'track', 'steps', 'bridleway'] },
 ];
 
-const ALL_STREET_TYPES = [...CORE_STREET_TYPES, ...EXTRA_STREET_TYPES];
+// Combined for backward compatibility
+const CORE_STREET_TYPES = [...PRIORITY_1_STREET_TYPES, ...PRIORITY_2_STREET_TYPES.slice(0, 4)];
+const ALL_STREET_TYPES = [...PRIORITY_1_STREET_TYPES, ...PRIORITY_2_STREET_TYPES];
 
 // NOTE: In-memory cache removed to prevent BOOT_ERROR/memory issues
 // Caching is handled client-side in IndexedDB instead
@@ -172,6 +180,75 @@ function buildQuery(params: {
   `;
 }
 
+// Priority-aware query builder for progressive loading
+function buildPriorityQuery(params: {
+  bbox: string;
+  highwayTags: string[];
+  includePolygons: boolean;
+  includeBuildings: boolean;
+  includeWater: boolean;
+  includeCoastlines: boolean;
+  includeParksForests: boolean;
+  includeRailways: boolean;
+  includeAeroways: boolean;
+}): string {
+  const { 
+    bbox, 
+    highwayTags, 
+    includePolygons, 
+    includeBuildings,
+    includeWater,
+    includeCoastlines,
+    includeParksForests,
+    includeRailways,
+    includeAeroways,
+  } = params;
+  
+  const railwayRegex = RAILWAY_TYPES.join('|');
+  const aerowayRegex = AEROWAY_TYPES.join('|');
+
+  const queryParts: string[] = [];
+  
+  // Always include highways
+  if (highwayTags.length > 0) {
+    queryParts.push(`way["highway"~"^(${highwayTags.join('|')})$"](${bbox});`);
+  }
+  
+  // Conditionally include other features
+  if (includeRailways) {
+    queryParts.push(`way["railway"~"^(${railwayRegex})$"](${bbox});`);
+  }
+  if (includeAeroways) {
+    queryParts.push(`way["aeroway"~"^(${aerowayRegex})$"](${bbox});`);
+  }
+  if (includeWater) {
+    queryParts.push(`way["natural"="water"](${bbox});`);
+    queryParts.push(`way["waterway"~"^(river|stream|canal|drain)$"](${bbox});`);
+  }
+  if (includeCoastlines) {
+    queryParts.push(`way["natural"="coastline"](${bbox});`);
+  }
+  if (includeParksForests && includePolygons) {
+    queryParts.push(`way["leisure"="park"](${bbox});`);
+    queryParts.push(`way["landuse"~"^(grass|meadow|forest)$"](${bbox});`);
+    queryParts.push(`way["natural"~"^(wood|beach)$"](${bbox});`);
+  }
+  if (includeBuildings) {
+    queryParts.push(`way["building"](${bbox});`);
+  }
+
+  // Priority queries get shorter timeouts for speed
+  const timeout = queryParts.length <= 4 ? 10 : 18;
+
+  return `
+    [out:json][timeout:${timeout}];
+    (
+      ${queryParts.join('\n      ')}
+    );
+    out geom;
+  `;
+}
+
 async function fetchOverpass(query: string): Promise<any[] | null> {
   // Shuffle endpoints to distribute load
   const endpoints = [...OVERPASS_URLS].sort(() => Math.random() - 0.5);
@@ -229,6 +306,7 @@ Deno.serve(async (req) => {
       skipService = false,
       includeBuildings = false,
       buildingsOnly = false,
+      priority = 0, // 0 = all, 1 = essential only, 2 = details only
     } = await req.json();
 
     if (!lat || !lng || !distance) {
@@ -242,7 +320,7 @@ Deno.serve(async (req) => {
     // Caching is handled client-side in IndexedDB instead
 
     console.log(
-      `Fetching streets for lat=${lat}, lng=${lng}, distance=${distance}m, skipService=${skipService}, buildings=${includeBuildings}, buildingsOnly=${buildingsOnly}`
+      `Fetching streets for lat=${lat}, lng=${lng}, distance=${distance}m, priority=${priority}, skipService=${skipService}, buildings=${includeBuildings}, buildingsOnly=${buildingsOnly}`
     );
 
     const distanceNum = Number(distance);
@@ -311,22 +389,55 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Determine which street types to use
-    const activeStreetTypes = skipService 
-      ? CORE_STREET_TYPES 
-      : ALL_STREET_TYPES;
+    // ==========================================================================
+    // PRIORITY-BASED LOADING
+    // Priority 1: Only essential (motorway, primary, water, coastlines) - FAST
+    // Priority 2: Only details (secondary, tertiary, residential, parks, forests)
+    // Priority 0: Everything (backward compatible)
+    // ==========================================================================
+    
+    let activeStreetTypes;
+    let includeWater = true;
+    let includeCoastlines = true;
+    let includeParksForests = true;
+    let includeRailways = true;
+    let includeAeroways = true;
+    
+    if (priority === 1) {
+      // FAST PATH: Only essential features for immediate visual feedback
+      activeStreetTypes = PRIORITY_1_STREET_TYPES;
+      includeParksForests = false; // Skip for speed
+      includeRailways = false;
+      includeAeroways = false;
+      console.log('PRIORITY 1: Essential features only (fast path)');
+    } else if (priority === 2) {
+      // DETAIL PATH: Load remaining features
+      activeStreetTypes = PRIORITY_2_STREET_TYPES;
+      includeWater = false; // Already loaded in priority 1
+      includeCoastlines = false;
+      console.log('PRIORITY 2: Detail features only');
+    } else {
+      // FULL PATH: Everything (backward compatible)
+      activeStreetTypes = skipService ? CORE_STREET_TYPES : ALL_STREET_TYPES;
+    }
+    
     const highwayTags = activeStreetTypes.flatMap(st => st.tags);
 
     // CRITICAL FIX: Check element count BEFORE fetching full data to avoid memory crashes
-    console.log('Checking element count...');
-    // Don't include buildings in count query - check separately
-    const estimatedCount = await getElementCount(bbox, highwayTags, false);
-    console.log(`Estimated element count (without buildings): ${estimatedCount}`);
-
-    // Use threshold to decide on reduced mode
-    const threshold = includeBuildings ? ELEMENT_COUNT_THRESHOLD_WITH_BUILDINGS : ELEMENT_COUNT_THRESHOLD;
-    let useReducedMode = estimatedCount > threshold;
-    let includePolygons = !useReducedMode;
+    // Skip count check for priority requests (they're already filtered)
+    let estimatedCount = 0;
+    let useReducedMode = false;
+    let includePolygons = true;
+    
+    if (priority === 0) {
+      console.log('Checking element count...');
+      estimatedCount = await getElementCount(bbox, highwayTags, false);
+      console.log(`Estimated element count (without buildings): ${estimatedCount}`);
+      
+      const threshold = includeBuildings ? ELEMENT_COUNT_THRESHOLD_WITH_BUILDINGS : ELEMENT_COUNT_THRESHOLD;
+      useReducedMode = estimatedCount > threshold;
+      includePolygons = !useReducedMode;
+    }
     
     // Allow buildings even in moderately dense areas - but be conservative
     const actuallyIncludeBuildings = includeBuildings && estimatedCount < 25000;
@@ -337,8 +448,8 @@ Deno.serve(async (req) => {
       : highwayTags;
 
     if (useReducedMode) {
-      console.log(`Using REDUCED mode (${estimatedCount} elements > ${threshold})`);
-    } else {
+      console.log(`Using REDUCED mode (${estimatedCount} elements > threshold)`);
+    } else if (priority === 0) {
       console.log(`Using FULL mode (${estimatedCount} elements)`);
     }
     
@@ -346,7 +457,18 @@ Deno.serve(async (req) => {
       console.log(`Buildings: ${actuallyIncludeBuildings ? 'ENABLED' : 'SKIPPED (too dense)'}`);
     }
 
-    const query = buildQuery({ bbox, highwayTags: finalHighwayTags, includePolygons, includeBuildings: actuallyIncludeBuildings });
+    // Build priority-aware query
+    const query = buildPriorityQuery({
+      bbox,
+      highwayTags: finalHighwayTags,
+      includePolygons: priority === 0 ? includePolygons : (priority === 2),
+      includeBuildings: actuallyIncludeBuildings,
+      includeWater,
+      includeCoastlines,
+      includeParksForests,
+      includeRailways,
+      includeAeroways,
+    });
     const elements = await fetchOverpass(query);
 
     if (elements === null) {

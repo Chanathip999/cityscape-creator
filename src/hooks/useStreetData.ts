@@ -204,6 +204,7 @@ export const useStreetData = ({
   const runIdRef = useRef(0);
 
   // Single tile fetch with retry - wrapped in semaphore for global concurrency control
+  // Now supports priority parameter for progressive loading
   const fetchTileWithRetry = useCallback(async (
     runId: number,
     tileLat: number,
@@ -212,11 +213,13 @@ export const useStreetData = ({
     skipService: boolean,
     fetchBuildings: boolean,
     buildingsOnly: boolean,
+    priority: 0 | 1 | 2 = 0, // 0 = all, 1 = essential, 2 = details
     retries = 3
   ): Promise<TileResult | null> => {
     const cacheKey =
       getTileCacheKey(tileLat, tileLng, tileRadius) +
-      (fetchBuildings ? (buildingsOnly ? '-bld-only' : '-bld') : '');
+      (fetchBuildings ? (buildingsOnly ? '-bld-only' : '-bld') : '') +
+      (priority > 0 ? `-p${priority}` : '');
     
     // Try IndexedDB cache first (24h TTL) - instant!
     const cached = await getCachedTile(cacheKey);
@@ -239,6 +242,7 @@ export const useStreetData = ({
               skipService,
               includeBuildings: fetchBuildings,
               buildingsOnly,
+              priority, // NEW: Send priority to backend
             },
           });
 
@@ -337,69 +341,91 @@ export const useStreetData = ({
         
         const skipService = false;
         console.log(
-          `🚀 FAST LOAD: ${streetTiles.length} street tiles + ${buildingTiles.length} building tiles (batch: ${STREET_BATCH_SIZE}/${BUILDING_BATCH_SIZE})`
+          `🚀 PROGRESSIVE LOAD: ${streetTiles.length} tiles (Priority 1→2)`
         );
 
         // =========================================================================
-        // PROGRESSIVE LOADING STRATEGY:
-        // 1. First: Load CENTER tile immediately (fast first paint)
-        // 2. Then: Load ALL remaining tiles in large parallel batches
+        // TWO-STAGE PROGRESSIVE LOADING STRATEGY:
+        // 1. PRIORITY 1: Essential features (motorways, primary, water) - FAST FIRST PAINT
+        // 2. PRIORITY 2: Detail features (secondary, tertiary, residential, parks) - LOAD AFTER
         // =========================================================================
 
-        // PHASE 1: Center tile for immediate visual feedback
+        // PHASE 1A: Center tile with PRIORITY 1 (essential only) for INSTANT feedback
         const centerTile = streetTiles[0];
-        const centerResult = await fetchTileWithRetry(
-          runId, centerTile.lat, centerTile.lng, centerTile.radius, skipService, false, false
+        const centerEssentialResult = await fetchTileWithRetry(
+          runId, centerTile.lat, centerTile.lng, centerTile.radius, skipService, false, false, 1
         );
         
         if (runId !== runIdRef.current) return;
         
-        if (centerResult) {
-          // Show center immediately!
-          setStreets(centerResult.streets);
-          setRailways(centerResult.railways);
-          setAeroways(centerResult.aeroways);
-          setCoastlines(centerResult.coastlines);
-          setWater(centerResult.water);
-          setParks(centerResult.parks);
-          setForests(centerResult.forests);
-          console.log(`⚡ Center tile rendered in ${(performance.now() - startTime).toFixed(0)}ms`);
+        if (centerEssentialResult) {
+          // Show essential features immediately!
+          setStreets(centerEssentialResult.streets);
+          setWater(centerEssentialResult.water);
+          setCoastlines(centerEssentialResult.coastlines);
+          console.log(`⚡ PRIORITY 1 center in ${(performance.now() - startTime).toFixed(0)}ms`);
         }
 
-        // PHASE 2: All remaining tiles in parallel (semaphore handles concurrency)
-        const remainingStreetTiles = streetTiles.slice(1);
+        // PHASE 1B: All tiles with PRIORITY 1 (essential) in parallel - FAST
+        const remainingTiles = streetTiles.slice(1);
+        const priority1Results: TileResult[] = centerEssentialResult ? [centerEssentialResult] : [];
         
-        const streetFetchPromise = (async () => {
-          const results: TileResult[] = centerResult ? [centerResult] : [];
+        // Fetch ALL tiles with priority 1 first (much faster than full data)
+        const p1BatchSize = STREET_BATCH_SIZE * 2; // Can be more aggressive for smaller payloads
+        for (let i = 0; i < remainingTiles.length; i += p1BatchSize) {
+          if (runId !== runIdRef.current) break;
+          const batch = remainingTiles.slice(i, i + p1BatchSize);
+          const batchResults = await Promise.all(
+            batch.map(tile =>
+              fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, false, false, 1)
+            )
+          );
           
-          // Fire ALL tiles at once - semaphore will queue them safely
-          for (let i = 0; i < remainingStreetTiles.length; i += STREET_BATCH_SIZE) {
+          for (const result of batchResults) {
+            if (result) priority1Results.push(result);
+          }
+          
+          // Progressive update
+          const merged = mergeResults(priority1Results);
+          setStreets(merged.streets);
+          setWater(merged.water);
+          setCoastlines(merged.coastlines);
+        }
+        
+        const priority1Time = performance.now() - startTime;
+        console.log(`✅ PRIORITY 1 complete: ${priority1Results.length} tiles in ${priority1Time.toFixed(0)}ms`);
+
+        // PHASE 2: Load PRIORITY 2 (details) for all tiles - runs in background
+        const streetFetchPromise = (async () => {
+          const priority2Results: TileResult[] = [];
+          
+          for (let i = 0; i < streetTiles.length; i += STREET_BATCH_SIZE) {
             if (runId !== runIdRef.current) break;
-            const batch = remainingStreetTiles.slice(i, i + STREET_BATCH_SIZE);
+            const batch = streetTiles.slice(i, i + STREET_BATCH_SIZE);
             const batchResults = await Promise.all(
               batch.map(tile =>
-                fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, false, false)
+                fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, false, false, 2)
               )
             );
             
-            // Progressive update after each batch
             for (const result of batchResults) {
-              if (result) results.push(result);
+              if (result) priority2Results.push(result);
             }
             
-            // Update UI progressively
-            if (results.length > 1) {
-              const merged = mergeResults(results);
-              setStreets(merged.streets);
-              setRailways(merged.railways);
-              setAeroways(merged.aeroways);
-              setCoastlines(merged.coastlines);
-              setWater(merged.water);
-              setParks(merged.parks);
-              setForests(merged.forests);
-            }
+            // Merge priority 1 + priority 2 results for complete picture
+            const allResults = [...priority1Results, ...priority2Results];
+            const merged = mergeResults(allResults);
+            setStreets(merged.streets);
+            setRailways(merged.railways);
+            setAeroways(merged.aeroways);
+            setCoastlines(merged.coastlines);
+            setWater(merged.water);
+            setParks(merged.parks);
+            setForests(merged.forests);
           }
-          return results;
+          
+          console.log(`✅ PRIORITY 2 complete: ${priority2Results.length} detail tiles in ${(performance.now() - startTime).toFixed(0)}ms`);
+          return [...priority1Results, ...priority2Results];
         })();
 
         // PROGRESSIVE BUILDING FETCH: Update UI after each batch
@@ -412,7 +438,7 @@ export const useStreetData = ({
             const batch = buildingTiles.slice(i, i + BUILDING_BATCH_SIZE);
             const batchResults = await Promise.all(
               batch.map(tile =>
-                fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, true, true)
+                fetchTileWithRetry(runId, tile.lat, tile.lng, tile.radius, skipService, true, true, 0)
               )
             );
             
