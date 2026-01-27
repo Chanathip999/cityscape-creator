@@ -23,6 +23,9 @@ const CACHE_TTL = 600000; // 10 minutes
 // All railway types for maximum detail
 const RAILWAY_TYPES = ['rail', 'tram', 'subway', 'light_rail', 'monorail', 'narrow_gauge'];
 
+// Aeroway types for airport runways
+const AEROWAY_TYPES = ['runway', 'taxiway'];
+
 interface StreetData {
   type: string;
   coordinates: [number, number][][];
@@ -86,9 +89,7 @@ Deno.serve(async (req) => {
       : ALL_STREET_TYPES;
     console.log(`Using ${activeStreetTypes.length} street types (skipService: ${skipService})`);
 
-    // Disable water/parks entirely for now
-    const includeWaterParks = false;
-
+    // Always include all features for maximum detail
     const latDelta = radius / 111320;
     const lngDelta = radius / (111320 * Math.cos(lat * Math.PI / 180));
     
@@ -100,35 +101,26 @@ Deno.serve(async (req) => {
     const highwayTags = activeStreetTypes.flatMap(st => st.tags);
     const bbox = `${south.toFixed(5)},${west.toFixed(5)},${north.toFixed(5)},${east.toFixed(5)}`;
     
-    // Build query conditionally - include water/parks/railways for smaller radii
-    // z-order from maptoposter: z=3 roads, z=2.5 railways, z=2 parks, z=1 water, z=0 bg
+    // Build comprehensive query with all features
+    // z-order: z=3 roads, z=2.5 railways, z=2 parks/forests, z=1 water, z=0 bg
     const railwayRegex = RAILWAY_TYPES.join('|');
-    let overpassQuery: string;
+    const aerowayRegex = AEROWAY_TYPES.join('|');
     
-    if (includeWaterParks) {
-      overpassQuery = `
-        [out:json][timeout:30];
-        (
-          way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
-          way["railway"~"^(${railwayRegex})$"](${bbox});
-          way["natural"="water"](${bbox});
-          way["waterway"~"^(river|canal|riverbank)$"](${bbox});
-          way["leisure"="park"](${bbox});
-          way["landuse"~"^(grass|meadow)$"](${bbox});
-        );
-        out geom;
-      `;
-    } else {
-      // Large areas: streets and railways only (all railway types)
-      overpassQuery = `
-        [out:json][timeout:20];
-        (
-          way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
-          way["railway"~"^(${railwayRegex})$"](${bbox});
-        );
-        out geom;
-      `;
-    }
+    const overpassQuery = `
+      [out:json][timeout:45];
+      (
+        way["highway"~"^(${highwayTags.join('|')})$"](${bbox});
+        way["railway"~"^(${railwayRegex})$"](${bbox});
+        way["aeroway"~"^(${aerowayRegex})$"](${bbox});
+        way["natural"="water"](${bbox});
+        way["natural"="coastline"](${bbox});
+        way["waterway"~"^(river|stream|canal|drain)$"](${bbox});
+        way["leisure"="park"](${bbox});
+        way["landuse"~"^(grass|meadow|forest)$"](${bbox});
+        way["natural"~"^(wood|beach)$"](${bbox});
+      );
+      out geom;
+    `;
 
     console.log('Sending Overpass query...');
 
@@ -188,10 +180,15 @@ Deno.serve(async (req) => {
 
     // Process railways (z-order 2.5 in maptoposter)
     const railwayLines: [number, number][][] = [];
+    
+    // Process aeroways (runways, taxiways)
+    const aerowayLines: [number, number][][] = [];
 
-    // Process water and parks
+    // Process water, coastlines, and parks/forests
     const waterPolygons: [number, number][][] = [];
+    const coastlineLines: [number, number][][] = [];
     const parkPolygons: [number, number][][] = [];
+    const forestPolygons: [number, number][][] = [];
 
     for (const element of elements) {
       if (element.type !== 'way') continue;
@@ -230,7 +227,7 @@ Deno.serve(async (req) => {
           railwayLines.push(points);
         }
       }
-      // Check if it's water
+      // Check if it's water or waterway
       else if (tags.natural === 'water' || tags.waterway) {
         const points: [number, number][] = [];
         for (const pt of geom) {
@@ -238,12 +235,36 @@ Deno.serve(async (req) => {
             points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
           }
         }
-        if (points.length >= 3) {
+        if (points.length >= 2) {
           waterPolygons.push(points);
         }
       }
+      // Check if it's a coastline
+      else if (tags.natural === 'coastline') {
+        const points: [number, number][] = [];
+        for (const pt of geom) {
+          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+            points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+          }
+        }
+        if (points.length >= 2) {
+          coastlineLines.push(points);
+        }
+      }
+      // Check if it's an aeroway (runway, taxiway)
+      else if (tags.aeroway && AEROWAY_TYPES.includes(tags.aeroway)) {
+        const points: [number, number][] = [];
+        for (const pt of geom) {
+          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+            points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+          }
+        }
+        if (points.length >= 2) {
+          aerowayLines.push(points);
+        }
+      }
       // Check if it's a park
-      else if (tags.leisure === 'park' || tags.landuse === 'grass' || tags.landuse === 'meadow') {
+      else if (tags.leisure === 'park' || tags.landuse === 'grass' || tags.landuse === 'meadow' || tags.natural === 'beach') {
         const points: [number, number][] = [];
         for (const pt of geom) {
           if (pt && pt.lat !== undefined && pt.lon !== undefined) {
@@ -254,6 +275,18 @@ Deno.serve(async (req) => {
           parkPolygons.push(points);
         }
       }
+      // Check if it's forest/wood
+      else if (tags.landuse === 'forest' || tags.natural === 'wood') {
+        const points: [number, number][] = [];
+        for (const pt of geom) {
+          if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+            points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+          }
+        }
+        if (points.length >= 3) {
+          forestPolygons.push(points);
+        }
+      }
     }
 
     const streetData: StreetData[] = activeStreetTypes.map((st) => ({
@@ -262,13 +295,16 @@ Deno.serve(async (req) => {
     }));
 
     const totalStreets = streetData.reduce((sum, st) => sum + st.coordinates.length, 0);
-    console.log(`Returning ${totalStreets} street segments, ${railwayLines.length} railways, ${waterPolygons.length} water, ${parkPolygons.length} parks`);
+    console.log(`Returning ${totalStreets} streets, ${railwayLines.length} railways, ${aerowayLines.length} aeroways, ${coastlineLines.length} coastlines, ${waterPolygons.length} water, ${parkPolygons.length} parks, ${forestPolygons.length} forests`);
 
     const responseData = { 
       streets: streetData,
       railways: railwayLines,
+      aeroways: aerowayLines,
+      coastlines: coastlineLines,
       water: waterPolygons,
       parks: parkPolygons,
+      forests: forestPolygons,
     };
     
     // Cache the result

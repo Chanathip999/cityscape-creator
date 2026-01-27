@@ -16,8 +16,11 @@ interface UseStreetDataProps {
 interface UseStreetDataResult {
   streets: StreetSegment[];
   railways: [number, number][][];
+  aeroways: [number, number][][];
+  coastlines: [number, number][][];
   water: [number, number][][];
   parks: [number, number][][];
+  forests: [number, number][][];
   isLoading: boolean;
   error: string | null;
 }
@@ -25,8 +28,11 @@ interface UseStreetDataResult {
 interface TileResult {
   streets: StreetSegment[];
   railways: [number, number][][];
+  aeroways: [number, number][][];
+  coastlines: [number, number][][];
   water: [number, number][][];
   parks: [number, number][][];
+  forests: [number, number][][];
 }
 
 // Maximum radius per tile - use 5km for efficiency
@@ -88,8 +94,11 @@ function mergeResults(results: TileResult[]): TileResult {
   const merged: TileResult = {
     streets: [],
     railways: [],
+    aeroways: [],
+    coastlines: [],
     water: [],
     parks: [],
+    forests: [],
   };
 
   // Create maps to aggregate streets by type
@@ -105,8 +114,11 @@ function mergeResults(results: TileResult[]): TileResult {
 
     // Merge other features (simple concat - some duplication at edges is acceptable)
     merged.railways.push(...result.railways);
+    merged.aeroways.push(...result.aeroways);
+    merged.coastlines.push(...result.coastlines);
     merged.water.push(...result.water);
     merged.parks.push(...result.parks);
+    merged.forests.push(...result.forests);
   }
 
   // Convert back to StreetSegment array
@@ -126,8 +138,11 @@ export const useStreetData = ({
 }: UseStreetDataProps): UseStreetDataResult => {
   const [streets, setStreets] = useState<StreetSegment[]>([]);
   const [railways, setRailways] = useState<[number, number][][]>([]);
+  const [aeroways, setAeroways] = useState<[number, number][][]>([]);
+  const [coastlines, setCoastlines] = useState<[number, number][][]>([]);
   const [water, setWater] = useState<[number, number][][]>([]);
   const [parks, setParks] = useState<[number, number][][]>([]);
+  const [forests, setForests] = useState<[number, number][][]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -163,8 +178,11 @@ export const useStreetData = ({
       const result: TileResult = {
         streets: data?.streets || [],
         railways: data?.railways || [],
+        aeroways: data?.aeroways || [],
+        coastlines: data?.coastlines || [],
         water: data?.water || [],
         parks: data?.parks || [],
+        forests: data?.forests || [],
       };
       
       // Cache in IndexedDB for future use
@@ -244,8 +262,11 @@ export const useStreetData = ({
 
         setStreets(merged.streets);
         setRailways(merged.railways);
+        setAeroways(merged.aeroways);
+        setCoastlines(merged.coastlines);
         setWater(merged.water);
         setParks(merged.parks);
+        setForests(merged.forests);
         lastParamsRef.current = paramsKey;
 
       } catch (err) {
@@ -263,5 +284,5 @@ export const useStreetData = ({
     };
   }, [latitude, longitude, distance, enabled, fetchTile]);
 
-  return { streets, railways, water, parks, isLoading, error };
+  return { streets, railways, aeroways, coastlines, water, parks, forests, isLoading, error };
 };
