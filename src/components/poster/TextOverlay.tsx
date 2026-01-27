@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { PosterConfig, TextOverrides, TextElementConfig, TextPositionOffset } from '@/types/poster';
+import { PosterConfig, TextOverrides, TextElementConfig, TextPositionOffset, TextOrientation } from '@/types/poster';
 import { getTextPositions, getScaledFontSizes, FONT_STACKS, formatCoordinates, formatDisplayText } from '@/lib/posterTypography';
+import { RotateCw } from 'lucide-react';
 
 interface TextOverlayProps {
   config: PosterConfig;
@@ -25,6 +26,7 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
   const [resizeTarget, setResizeTarget] = useState<DragTarget>(null);
   const [resizeHandle, setResizeHandle] = useState<ResizeHandle>(null);
   const [editingElement, setEditingElement] = useState<'city' | 'country' | null>(null);
+  const [selectedElement, setSelectedElement] = useState<DragTarget>(null);
   const [showGuides, setShowGuides] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
   const dragStartPos = useRef({ x: 0, y: 0 });
@@ -37,7 +39,19 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
   const baseFonts = getScaledFontSizes(containerHeight, config.fontSize);
   const fontSizeScale = config.fontSizeScale || 1;
 
-  // Calculate effective sizes
+  // Initialize textOverrides if not present
+  useEffect(() => {
+    if (!config.textOverrides) {
+      onConfigUpdate({
+        textOverrides: {
+          city: { position: { x: 0.5, y: TEXT_POSITIONS.title } },
+          country: { position: { x: 0.5, y: TEXT_POSITIONS.subtitle } },
+          coordinates: { position: { x: 0.5, y: TEXT_POSITIONS.coords } },
+        }
+      });
+    }
+  }, []);
+
   const getElementConfig = useCallback((elementId: 'city' | 'country' | 'coordinates'): TextElementConfig => {
     return config.textOverrides?.[elementId] || {};
   }, [config.textOverrides]);
@@ -52,16 +66,39 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
     return override.scale || 1;
   }, [getElementConfig]);
 
+  const getOrientation = useCallback((elementId: 'city' | 'country' | 'coordinates'): TextOrientation => {
+    const override = getElementConfig(elementId);
+    return override.orientation || 'horizontal';
+  }, [getElementConfig]);
+
   const textElements: TextElement[] = [
     { id: 'city', text: formatDisplayText(config.city), defaultY: TEXT_POSITIONS.title, visible: config.showCity, editable: true },
     { id: 'country', text: formatDisplayText(config.countryLabel || config.country), defaultY: TEXT_POSITIONS.subtitle, visible: config.showCountry, editable: true },
     { id: 'coordinates', text: formatCoordinates(config.latitude, config.longitude), defaultY: TEXT_POSITIONS.coords, visible: config.showCoordinates, editable: false },
   ];
 
+  // Toggle orientation for an element
+  const toggleOrientation = useCallback((elementId: 'city' | 'country' | 'coordinates') => {
+    const currentOrientation = getOrientation(elementId);
+    const newOrientation: TextOrientation = currentOrientation === 'horizontal' ? 'vertical' : 'horizontal';
+    
+    const newOverrides: TextOverrides = {
+      ...config.textOverrides,
+      [elementId]: {
+        ...config.textOverrides?.[elementId],
+        orientation: newOrientation,
+      },
+    };
+    onConfigUpdate({ textOverrides: newOverrides });
+  }, [config.textOverrides, getOrientation, onConfigUpdate]);
+
   const handleMouseDown = useCallback((e: React.MouseEvent, elementId: DragTarget, isResize: boolean = false, handle: ResizeHandle = null) => {
     if (!elementId) return;
     e.preventDefault();
     e.stopPropagation();
+
+    // Select the element
+    setSelectedElement(elementId);
 
     if (isResize) {
       setResizeTarget(elementId);
@@ -102,7 +139,6 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
 
     if (resizeTarget && resizeHandle) {
       const dy = (e.clientY - dragStartPos.current.y) / containerHeight;
-      // Scale changes based on vertical drag (down = bigger)
       const scaleChange = resizeHandle.startsWith('s') ? dy * 2 : -dy * 2;
       const newScale = Math.max(0.3, Math.min(3, initialScale.current + scaleChange));
 
@@ -125,6 +161,14 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
     setShowGuides(false);
   }, []);
 
+  // Deselect when clicking outside
+  const handleOverlayClick = useCallback((e: React.MouseEvent) => {
+    if (e.target === overlayRef.current) {
+      setSelectedElement(null);
+      setEditingElement(null);
+    }
+  }, []);
+
   useEffect(() => {
     if (dragTarget || resizeTarget) {
       document.addEventListener('mousemove', handleMouseMove);
@@ -136,9 +180,18 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
     }
   }, [dragTarget, resizeTarget, handleMouseMove, handleMouseUp]);
 
-  const handleDoubleClick = useCallback((elementId: 'city' | 'country') => {
-    setEditingElement(elementId);
-  }, []);
+  // Single click to start editing (instead of double-click)
+  const handleTextClick = useCallback((e: React.MouseEvent, elementId: 'city' | 'country' | 'coordinates', isEditable: boolean) => {
+    e.stopPropagation();
+    
+    // If already selected, start editing on next click
+    if (selectedElement === elementId && isEditable && !editingElement) {
+      setEditingElement(elementId as 'city' | 'country');
+    } else {
+      setSelectedElement(elementId);
+      setEditingElement(null);
+    }
+  }, [selectedElement, editingElement]);
 
   const handleTextChange = useCallback((e: React.ChangeEvent<HTMLInputElement>, elementId: 'city' | 'country') => {
     if (elementId === 'city') {
@@ -161,8 +214,9 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
   return (
     <div
       ref={overlayRef}
-      className="absolute inset-0 pointer-events-none z-20"
+      className="absolute inset-0 z-20"
       style={{ fontFamily: fontStack }}
+      onClick={handleOverlayClick}
     >
       {/* Guides - shown while dragging */}
       {showGuides && (
@@ -195,8 +249,11 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
 
         const pos = getPosition(element.id, element.defaultY);
         const scale = getScale(element.id);
+        const orientation = getOrientation(element.id);
+        const isSelected = selectedElement === element.id;
         const isActive = dragTarget === element.id || resizeTarget === element.id;
         const isEditing = editingElement === element.id;
+        const isVertical = orientation === 'vertical';
 
         let fontSize = baseFonts.subtitle * fontSizeScale * scale;
         let fontWeight = 300;
@@ -217,15 +274,15 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
         return (
           <div
             key={element.id}
-            className={`absolute transform -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-move transition-shadow ${
-              isActive ? 'ring-2 ring-primary ring-offset-2 ring-offset-background/50 rounded-md' : ''
+            className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-move transition-all ${
+              isSelected || isActive ? 'ring-2 ring-primary ring-offset-2 ring-offset-background/50 rounded-md' : ''
             }`}
             style={{
               left: `${pos.x * 100}%`,
               top: `${pos.y * 100}%`,
             }}
             onMouseDown={(e) => handleMouseDown(e, element.id)}
-            onDoubleClick={() => element.editable && handleDoubleClick(element.id as 'city' | 'country')}
+            onClick={(e) => handleTextClick(e, element.id, element.editable)}
           >
             {isEditing && element.editable ? (
               <input
@@ -254,20 +311,34 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
                   letterSpacing,
                   opacity,
                   textTransform: 'uppercase',
+                  writingMode: isVertical ? 'vertical-rl' : 'horizontal-tb',
+                  textOrientation: isVertical ? 'mixed' : undefined,
                 }}
               >
                 {element.text}
               </span>
             )}
 
-            {/* Resize handles - only show when active */}
-            {isActive && !isEditing && (
+            {/* Controls - only show when selected */}
+            {isSelected && !isEditing && (
               <>
+                {/* Orientation toggle button */}
+                <button
+                  className="absolute -top-8 left-1/2 -translate-x-1/2 w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleOrientation(element.id);
+                  }}
+                  title={isVertical ? 'Horizontal' : 'Vertikal'}
+                >
+                  <RotateCw className="w-3 h-3" />
+                </button>
+
                 {/* Corner resize handles */}
                 {['nw', 'ne', 'sw', 'se'].map((handle) => (
                   <div
                     key={handle}
-                    className="absolute w-3 h-3 bg-primary border-2 border-background rounded-sm cursor-nwse-resize"
+                    className="absolute w-3 h-3 bg-primary border-2 border-background rounded-sm"
                     style={{
                       top: handle.startsWith('n') ? '-6px' : undefined,
                       bottom: handle.startsWith('s') ? '-6px' : undefined,

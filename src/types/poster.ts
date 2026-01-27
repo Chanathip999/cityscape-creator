@@ -81,10 +81,14 @@ export interface TextPositionOffset {
   y: number; // 0 = top, 1 = bottom
 }
 
+// Text orientation type
+export type TextOrientation = 'horizontal' | 'vertical';
+
 // Individual text element override
 export interface TextElementConfig {
   position?: TextPositionOffset;
   scale?: number; // Size multiplier (1.0 = default)
+  orientation?: TextOrientation; // Text direction
 }
 
 // All text overrides
