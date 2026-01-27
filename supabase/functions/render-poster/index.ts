@@ -87,14 +87,14 @@ const ASPECT_RATIOS: Record<string, { width: number; height: number }> = {
   '19:6': { width: 19, height: 6 },
 };
 
-// Typography from Python script - using ax.transAxes (normalized 0-1 coordinates)
-// Python positions from BOTTOM, so we convert: SVG_Y = 1 - PYTHON_Y
+// Typography positions - MUST match posterTypography.ts for visual parity
+// These are relative to canvas height (0 = top, 1 = bottom)
 const TEXT_POSITIONS = {
-  title: 0.86,           // City: Python y=0.14 → 1-0.14 = 0.86
-  decorativeLine: 0.875, // Line: Python y=0.125 → 1-0.125 = 0.875
-  subtitle: 0.90,        // Country: Python y=0.10 → 1-0.10 = 0.90
-  coords: 0.93,          // Coords: Python y=0.07 → 1-0.07 = 0.93
-  attribution: 0.98,     // Attribution: Python y=0.02 → 1-0.02 = 0.98
+  title: 0.82,           // City name: ABOVE the decorative line
+  decorativeLine: 0.86,  // Decorative line: between city and country
+  subtitle: 0.895,       // Country name: BELOW the decorative line
+  coords: 0.935,         // Coordinates: at the very bottom
+  attribution: 0.98,     // Attribution
 };
 
 // Letter spacing (tracking) in em units
@@ -163,14 +163,22 @@ function getCropLimits(lat: number, lng: number, distance: number, aspectValue: 
   const metersPerDegreeLat = 111320;
   const metersPerDegreeLng = 111320 * Math.cos((lat * Math.PI) / 180);
 
-  let halfX = distance / metersPerDegreeLng;
-  let halfY = distance / metersPerDegreeLat;
+  // IMPORTANT: Keep a true 90° orthographic feel by ensuring the same meter-per-pixel
+  // scale on both axes. Adjust in meters first, then convert to degrees per axis.
+  // This MUST match CanvasPosterPreview.tsx getCropLimits() for visual parity.
+  let halfWidthMeters = distance;
+  let halfHeightMeters = distance;
 
   if (aspectValue > 1) {
-    halfY = halfX / aspectValue;
+    // wide: keep width, reduce height
+    halfHeightMeters = halfWidthMeters / aspectValue;
   } else if (aspectValue < 1) {
-    halfX = halfY * aspectValue;
+    // tall: keep height, reduce width
+    halfWidthMeters = halfHeightMeters * aspectValue;
   }
+
+  const halfX = halfWidthMeters / metersPerDegreeLng;
+  const halfY = halfHeightMeters / metersPerDegreeLat;
 
   return {
     minLng: lng - halfX,
