@@ -6,6 +6,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { getCachedTile, setCachedTile, getTileCacheKey } from './streetDataCache';
+import { withConcurrencyLimit, getCurrentInFlight } from './fetchSemaphore';
 
 // Top 20 most popular cities for map posters
 // Coordinates are city centers; we prefetch a 4km radius
@@ -58,30 +59,38 @@ async function prefetchCity(city: typeof POPULAR_CITIES[0]): Promise<PrefetchRes
   }
 
   try {
-    // Fetch core layers only (streets, water, railways) - no buildings for prefetch
-    const { data, error } = await supabase.functions.invoke('fetch-streets', {
-      body: {
-        lat: city.lat,
-        lng: city.lng,
-        distance: PREFETCH_RADIUS,
-        skipService: false,
-        includeBuildings: false,
-        buildingsOnly: false,
-        priority: 2, // Low priority for prefetch
-        layerVisibility: {
-          water: true,
-          railways: true,
-          aeroways: true,
-          forests: false,
-          parks: false,
-          coastlines: false,
-          buildings: false,
+    // IMPORTANT: Prefetch must be "low impact".
+    // - Use the global semaphore so prefetch never competes aggressively with interactive loads.
+    // - Avoid priority=2 because that loads minor roads/paths (largest payload).
+    const { data, error } = await withConcurrencyLimit(async () =>
+      supabase.functions.invoke('fetch-streets', {
+        body: {
+          lat: city.lat,
+          lng: city.lng,
+          distance: PREFETCH_RADIUS,
+          // Reduced payload while still useful for quick first paint
+          skipService: true,
+          includeBuildings: false,
+          buildingsOnly: false,
+          priority: 0,
+          layerVisibility: {
+            water: true,
+            railways: true,
+            aeroways: true,
+            forests: false,
+            parks: false,
+            coastlines: false,
+            buildings: false,
+          },
         },
-      },
-    });
+      })
+    );
 
     if (error) {
-      console.warn(`[prefetch] Failed to prefetch ${city.name}:`, error);
+      console.warn(
+        `[prefetch] Failed to prefetch ${city.name} (in-flight: ${getCurrentInFlight()}):`,
+        error
+      );
       return { city: city.name, success: false, fromCache: false };
     }
 
@@ -128,8 +137,10 @@ export async function startCityPrefetch(): Promise<void> {
       console.log(`[prefetch] ✓ ${city.name} ${result.fromCache ? '(cached)' : '(fetched)'}`);
     }
 
-    // Wait between cities to avoid rate limiting (2 seconds between requests)
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Wait between cities to avoid rate limiting + reduce compute pressure.
+    // Add small jitter so multiple clients don't align perfectly.
+    const jitter = Math.floor(Math.random() * 500);
+    await new Promise(resolve => setTimeout(resolve, 3500 + jitter));
   }
 
   console.log('[prefetch] Complete:', prefetchedCities.length, 'cities prefetched');
@@ -165,26 +176,28 @@ export async function prefetchLocation(lat: number, lng: number, radius = PREFET
   if (cached) return true;
 
   try {
-    const { data, error } = await supabase.functions.invoke('fetch-streets', {
-      body: {
-        lat,
-        lng,
-        distance: radius,
-        skipService: false,
-        includeBuildings: false,
-        buildingsOnly: false,
-        priority: 1,
-        layerVisibility: {
-          water: true,
-          railways: true,
-          aeroways: true,
-          forests: false,
-          parks: false,
-          coastlines: false,
-          buildings: false,
+    const { data, error } = await withConcurrencyLimit(async () =>
+      supabase.functions.invoke('fetch-streets', {
+        body: {
+          lat,
+          lng,
+          distance: radius,
+          skipService: true,
+          includeBuildings: false,
+          buildingsOnly: false,
+          priority: 0,
+          layerVisibility: {
+            water: true,
+            railways: true,
+            aeroways: true,
+            forests: false,
+            parks: false,
+            coastlines: false,
+            buildings: false,
+          },
         },
-      },
-    });
+      })
+    );
 
     if (!error && data) {
       await setCachedTile(cacheKey, data);
