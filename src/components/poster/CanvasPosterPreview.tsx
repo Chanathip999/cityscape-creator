@@ -8,8 +8,8 @@
  * to ensure visual parity with the reference output.
  */
 
-import { useEffect, useRef, useCallback, useState } from 'react';
-import { PosterConfig, ASPECT_RATIOS } from '@/types/poster';
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
+import { PosterConfig, ASPECT_RATIOS, TEXT_LAYOUT_STYLES, MapIconType } from '@/types/poster';
 import { useStreetData } from '@/hooks/useStreetData';
 import {
   FONT_STACKS,
@@ -21,6 +21,36 @@ import {
   getScaledFontSizes,
   drawTextWithTracking,
 } from '@/lib/posterTypography';
+
+// SVG path data for map icons (simplified versions)
+const ICON_PATHS: Record<MapIconType, string> = {
+  pin: 'M12 0C7.58 0 4 3.58 4 8c0 5.25 8 13 8 13s8-7.75 8-13c0-4.42-3.58-8-8-8zm0 11c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z',
+  heart: 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z',
+  star: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
+  home: 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z',
+  flag: 'M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z',
+  plane: 'M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z',
+  train: 'M12 2c-4 0-8 .5-8 4v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h2l2-2h4l2 2h2v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-4-4-8-4z',
+  car: 'M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99z',
+  bike: 'M15.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM5 12c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5zm0 8.5c-1.9 0-3.5-1.6-3.5-3.5s1.6-3.5 3.5-3.5 3.5 1.6 3.5 3.5-1.6 3.5-3.5 3.5z',
+  bus: 'M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10z',
+  ship: 'M20 21c-1.39 0-2.78-.47-4-1.32-2.44 1.71-5.56 1.71-8 0C6.78 20.53 5.39 21 4 21H2v2h2c1.38 0 2.74-.35 4-.99 2.52 1.29 5.48 1.29 8 0 1.26.65 2.62.99 4 .99h2v-2h-2z',
+  helicopter: 'M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z',
+  parking: 'M13 3H6v18h4v-6h3c3.31 0 6-2.69 6-6s-2.69-6-6-6zm.2 8H10V7h3.2c1.1 0 2 .9 2 2s-.9 2-2 2z',
+  fuel: 'M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33 0 1.38 1.12 2.5 2.5 2.5.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14c0-1.1-.9-2-2-2h-1V5c0-1.1-.9-2-2-2H6c-1.1 0-2 .9-2 2v16h10v-7.5h1.5v5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V9c0-.69-.28-1.32-.73-1.77z',
+  restaurant: 'M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z',
+  cafe: 'M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.9 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM2 21h18v-2H2v2z',
+  hotel: 'M7 13c1.66 0 3-1.34 3-3S8.66 7 7 7s-3 1.34-3 3 1.34 3 3 3zm12-6h-8v7H3V5H1v15h2v-3h18v3h2v-9c0-2.21-1.79-4-4-4z',
+  hospital: 'M19 3H5c-1.1 0-1.99.9-1.99 2L3 19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-4v-4H6v-4h4V6h4v4h4v4z',
+  church: 'M18 12.22V9l-5-2.5V5h2V3h-2V1h-2v2H9v2h2v1.5L6 9v3.22L4 13v9h7v-5h2v5h7v-9l-2-.78z',
+  monument: 'M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z',
+  castle: 'M21 9V7l-2 1V6l-2-1V3H7v2L5 6v2L3 7v2l2 1v9H3v2h18v-2h-2v-9l2-1zM8 19H5v-6h3v6zm5 0h-3v-6h3v6zm5 0h-3v-6h3v6z',
+  stadium: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93z',
+  university: 'M12 3L1 9l11 6 9-4.91V17h2V9L12 3z',
+  school: 'M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3L1 9l11 6 9-4.91V17h2V9L12 3z',
+  library: 'M12 11.55C9.64 9.35 6.48 8 3 8v11c3.48 0 6.64 1.35 9 3.55 2.36-2.19 5.52-3.55 9-3.55V8c-3.48 0-6.64 1.35-9 3.55z',
+  museum: 'M22 11V9L12 2 2 9v2h2v9H2v2h20v-2h-2v-9h2zm-6 9h-3v-5h-2v5H8v-7h8v7z',
+};
 
 interface CanvasPosterPreviewProps {
   config: PosterConfig;
@@ -104,7 +134,38 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     showCity,
     showGradients,
     textPosition,
+    textLayoutStyle = 'classic',
+    mapIcons = [],
+    mapImages = [],
+    mapRoutes = [],
   } = config;
+
+  // Get text layout style configuration
+  const textStyle = useMemo(() => 
+    TEXT_LAYOUT_STYLES.find(s => s.id === textLayoutStyle) || TEXT_LAYOUT_STYLES[0],
+    [textLayoutStyle]
+  );
+
+  // Load images for overlay rendering
+  const [loadedImages, setLoadedImages] = useState<Record<string, HTMLImageElement>>({});
+  
+  useEffect(() => {
+    const loadImages = async () => {
+      const newImages: Record<string, HTMLImageElement> = {};
+      for (const mapImage of mapImages) {
+        if (!loadedImages[mapImage.id]) {
+          const img = new Image();
+          img.src = mapImage.dataUrl;
+          await new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
+          newImages[mapImage.id] = img;
+        }
+      }
+      if (Object.keys(newImages).length > 0) {
+        setLoadedImages(prev => ({ ...prev, ...newImages }));
+      }
+    };
+    loadImages();
+  }, [mapImages]);
 
   // Get text positions based on textPosition setting
   const TEXT_POSITIONS = getTextPositions(textPosition);
@@ -508,6 +569,92 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       ctx.globalAlpha = 1.0; // Reset alpha
     }
 
+    // z=5: Draw custom routes
+    if (mapRoutes && mapRoutes.length > 0) {
+      for (const route of mapRoutes) {
+        if (route.routePoints && route.routePoints.length >= 2) {
+          ctx.strokeStyle = route.color || '#E53935';
+          ctx.lineWidth = Math.max(2, 4 * (width / 864) * (route.width || 1));
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          
+          ctx.beginPath();
+          const start = toCanvasCoords(route.routePoints[0][0], route.routePoints[0][1], width, height, bounds);
+          ctx.moveTo(start.x, start.y);
+          
+          for (let i = 1; i < route.routePoints.length; i++) {
+            const point = toCanvasCoords(route.routePoints[i][0], route.routePoints[i][1], width, height, bounds);
+            ctx.lineTo(point.x, point.y);
+          }
+          ctx.stroke();
+        } else if (route.startLat && route.startLng && route.endLat && route.endLng) {
+          // Fallback: draw straight line if no route points
+          ctx.strokeStyle = route.color || '#E53935';
+          ctx.lineWidth = Math.max(2, 4 * (width / 864) * (route.width || 1));
+          ctx.lineCap = 'round';
+          
+          ctx.beginPath();
+          const start = toCanvasCoords(route.startLat, route.startLng, width, height, bounds);
+          const end = toCanvasCoords(route.endLat, route.endLng, width, height, bounds);
+          ctx.moveTo(start.x, start.y);
+          ctx.lineTo(end.x, end.y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // z=6: Draw custom images
+    if (mapImages && mapImages.length > 0) {
+      for (const mapImage of mapImages) {
+        const img = loadedImages[mapImage.id];
+        if (!img || !img.complete) continue;
+        
+        const pos = toCanvasCoords(mapImage.lat, mapImage.lng, width, height, bounds);
+        const imgWidth = width * mapImage.width;
+        const imgHeight = height * mapImage.height;
+        
+        ctx.save();
+        ctx.globalAlpha = mapImage.opacity || 1;
+        if (mapImage.rotation) {
+          ctx.translate(pos.x, pos.y);
+          ctx.rotate((mapImage.rotation * Math.PI) / 180);
+          ctx.drawImage(img, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
+        } else {
+          ctx.drawImage(img, pos.x - imgWidth / 2, pos.y - imgHeight / 2, imgWidth, imgHeight);
+        }
+        ctx.restore();
+      }
+    }
+
+    // z=7: Draw custom icons
+    if (mapIcons && mapIcons.length > 0) {
+      for (const icon of mapIcons) {
+        const pos = toCanvasCoords(icon.lat, icon.lng, width, height, bounds);
+        const iconSize = Math.max(16, 24 * (width / 864) * (icon.size || 1));
+        const iconPath = ICON_PATHS[icon.type];
+        
+        if (iconPath) {
+          ctx.save();
+          ctx.translate(pos.x - iconSize / 2, pos.y - iconSize / 2);
+          ctx.scale(iconSize / 24, iconSize / 24);
+          
+          const path = new Path2D(iconPath);
+          ctx.fillStyle = icon.color || '#E53935';
+          ctx.fill(path);
+          ctx.restore();
+        }
+        
+        // Draw label if present
+        if (icon.label) {
+          const labelSize = Math.max(10, 12 * (width / 864));
+          ctx.font = `${labelSize}px sans-serif`;
+          ctx.fillStyle = icon.color || '#E53935';
+          ctx.textAlign = 'center';
+          ctx.fillText(icon.label, pos.x, pos.y + iconSize / 2 + labelSize);
+        }
+      }
+    }
+
     // z=10: Gradient fades (top & bottom) - conditional
     if (showGradients) {
       const fadeHeight = height * 0.25;
@@ -539,8 +686,12 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
         attribution: baseFonts.attribution,
       };
 
+      // Apply text alignment based on style
+      const textAlign = textStyle.textAlign;
+      const xPos = textAlign === 'left' ? width * 0.08 : textAlign === 'right' ? width * 0.92 : width / 2;
+      
       ctx.fillStyle = textColor;
-      ctx.textAlign = 'center';
+      ctx.textAlign = textAlign;
       ctx.textBaseline = 'middle';
 
       // City name with dynamic size adjustment
@@ -552,55 +703,87 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
           adjustedTitleSize = Math.max(adjustedTitleSize * lengthFactor, 20 * (height / 1000));
         }
 
-        const cityText = formatDisplayText(city);
+        // Apply uppercase based on style
+        const cityText = textStyle.cityUppercase ? formatDisplayText(city) : city;
         ctx.font = `${FONT_WEIGHTS.title} ${adjustedTitleSize}px ${fontStack}`;
-        drawTextWithTracking(
-          ctx,
-          cityText,
-          width / 2,
-          height * TEXT_POSITIONS.title,
-          TRACKING.title,
-          adjustedTitleSize
-        );
+        
+        if (textAlign === 'center') {
+          drawTextWithTracking(
+            ctx,
+            cityText,
+            xPos,
+            height * TEXT_POSITIONS.title,
+            TRACKING.title,
+            adjustedTitleSize
+          );
+        } else {
+          ctx.fillText(cityText, xPos, height * TEXT_POSITIONS.title);
+        }
 
-        // Decorative line
-        const lineLength = width * 0.15;
-        const decoLineWidth = adjustedTitleSize * 0.02;
-        ctx.strokeStyle = textColor;
-        ctx.lineWidth = decoLineWidth;
-        ctx.globalAlpha = 0.6;
-        ctx.beginPath();
-        ctx.moveTo((width - lineLength) / 2, height * TEXT_POSITIONS.decorativeLine);
-        ctx.lineTo((width + lineLength) / 2, height * TEXT_POSITIONS.decorativeLine);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
+        // Decorative line - only if style says so
+        if (textStyle.showSeparatorLine) {
+          const lineLength = width * 0.15;
+          const decoLineWidth = adjustedTitleSize * 0.02;
+          ctx.strokeStyle = textColor;
+          ctx.lineWidth = decoLineWidth;
+          ctx.globalAlpha = 0.6;
+          ctx.beginPath();
+          if (textAlign === 'center') {
+            ctx.moveTo((width - lineLength) / 2, height * TEXT_POSITIONS.decorativeLine);
+            ctx.lineTo((width + lineLength) / 2, height * TEXT_POSITIONS.decorativeLine);
+          } else if (textAlign === 'left') {
+            ctx.moveTo(xPos, height * TEXT_POSITIONS.decorativeLine);
+            ctx.lineTo(xPos + lineLength, height * TEXT_POSITIONS.decorativeLine);
+          } else {
+            ctx.moveTo(xPos - lineLength, height * TEXT_POSITIONS.decorativeLine);
+            ctx.lineTo(xPos, height * TEXT_POSITIONS.decorativeLine);
+          }
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
       }
 
       // Country
       if (showCountry) {
+        const countryText = textStyle.countryUppercase 
+          ? formatDisplayText(countryLabel || country) 
+          : (countryLabel || country);
         ctx.font = `${FONT_WEIGHTS.subtitle} ${scaledFonts.subtitle}px ${fontStack}`;
-        drawTextWithTracking(
-          ctx,
-          formatDisplayText(countryLabel || country),
-          width / 2,
-          height * TEXT_POSITIONS.subtitle,
-          TRACKING.subtitle,
-          scaledFonts.subtitle
-        );
+        
+        if (textAlign === 'center') {
+          drawTextWithTracking(
+            ctx,
+            countryText,
+            xPos,
+            height * TEXT_POSITIONS.subtitle,
+            TRACKING.subtitle,
+            scaledFonts.subtitle
+          );
+        } else {
+          ctx.fillText(countryText, xPos, height * TEXT_POSITIONS.subtitle);
+        }
       }
 
-      // Coordinates
-      if (showCoordinates) {
+      // Coordinates - respect style's coordsStyle setting
+      if (showCoordinates && textStyle.coordsStyle !== 'hidden') {
         ctx.globalAlpha = 0.7;
         ctx.font = `${FONT_WEIGHTS.coords} ${scaledFonts.coords}px ${fontStack}`;
-        drawTextWithTracking(
-          ctx,
-          formatCoordinates(latitude, longitude),
-          width / 2,
-          height * TEXT_POSITIONS.coords,
-          TRACKING.coords,
-          scaledFonts.coords
-        );
+        const coordsText = textStyle.coordsStyle === 'compact'
+          ? `${latitude.toFixed(4)}°N / ${Math.abs(longitude).toFixed(3)}°${longitude >= 0 ? 'E' : 'W'}`
+          : formatCoordinates(latitude, longitude);
+        
+        if (textAlign === 'center') {
+          drawTextWithTracking(
+            ctx,
+            coordsText,
+            xPos,
+            height * TEXT_POSITIONS.coords,
+            TRACKING.coords,
+            scaledFonts.coords
+          );
+        } else {
+          ctx.fillText(coordsText, xPos, height * TEXT_POSITIONS.coords);
+        }
         ctx.globalAlpha = 1;
       }
     }
@@ -630,14 +813,19 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     showCoordinates,
     showCountry,
     layerVisibility,
-     canvasWidth,
-     canvasHeight,
+    canvasWidth,
+    canvasHeight,
     getCropLimits,
     toCanvasCoords,
     getStreetColor,
     getStreetWidth,
     adjustColor,
     onExportReady,
+    textStyle,
+    mapIcons,
+    mapImages,
+    mapRoutes,
+    loadedImages,
   ]);
 
   useEffect(() => {
