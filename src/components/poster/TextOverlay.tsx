@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { PosterConfig, TextOverrides, TextElementConfig, TextPositionOffset, TextOrientation } from '@/types/poster';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { PosterConfig, TextOverrides, TextElementConfig, TextPositionOffset, TextOrientation, TEXT_LAYOUT_STYLES } from '@/types/poster';
 import { getTextPositions, getScaledFontSizes, FONT_STACKS, formatCoordinates, formatDisplayText } from '@/lib/posterTypography';
 import { RotateCw } from 'lucide-react';
 
@@ -50,6 +50,12 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
   const fontStack = FONT_STACKS[config.fontFamily];
   const baseFonts = getScaledFontSizes(containerHeight, config.fontSize);
   const fontSizeScale = config.fontSizeScale || 1;
+
+  // Get text layout style configuration
+  const textStyle = useMemo(() => 
+    TEXT_LAYOUT_STYLES.find(s => s.id === config.textLayoutStyle) || TEXT_LAYOUT_STYLES[0],
+    [config.textLayoutStyle]
+  );
 
   // Track aspect ratio to detect format changes
   const prevAspectRatioRef = useRef(config.aspectRatio);
@@ -117,10 +123,27 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
     return override.orientation || 'horizontal';
   }, [getElementConfig]);
 
+  // Format text based on style settings
+  const formatCityText = useCallback((text: string) => {
+    return textStyle.cityUppercase ? formatDisplayText(text) : text;
+  }, [textStyle.cityUppercase]);
+
+  const formatCountryText = useCallback((text: string) => {
+    return textStyle.countryUppercase ? formatDisplayText(text) : text;
+  }, [textStyle.countryUppercase]);
+
+  const formatCoordsText = useCallback(() => {
+    if (textStyle.coordsStyle === 'hidden') return '';
+    if (textStyle.coordsStyle === 'compact') {
+      return `${config.latitude.toFixed(4)}°N / ${Math.abs(config.longitude).toFixed(3)}°${config.longitude >= 0 ? 'E' : 'W'}`;
+    }
+    return formatCoordinates(config.latitude, config.longitude);
+  }, [textStyle.coordsStyle, config.latitude, config.longitude]);
+
   const textElements: TextElement[] = [
-    { id: 'city', text: formatDisplayText(config.city), defaultY: TEXT_POSITIONS.title, visible: config.showCity, editable: true },
-    { id: 'country', text: formatDisplayText(config.countryLabel || config.country), defaultY: TEXT_POSITIONS.subtitle, visible: config.showCountry, editable: true },
-    { id: 'coordinates', text: formatCoordinates(config.latitude, config.longitude), defaultY: TEXT_POSITIONS.coords, visible: config.showCoordinates, editable: false },
+    { id: 'city', text: formatCityText(config.city), defaultY: TEXT_POSITIONS.title, visible: config.showCity, editable: true },
+    { id: 'country', text: formatCountryText(config.countryLabel || config.country), defaultY: TEXT_POSITIONS.subtitle, visible: config.showCountry, editable: true },
+    { id: 'coordinates', text: formatCoordsText(), defaultY: TEXT_POSITIONS.coords, visible: config.showCoordinates && textStyle.coordsStyle !== 'hidden', editable: false },
   ];
 
   // Toggle orientation for an element
@@ -354,16 +377,19 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
         let fontWeight = 300;
         let letterSpacing = '0.15em';
         let opacity = 1;
+        let useUppercase = textStyle.countryUppercase;
 
         if (element.id === 'city') {
           fontSize = baseFonts.title * fontSizeScale * scale;
           fontWeight = 700;
           letterSpacing = '0.3em';
+          useUppercase = textStyle.cityUppercase;
         } else if (element.id === 'coordinates') {
           fontSize = baseFonts.coords * fontSizeScale * scale;
           fontWeight = 400;
           letterSpacing = '0.05em';
           opacity = 0.7;
+          useUppercase = false; // Coordinates don't use uppercase transform
         }
 
         return (
@@ -411,7 +437,7 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
                       fontSize: `${fontSize}px`,
                       fontWeight,
                       letterSpacing,
-                      textTransform: 'uppercase',
+                      textTransform: useUppercase ? 'uppercase' : 'none',
                       width: `${calculatedWidth}px`,
                       writingMode: isVertical ? 'vertical-rl' : 'horizontal-tb',
                       textOrientation: isVertical ? 'mixed' : undefined,
@@ -430,7 +456,7 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
                   fontWeight,
                   letterSpacing,
                   opacity,
-                  textTransform: 'uppercase',
+                  textTransform: useUppercase ? 'uppercase' : 'none',
                   writingMode: isVertical ? 'vertical-rl' : 'horizontal-tb',
                   textOrientation: isVertical ? 'mixed' : undefined,
                 }}
