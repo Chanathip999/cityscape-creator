@@ -25,15 +25,18 @@ interface ExportDialogProps {
   posterRef: React.RefObject<HTMLDivElement>;
 }
 
-// Single poster pricing
-const RESOLUTION_OPTIONS = [
-  { id: 'fullhd' as ExportResolution, name: 'Full HD', description: '1920px', price: 9.99, multiplier: 1 },
-  { id: '4k' as ExportResolution, name: '4K', description: '3840px', price: 14.99, multiplier: 2 },
-  { id: '8k' as ExportResolution, name: '8K', description: '7680px', price: 17.99, multiplier: 4 },
+// Pricing tiers
+type PricingTier = 'budget' | 'fullhd' | '4k' | '8k';
+
+const PRICING_OPTIONS: { id: PricingTier; name: string; description: string; price: number; multiplier: number; hasWatermark: boolean }[] = [
+  { id: 'budget', name: 'Budget', description: 'Mit Logo', price: 3.00, multiplier: 1, hasWatermark: true },
+  { id: 'fullhd', name: 'Full HD', description: '1920px', price: 9.99, multiplier: 1, hasWatermark: false },
+  { id: '4k', name: '4K', description: '3840px', price: 14.99, multiplier: 2, hasWatermark: false },
+  { id: '8k', name: '8K', description: '7680px', price: 17.99, multiplier: 4, hasWatermark: false },
 ];
 
-// Bundle pricing (3 posters)
-const BUNDLE_PRICING: Record<ExportResolution, number> = {
+// Bundle pricing (3 posters) - only for premium tiers
+const BUNDLE_PRICING: Record<Exclude<PricingTier, 'budget'>, number> = {
   fullhd: 24.97,
   '4k': 39.97,
   '8k': 49.97,
@@ -45,21 +48,26 @@ const BUILDING_PREMIUM = 1.99;
 export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [format, setFormat] = useState<ExportFormat>('png');
-  const [resolution, setResolution] = useState<ExportResolution>('fullhd');
+  const [pricingTier, setPricingTier] = useState<PricingTier>('fullhd');
   const [quantity, setQuantity] = useState<1 | 3>(1);
   const [open, setOpen] = useState(false);
   
   const { renderPoster } = useRenderPoster();
 
-  const currentResolution = RESOLUTION_OPTIONS.find((r) => r.id === resolution) || RESOLUTION_OPTIONS[0];
+  const currentPricing = PRICING_OPTIONS.find((r) => r.id === pricingTier) || PRICING_OPTIONS[1];
+  
+  // Budget tier doesn't support buildings or bundles
+  const isBudgetTier = pricingTier === 'budget';
   
   // Buildings only available for 4K and 8K
-  const buildingsAvailable = resolution === '4k' || resolution === '8k';
+  const buildingsAvailable = pricingTier === '4k' || pricingTier === '8k';
   const hasBuildings = buildingsAvailable && (config.layerVisibility?.buildings || false);
   
   // Calculate total price
   const buildingSurcharge = hasBuildings ? BUILDING_PREMIUM : 0;
-  const basePrice = quantity === 3 ? BUNDLE_PRICING[resolution] : currentResolution.price;
+  const basePrice = !isBudgetTier && quantity === 3 
+    ? BUNDLE_PRICING[pricingTier as Exclude<PricingTier, 'budget'>] 
+    : currentPricing.price;
   const totalPrice = basePrice + buildingSurcharge;
 
   const handleDownload = async () => {
@@ -70,20 +78,21 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
     try {
       toast({
         title: 'Poster wird generiert...',
-        description: 'Bitte warte einen Moment.',
+        description: isBudgetTier ? 'Budget-Version mit Logo wird erstellt...' : 'Bitte warte einen Moment.',
       });
 
       // Calculate dimensions
       const aspectRatioConfig = ASPECT_RATIOS.find((r) => r.id === config.aspectRatio);
       const ratioWidth = aspectRatioConfig?.width || 3;
       const ratioHeight = aspectRatioConfig?.height || 4;
-      const exportWidth = 1920 * currentResolution.multiplier;
+      const exportWidth = 1920 * currentPricing.multiplier;
       const exportHeight = Math.round(exportWidth * (ratioHeight / ratioWidth));
 
-      // Render poster via backend
-      const svg = await renderPoster(config, exportWidth, exportHeight);
+      // Render poster via backend (with watermark for budget tier)
+      const svg = await renderPoster(config, exportWidth, exportHeight, currentPricing.hasWatermark);
 
-      const fileName = `${config.city.toLowerCase().replace(/\s+/g, '-')}-${config.aspectRatio.replace(':', 'x')}-${resolution}`;
+      const tierSuffix = isBudgetTier ? 'budget' : pricingTier;
+      const fileName = `${config.city.toLowerCase().replace(/\s+/g, '-')}-${config.aspectRatio.replace(':', 'x')}-${tierSuffix}`;
 
       if (format === 'png') {
         const blob = await svgToPng(svg, exportWidth, exportHeight);
@@ -150,7 +159,7 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
   const aspectRatioConfig = ASPECT_RATIOS.find((r) => r.id === config.aspectRatio);
   const ratioWidth = aspectRatioConfig?.width || 3;
   const ratioHeight = aspectRatioConfig?.height || 4;
-  const exportWidth = 1920 * currentResolution.multiplier;
+  const exportWidth = 1920 * currentPricing.multiplier;
   const exportHeight = Math.round(exportWidth * (ratioHeight / ratioWidth));
 
   return (
@@ -211,75 +220,101 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
             </RadioGroup>
           </div>
 
-          {/* Resolution Selection with Prices */}
+          {/* Pricing Tier Selection */}
           <div className="space-y-3">
-            <Label className="text-base font-medium">Auflösung</Label>
+            <Label className="text-base font-medium">Preisstufe</Label>
             <RadioGroup
-              value={resolution}
-              onValueChange={(value) => setResolution(value as ExportResolution)}
-              className="grid grid-cols-3 gap-3"
+              value={pricingTier}
+              onValueChange={(value) => {
+                setPricingTier(value as PricingTier);
+                // Reset quantity to 1 for budget tier
+                if (value === 'budget') setQuantity(1);
+              }}
+              className="grid grid-cols-2 gap-2"
             >
-              {RESOLUTION_OPTIONS.map((res) => (
-                <div key={res.id}>
+              {PRICING_OPTIONS.map((tier) => (
+                <div key={tier.id}>
                   <RadioGroupItem
-                    value={res.id}
-                    id={`res-${res.id}`}
+                    value={tier.id}
+                    id={`tier-${tier.id}`}
                     className="peer sr-only"
                   />
                   <Label
-                    htmlFor={`res-${res.id}`}
-                    className="flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                    htmlFor={`tier-${tier.id}`}
+                    className={`flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-2.5 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer relative ${
+                      tier.hasWatermark ? 'bg-muted/30' : ''
+                    }`}
                   >
-                    <span className="font-medium">{res.name}</span>
-                    <span className="text-xs text-muted-foreground">{res.description}</span>
-                    <span className="text-sm font-bold text-primary mt-1">€{res.price.toFixed(2)}</span>
+                    {tier.hasWatermark && (
+                      <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-orange-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">
+                        GÜNSTIG
+                      </span>
+                    )}
+                    <span className="font-medium text-sm">{tier.name}</span>
+                    <span className="text-[10px] text-muted-foreground">{tier.description}</span>
+                    <span className="text-sm font-bold text-primary mt-0.5">€{tier.price.toFixed(2)}</span>
                   </Label>
                 </div>
               ))}
             </RadioGroup>
           </div>
 
-          {/* Quantity Selection */}
-          <div className="space-y-3">
-            <Label className="text-base font-medium">Anzahl</Label>
-            <RadioGroup
-              value={String(quantity)}
-              onValueChange={(value) => setQuantity(Number(value) as 1 | 3)}
-              className="grid grid-cols-2 gap-3"
-            >
-              <div>
-                <RadioGroupItem value="1" id="qty-1" className="peer sr-only" />
-                <Label
-                  htmlFor="qty-1"
-                  className="flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
-                >
-                  <span className="font-medium">1 Poster</span>
-                  <span className="text-sm font-bold text-primary mt-1">€{currentResolution.price.toFixed(2)}</span>
-                </Label>
-              </div>
-              <div>
-                <RadioGroupItem value="3" id="qty-3" className="peer sr-only" />
-                <Label
-                  htmlFor="qty-3"
-                  className="flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer relative"
-                >
-                  <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-                    SPARE
-                  </span>
-                  <span className="font-medium">3 Poster</span>
-                  <span className="text-sm font-bold text-primary mt-1">€{BUNDLE_PRICING[resolution].toFixed(2)}</span>
-                  <span className="text-[10px] text-muted-foreground line-through">
-                    €{(currentResolution.price * 3).toFixed(2)}
-                  </span>
-                </Label>
-              </div>
-            </RadioGroup>
-          </div>
+          {/* Budget tier notice */}
+          {isBudgetTier && (
+            <div className="text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 rounded-lg p-2 flex items-start gap-2">
+              <span className="text-base">🏷️</span>
+              <span>Budget-Version enthält ein dezentes "MAPPOSTER" Logo am unteren Rand. Perfekt für den persönlichen Gebrauch!</span>
+            </div>
+          )}
+
+          {/* Quantity Selection - only for premium tiers */}
+          {!isBudgetTier && (
+            <div className="space-y-3">
+              <Label className="text-base font-medium">Anzahl</Label>
+              <RadioGroup
+                value={String(quantity)}
+                onValueChange={(value) => setQuantity(Number(value) as 1 | 3)}
+                className="grid grid-cols-2 gap-3"
+              >
+                <div>
+                  <RadioGroupItem value="1" id="qty-1" className="peer sr-only" />
+                  <Label
+                    htmlFor="qty-1"
+                    className="flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                  >
+                    <span className="font-medium">1 Poster</span>
+                    <span className="text-sm font-bold text-primary mt-1">€{currentPricing.price.toFixed(2)}</span>
+                  </Label>
+                </div>
+                <div>
+                  <RadioGroupItem value="3" id="qty-3" className="peer sr-only" />
+                  <Label
+                    htmlFor="qty-3"
+                    className="flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer relative"
+                  >
+                    <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                      SPARE
+                    </span>
+                    <span className="font-medium">3 Poster</span>
+                    <span className="text-sm font-bold text-primary mt-1">
+                      €{BUNDLE_PRICING[pricingTier as Exclude<PricingTier, 'budget'>]?.toFixed(2) || '-'}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground line-through">
+                      €{(currentPricing.price * 3).toFixed(2)}
+                    </span>
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+          )}
 
           {/* Summary */}
           <div className="text-xs text-muted-foreground space-y-1 bg-muted/50 rounded-lg p-3">
             <p>📍 <strong>{config.city}</strong> • Format {config.aspectRatio}</p>
             <p>📐 Auflösung: {exportWidth} × {exportHeight} px</p>
+            {isBudgetTier && (
+              <p className="text-orange-600 dark:text-orange-400 font-medium">🏷️ Mit Logo-Wasserzeichen</p>
+            )}
             {hasBuildings && (
               <p className="text-primary font-medium">🏢 Gebäudedaten: +€{BUILDING_PREMIUM.toFixed(2)}</p>
             )}
@@ -304,7 +339,7 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
             ) : (
               <>
                 <Download className="w-4 h-4" />
-                Download {quantity}x {format.toUpperCase()} ({currentResolution.name}) – €{totalPrice.toFixed(2)}
+                Download {isBudgetTier ? '' : `${quantity}x `}{format.toUpperCase()} ({currentPricing.name}) – €{totalPrice.toFixed(2)}
               </>
             )}
           </Button>

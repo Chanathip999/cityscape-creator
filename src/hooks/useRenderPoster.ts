@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { PosterConfig } from '@/types/poster';
 
 interface UseRenderPosterResult {
-  renderPoster: (config: PosterConfig, width?: number, height?: number) => Promise<string>;
+  renderPoster: (config: PosterConfig, width?: number, height?: number, addWatermark?: boolean) => Promise<string>;
   isRendering: boolean;
   error: string | null;
 }
@@ -19,7 +19,8 @@ export const useRenderPoster = (): UseRenderPosterResult => {
   const renderPoster = useCallback(async (
     config: PosterConfig,
     width: number = 1920,
-    height?: number
+    height?: number,
+    addWatermark: boolean = false
   ): Promise<string> => {
     setIsRendering(true);
     setError(null);
@@ -62,6 +63,7 @@ export const useRenderPoster = (): UseRenderPosterResult => {
           // Layer visibility for consistent rendering
           layerVisibility: config.layerVisibility,
           layerColors: config.layerColors,
+          addWatermark, // Budget version watermark
           width,
           height,
         },
