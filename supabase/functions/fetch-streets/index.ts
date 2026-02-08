@@ -37,6 +37,9 @@ const RAILWAY_TYPES = ['rail', 'tram', 'subway', 'light_rail', 'monorail', 'narr
 // Aeroway types for airport runways
 const AEROWAY_TYPES = ['runway', 'taxiway'];
 
+// Cable car/aerial way types
+const CABLEWAY_TYPES = ['cable_car', 'gondola', 'chair_lift', 'drag_lift', 'platter', 'rope_tow'];
+
 interface StreetData {
   type: string;
   coordinates: [number, number][][];
@@ -263,6 +266,22 @@ function buildPriorityQuery(params: {
   includeParksForests: boolean;
   includeRailways: boolean;
   includeAeroways: boolean;
+  // New layer visibility options
+  layerVisibility?: {
+    sideStreets?: boolean;
+    footpaths?: boolean;
+    cycleways?: boolean;
+    paths?: boolean;
+    mainRoads?: boolean;
+    trainStations?: boolean;
+    cableways?: boolean;
+    residentialBuildings?: boolean;
+    commercialBuildings?: boolean;
+    lakes?: boolean;
+    rivers?: boolean;
+    monuments?: boolean;
+    stadiums?: boolean;
+  };
 }): string {
   const { 
     bbox, 
@@ -274,16 +293,36 @@ function buildPriorityQuery(params: {
     includeParksForests,
     includeRailways,
     includeAeroways,
+    layerVisibility,
   } = params;
   
   const railwayRegex = RAILWAY_TYPES.join('|');
   const aerowayRegex = AEROWAY_TYPES.join('|');
+  const cablewayRegex = CABLEWAY_TYPES.join('|');
 
   const queryParts: string[] = [];
   
   // Always include highways
   if (highwayTags.length > 0) {
     queryParts.push(`way["highway"~"^(${highwayTags.join('|')})$"](${bbox});`);
+  }
+  
+  // Specific road types based on new layer visibility
+  if (layerVisibility?.mainRoads) {
+    queryParts.push(`way["highway"~"^(motorway|trunk|primary|secondary)$"](${bbox});`);
+  }
+  if (layerVisibility?.sideStreets) {
+    queryParts.push(`way["highway"~"^(tertiary|residential|living_street|unclassified)$"](${bbox});`);
+  }
+  if (layerVisibility?.footpaths) {
+    queryParts.push(`way["highway"="footway"](${bbox});`);
+    queryParts.push(`way["highway"="pedestrian"](${bbox});`);
+  }
+  if (layerVisibility?.cycleways) {
+    queryParts.push(`way["highway"="cycleway"](${bbox});`);
+  }
+  if (layerVisibility?.paths) {
+    queryParts.push(`way["highway"~"^(path|track|bridleway|steps)$"](${bbox});`);
   }
   
   // Conditionally include other features
@@ -293,10 +332,36 @@ function buildPriorityQuery(params: {
   if (includeAeroways) {
     queryParts.push(`way["aeroway"~"^(${aerowayRegex})$"](${bbox});`);
   }
+  
+  // Train stations (nodes and ways)
+  if (layerVisibility?.trainStations) {
+    queryParts.push(`node["railway"="station"](${bbox});`);
+    queryParts.push(`way["building"="train_station"](${bbox});`);
+  }
+  
+  // Cableways (aerial lifts)
+  if (layerVisibility?.cableways) {
+    queryParts.push(`way["aerialway"~"^(${cablewayRegex})$"](${bbox});`);
+  }
+  
+  // Water features
   if (includeWater) {
     queryParts.push(`way["natural"="water"](${bbox});`);
     queryParts.push(`way["waterway"~"^(river|stream|canal|drain)$"](${bbox});`);
   }
+  
+  // Lakes specifically
+  if (layerVisibility?.lakes) {
+    queryParts.push(`way["natural"="water"]["water"="lake"](${bbox});`);
+    queryParts.push(`way["natural"="water"]["water"="pond"](${bbox});`);
+  }
+  
+  // Rivers specifically  
+  if (layerVisibility?.rivers) {
+    queryParts.push(`way["waterway"="river"](${bbox});`);
+    queryParts.push(`way["waterway"="stream"](${bbox});`);
+  }
+  
   if (includeCoastlines) {
     queryParts.push(`way["natural"="coastline"](${bbox});`);
   }
@@ -305,8 +370,32 @@ function buildPriorityQuery(params: {
     queryParts.push(`way["landuse"~"^(grass|meadow|forest)$"](${bbox});`);
     queryParts.push(`way["natural"~"^(wood|beach)$"](${bbox});`);
   }
+  
+  // Buildings
   if (includeBuildings) {
     queryParts.push(`way["building"](${bbox});`);
+  }
+  
+  // Residential buildings specifically
+  if (layerVisibility?.residentialBuildings) {
+    queryParts.push(`way["building"~"^(residential|apartments|house|detached|terrace)$"](${bbox});`);
+  }
+  
+  // Commercial/office buildings
+  if (layerVisibility?.commercialBuildings) {
+    queryParts.push(`way["building"~"^(commercial|office|retail|industrial)$"](${bbox});`);
+  }
+  
+  // Historical monuments
+  if (layerVisibility?.monuments) {
+    queryParts.push(`node["historic"~"^(monument|memorial|castle|ruins)$"](${bbox});`);
+    queryParts.push(`way["historic"~"^(monument|memorial|castle|ruins)$"](${bbox});`);
+  }
+  
+  // Stadiums
+  if (layerVisibility?.stadiums) {
+    queryParts.push(`way["leisure"="stadium"](${bbox});`);
+    queryParts.push(`way["building"="stadium"](${bbox});`);
   }
 
   // Priority queries get shorter timeouts for speed
@@ -594,6 +683,7 @@ Deno.serve(async (req) => {
       includeParksForests,
       includeRailways,
       includeAeroways,
+      layerVisibility: lv, // Pass all layer visibility options
     });
     const elements = await fetchOverpass(query);
 
@@ -623,14 +713,32 @@ Deno.serve(async (req) => {
     const parkPolygons: [number, number][][] = [];
     const forestPolygons: [number, number][][] = [];
     const buildingPolygons: [number, number][][] = [];
+    
+    // New layer arrays
+    const trainStations: [number, number][] = [];
+    const cablewayLines: [number, number][][] = [];
+    const lakePolygons: [number, number][][] = [];
+    const riverLines: [number, number][][] = [];
+    const monuments: [number, number][] = [];
+    const stadiumPolygons: [number, number][][] = [];
 
     for (const element of elements) {
-      if (element.type !== 'way') continue;
-      
       const geom = element.geometry;
-      if (!geom || geom.length < 2) continue;
-
       const tags = element.tags || {};
+      
+      // Handle nodes (train stations, monuments as points)
+      if (element.type === 'node') {
+        if (tags.railway === 'station' && element.lat && element.lon) {
+          trainStations.push([roundCoord(element.lat), roundCoord(element.lon)]);
+        }
+        else if (tags.historic && element.lat && element.lon) {
+          monuments.push([roundCoord(element.lat), roundCoord(element.lon)]);
+        }
+        continue;
+      }
+      
+      if (element.type !== 'way') continue;
+      if (!geom || geom.length < 2) continue;
 
       if (tags.highway) {
         const type = tagToType.get(tags.highway);
@@ -658,7 +766,18 @@ Deno.serve(async (req) => {
           railwayLines.push(points);
         }
       }
-      else if (tags.natural === 'water' || tags.waterway) {
+      else if (tags.aerialway && CABLEWAY_TYPES.includes(tags.aerialway)) {
+        const points: [number, number][] = [];
+        for (const pt of geom) {
+          if (pt?.lat !== undefined && pt?.lon !== undefined) {
+            points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+          }
+        }
+        if (points.length >= 2) {
+          cablewayLines.push(points);
+        }
+      }
+      else if (tags.natural === 'water') {
         const points: [number, number][] = [];
         for (const pt of geom) {
           if (pt?.lat !== undefined && pt?.lon !== undefined) {
@@ -667,6 +786,25 @@ Deno.serve(async (req) => {
         }
         if (points.length >= 2) {
           waterPolygons.push(points);
+          // Also add to lakes if it's specifically a lake/pond
+          if (tags.water === 'lake' || tags.water === 'pond') {
+            lakePolygons.push(points);
+          }
+        }
+      }
+      else if (tags.waterway) {
+        const points: [number, number][] = [];
+        for (const pt of geom) {
+          if (pt?.lat !== undefined && pt?.lon !== undefined) {
+            points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+          }
+        }
+        if (points.length >= 2) {
+          waterPolygons.push(points);
+          // Rivers specifically
+          if (tags.waterway === 'river' || tags.waterway === 'stream') {
+            riverLines.push(points);
+          }
         }
       }
       else if (tags.natural === 'coastline') {
@@ -702,6 +840,17 @@ Deno.serve(async (req) => {
           parkPolygons.push(points);
         }
       }
+      else if (tags.leisure === 'stadium' || tags.building === 'stadium') {
+        const points: [number, number][] = [];
+        for (const pt of geom) {
+          if (pt?.lat !== undefined && pt?.lon !== undefined) {
+            points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+          }
+        }
+        if (points.length >= 3) {
+          stadiumPolygons.push(points);
+        }
+      }
       else if (tags.landuse === 'forest' || tags.natural === 'wood') {
         const points: [number, number][] = [];
         for (const pt of geom) {
@@ -711,6 +860,21 @@ Deno.serve(async (req) => {
         }
         if (points.length >= 3) {
           forestPolygons.push(points);
+        }
+      }
+      else if (tags.historic) {
+        // Historic monuments as polygons
+        const points: [number, number][] = [];
+        for (const pt of geom) {
+          if (pt?.lat !== undefined && pt?.lon !== undefined) {
+            points.push([roundCoord(pt.lat), roundCoord(pt.lon)]);
+          }
+        }
+        // Store center point for monuments
+        if (points.length >= 1) {
+          const centerLat = points.reduce((sum, p) => sum + p[0], 0) / points.length;
+          const centerLon = points.reduce((sum, p) => sum + p[1], 0) / points.length;
+          monuments.push([roundCoord(centerLat), roundCoord(centerLon)]);
         }
       }
       else if (tags.building) {
@@ -733,7 +897,7 @@ Deno.serve(async (req) => {
     }));
 
     const totalStreets = streetData.reduce((sum, st) => sum + st.coordinates.length, 0);
-    console.log(`Returning ${totalStreets} streets, ${railwayLines.length} railways, ${aerowayLines.length} aeroways, ${coastlineLines.length} coastlines, ${waterPolygons.length} water, ${parkPolygons.length} parks, ${forestPolygons.length} forests, ${buildingPolygons.length} buildings`);
+    console.log(`Returning ${totalStreets} streets, ${railwayLines.length} railways, ${aerowayLines.length} aeroways, ${coastlineLines.length} coastlines, ${waterPolygons.length} water, ${parkPolygons.length} parks, ${forestPolygons.length} forests, ${buildingPolygons.length} buildings, ${trainStations.length} stations, ${cablewayLines.length} cableways, ${monuments.length} monuments, ${stadiumPolygons.length} stadiums`);
 
     const responseData = { 
       streets: streetData,
@@ -744,6 +908,13 @@ Deno.serve(async (req) => {
       parks: parkPolygons,
       forests: forestPolygons,
       buildings: buildingPolygons,
+      // New layers
+      trainStations,
+      cableways: cablewayLines,
+      lakes: lakePolygons,
+      rivers: riverLines,
+      monuments,
+      stadiums: stadiumPolygons,
     };
     
     // NOTE: No server-side caching - handled by client IndexedDB

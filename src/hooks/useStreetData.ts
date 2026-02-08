@@ -23,6 +23,13 @@ interface TileResult {
   parks: [number, number][][];
   forests: [number, number][][];
   buildings: [number, number][][];
+  // New layers
+  trainStations?: [number, number][];
+  cableways?: [number, number][][];
+  lakes?: [number, number][][];
+  rivers?: [number, number][][];
+  monuments?: [number, number][];
+  stadiums?: [number, number][][];
 }
 
 interface LayerVisibility {
@@ -33,6 +40,20 @@ interface LayerVisibility {
   aeroways?: boolean;
   coastlines?: boolean;
   buildings?: boolean;
+  // New layer options
+  sideStreets?: boolean;
+  footpaths?: boolean;
+  cycleways?: boolean;
+  paths?: boolean;
+  mainRoads?: boolean;
+  trainStations?: boolean;
+  cableways?: boolean;
+  residentialBuildings?: boolean;
+  commercialBuildings?: boolean;
+  lakes?: boolean;
+  rivers?: boolean;
+  monuments?: boolean;
+  stadiums?: boolean;
 }
 
 interface UseStreetDataProps {
@@ -53,6 +74,13 @@ interface UseStreetDataResult {
   parks: [number, number][][];
   forests: [number, number][][];
   buildings: [number, number][][];
+  // New layers
+  trainStations: [number, number][];
+  cableways: [number, number][][];
+  lakes: [number, number][][];
+  rivers: [number, number][][];
+  monuments: [number, number][];
+  stadiums: [number, number][][];
   isLoading: boolean;
   error: string | null;
 }
@@ -170,6 +198,13 @@ function mergeResults(results: TileResult[]): TileResult {
     parks: [],
     forests: [],
     buildings: [],
+    // New layers
+    trainStations: [],
+    cableways: [],
+    lakes: [],
+    rivers: [],
+    monuments: [],
+    stadiums: [],
   };
 
   // Create maps to aggregate streets by type
@@ -191,6 +226,14 @@ function mergeResults(results: TileResult[]): TileResult {
     merged.parks.push(...result.parks);
     merged.forests.push(...result.forests);
     merged.buildings.push(...(result.buildings || []));
+    
+    // New layers
+    if (result.trainStations) merged.trainStations!.push(...result.trainStations);
+    if (result.cableways) merged.cableways!.push(...result.cableways);
+    if (result.lakes) merged.lakes!.push(...result.lakes);
+    if (result.rivers) merged.rivers!.push(...result.rivers);
+    if (result.monuments) merged.monuments!.push(...result.monuments);
+    if (result.stadiums) merged.stadiums!.push(...result.stadiums);
   }
 
   // Convert back to StreetSegment array
@@ -218,6 +261,14 @@ export const useStreetData = ({
   const [parks, setParks] = useState<[number, number][][]>([]);
   const [forests, setForests] = useState<[number, number][][]>([]);
   const [buildings, setBuildings] = useState<[number, number][][]>([]);
+  // New layer state
+  const [trainStations, setTrainStations] = useState<[number, number][]>([]);
+  const [cableways, setCableways] = useState<[number, number][][]>([]);
+  const [lakes, setLakes] = useState<[number, number][][]>([]);
+  const [rivers, setRivers] = useState<[number, number][][]>([]);
+  const [monuments, setMonuments] = useState<[number, number][]>([]);
+  const [stadiums, setStadiums] = useState<[number, number][][]>([]);
+  
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -599,6 +650,15 @@ export const useStreetData = ({
         setRailways(layerVisibility?.railways ? merged.railways : []);
         setAeroways(layerVisibility?.aeroways ? merged.aeroways : []);
         setWater(layerVisibility?.water ? merged.water : []);
+        
+        // New layers (update from merged results)
+        setTrainStations(layerVisibility?.trainStations ? (merged.trainStations || []) : []);
+        setCableways(layerVisibility?.cableways ? (merged.cableways || []) : []);
+        setLakes(layerVisibility?.lakes ? (merged.lakes || []) : []);
+        setRivers(layerVisibility?.rivers ? (merged.rivers || []) : []);
+        setMonuments(layerVisibility?.monuments ? (merged.monuments || []) : []);
+        setStadiums(layerVisibility?.stadiums ? (merged.stadiums || []) : []);
+        
         // Don't overwrite optional layers here - they were set in Phase 2
         
         lastParamsRef.current = paramsKey;
@@ -618,5 +678,9 @@ export const useStreetData = ({
     };
   }, [latitude, longitude, distance, enabled, includeBuildings, layerVisibility, fetchTileWithRetry]);
 
-  return { streets, railways, aeroways, coastlines, water, parks, forests, buildings, isLoading, error };
+  return { 
+    streets, railways, aeroways, coastlines, water, parks, forests, buildings, 
+    trainStations, cableways, lakes, rivers, monuments, stadiums,
+    isLoading, error 
+  };
 };

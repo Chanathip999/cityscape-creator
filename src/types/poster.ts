@@ -47,6 +47,20 @@ export interface LayerVisibility {
   aeroways: boolean;
   coastlines: boolean;
   buildings: boolean;
+  // New optional layers (all disabled by default)
+  sideStreets: boolean;
+  footpaths: boolean;
+  cycleways: boolean;
+  paths: boolean;
+  mainRoads: boolean;
+  trainStations: boolean;
+  cableways: boolean;
+  residentialBuildings: boolean;
+  commercialBuildings: boolean;
+  lakes: boolean;
+  rivers: boolean;
+  monuments: boolean;
+  stadiums: boolean;
 }
 
 export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
@@ -57,6 +71,20 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
   aeroways: true,
   coastlines: false, // Disabled by default for faster loading
   buildings: false,
+  // New layers - all disabled by default
+  sideStreets: false,
+  footpaths: false,
+  cycleways: false,
+  paths: false,
+  mainRoads: false,
+  trainStations: false,
+  cableways: false,
+  residentialBuildings: false,
+  commercialBuildings: false,
+  lakes: false,
+  rivers: false,
+  monuments: false,
+  stadiums: false,
 };
 
 // Custom layer colors (optional overrides)
@@ -68,6 +96,19 @@ export interface LayerColors {
   aeroways?: string;
   coastlines?: string;
   buildings?: string;
+  sideStreets?: string;
+  footpaths?: string;
+  cycleways?: string;
+  paths?: string;
+  mainRoads?: string;
+  trainStations?: string;
+  cableways?: string;
+  residentialBuildings?: string;
+  commercialBuildings?: string;
+  lakes?: string;
+  rivers?: string;
+  monuments?: string;
+  stadiums?: string;
 }
 
 export const DEFAULT_LAYER_COLORS: LayerColors = {};
