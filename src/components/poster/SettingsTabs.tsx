@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PosterConfig, FontFamily, FontSize, LayerVisibility, LayerColors, FONT_FAMILIES, FONT_SIZES, AspectRatioId, ASPECT_RATIOS, TextPosition, TEXT_POSITIONS_OPTIONS } from '@/types/poster';
+import { PosterConfig, FontFamily, FontSize, LayerVisibility, LayerColors, FONT_FAMILIES, FONT_SIZES, TextPosition, TEXT_POSITIONS_OPTIONS, TextLayoutStyle } from '@/types/poster';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
@@ -7,21 +7,27 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Type, Palette, Move, Waves, Trees, TreeDeciduous, Train, Plane, MapPin, Blend, Building,
-  Route, Footprints, Bike, Mountain, MapPinned, Cable, Home, Landmark, Droplets, Trophy
+  Route, Footprints, Bike, Mountain, MapPinned, Cable, Home, Landmark, Droplets, Trophy, 
+  Layers, ImagePlus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TextStyleSelector } from './TextStyleSelector';
+import { IconSelector } from './IconSelector';
+import { RouteEditor } from './RouteEditor';
+import { ImageUploader } from './ImageUploader';
 
 interface SettingsTabsProps {
   config: PosterConfig;
   onConfigUpdate: (updates: Partial<PosterConfig>) => void;
 }
 
-type TabId = 'text' | 'colors' | 'layers';
+type TabId = 'text' | 'colors' | 'layers' | 'overlays';
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'layers', label: 'Ebenen', icon: Move },
   { id: 'text', label: 'Text', icon: Type },
   { id: 'colors', label: 'Farben', icon: Palette },
+  { id: 'overlays', label: 'Overlays', icon: Layers },
 ];
 
 interface LayerOption {
@@ -91,8 +97,7 @@ const LAYER_GROUPS: LayerGroup[] = [
   },
 ];
 
-// Common aspect ratios for quick selection
-const QUICK_RATIOS: AspectRatioId[] = ['3:4', '4:3', '9:16', '16:9', '1:1'];
+// Common aspect ratios removed - now handled elsewhere
 
 export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
   const [activeTab, setActiveTab] = useState<TabId>('layers');
@@ -158,6 +163,12 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
       <div className="space-y-4">
         {activeTab === 'text' && (
           <>
+            {/* Text Style Selector - NEW */}
+            <TextStyleSelector
+              selectedStyle={config.textLayoutStyle || 'classic'}
+              onStyleChange={(style) => onConfigUpdate({ textLayoutStyle: style as TextLayoutStyle })}
+            />
+
             {/* Font Selector */}
             <div className="space-y-2">
               <Label>Schriftart</Label>
@@ -439,6 +450,34 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
             </button>
 
           </>
+        )}
+
+        {activeTab === 'overlays' && (
+          <div className="space-y-6">
+            {/* Icon Selector */}
+            <IconSelector
+              icons={config.mapIcons || []}
+              onIconsChange={(icons) => onConfigUpdate({ mapIcons: icons })}
+              mapCenter={{ lat: config.latitude, lng: config.longitude }}
+            />
+
+            <div className="border-t border-border pt-4" />
+
+            {/* Route Editor */}
+            <RouteEditor
+              routes={config.mapRoutes || []}
+              onRoutesChange={(routes) => onConfigUpdate({ mapRoutes: routes })}
+            />
+
+            <div className="border-t border-border pt-4" />
+
+            {/* Image Uploader */}
+            <ImageUploader
+              images={config.mapImages || []}
+              onImagesChange={(images) => onConfigUpdate({ mapImages: images })}
+              mapCenter={{ lat: config.latitude, lng: config.longitude }}
+            />
+          </div>
         )}
       </div>
     </div>

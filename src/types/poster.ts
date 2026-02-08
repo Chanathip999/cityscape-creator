@@ -25,6 +25,55 @@ export type ExportResolution = 'fullhd' | '4k' | '8k';
 export type RenderMode = 'vector';
 export type TextPosition = 'bottom' | 'center' | 'top';
 
+// Text layout styles (as seen in screenshot references)
+export type TextLayoutStyle = 'classic' | 'modern' | 'minimal' | 'editorial';
+
+// Map marker icon types
+export type MapIconType = 
+  | 'pin' | 'heart' | 'star' | 'home' | 'flag'
+  | 'plane' | 'train' | 'car' | 'bike' | 'bus'
+  | 'ship' | 'helicopter' | 'parking' | 'fuel'
+  | 'restaurant' | 'cafe' | 'hotel' | 'hospital'
+  | 'church' | 'monument' | 'castle' | 'stadium'
+  | 'university' | 'school' | 'library' | 'museum';
+
+// Custom map icon placed by user
+export interface MapIcon {
+  id: string;
+  type: MapIconType;
+  lat: number;
+  lng: number;
+  color?: string;
+  size?: number; // 0.5 - 2.0 scale
+  label?: string;
+}
+
+// Custom image overlay
+export interface MapImage {
+  id: string;
+  dataUrl: string; // Base64 or object URL
+  lat: number;
+  lng: number;
+  width: number; // Normalized 0-1 relative to map width
+  height: number;
+  rotation?: number; // Degrees
+  opacity?: number; // 0-1
+}
+
+// Route between two locations
+export interface MapRoute {
+  id: string;
+  startAddress: string;
+  endAddress: string;
+  startLat?: number;
+  startLng?: number;
+  endLat?: number;
+  endLng?: number;
+  color: string;
+  width?: number; // Line width multiplier
+  routePoints?: [number, number][]; // Actual route geometry from routing API
+}
+
 export interface AspectRatio {
   id: string;
   name: string;
@@ -167,13 +216,112 @@ export interface PosterConfig {
   showCity: boolean;
   showGradients: boolean;
   textPosition: TextPosition;
+  textLayoutStyle: TextLayoutStyle; // Layout style preset
   textOverrides?: TextOverrides; // Custom text positions and sizes
+  // Map overlays
+  mapIcons: MapIcon[];
+  mapImages: MapImage[];
+  mapRoutes: MapRoute[];
 }
 
 export const TEXT_POSITIONS_OPTIONS: { id: TextPosition; name: string }[] = [
   { id: 'bottom', name: 'Unten' },
   { id: 'center', name: 'Mitte' },
   { id: 'top', name: 'Oben' },
+];
+
+// Text layout style presets (based on screenshot references)
+export interface TextLayoutStyleConfig {
+  id: TextLayoutStyle;
+  name: string;
+  description: string;
+  showSeparatorLine: boolean;
+  textAlign: 'center' | 'left' | 'right';
+  cityUppercase: boolean;
+  countryUppercase: boolean;
+  coordsStyle: 'standard' | 'compact' | 'hidden';
+  spacing: 'tight' | 'normal' | 'loose';
+}
+
+export const TEXT_LAYOUT_STYLES: TextLayoutStyleConfig[] = [
+  {
+    id: 'classic',
+    name: 'Klassisch',
+    description: 'Zentriert mit Trennlinie',
+    showSeparatorLine: true,
+    textAlign: 'center',
+    cityUppercase: true,
+    countryUppercase: true,
+    coordsStyle: 'standard',
+    spacing: 'normal',
+  },
+  {
+    id: 'modern',
+    name: 'Modern',
+    description: 'Zentriert ohne Linie',
+    showSeparatorLine: false,
+    textAlign: 'center',
+    cityUppercase: true,
+    countryUppercase: false,
+    coordsStyle: 'compact',
+    spacing: 'tight',
+  },
+  {
+    id: 'minimal',
+    name: 'Minimal',
+    description: 'Links ausgerichtet',
+    showSeparatorLine: false,
+    textAlign: 'left',
+    cityUppercase: true,
+    countryUppercase: true,
+    coordsStyle: 'compact',
+    spacing: 'tight',
+  },
+  {
+    id: 'editorial',
+    name: 'Editorial',
+    description: 'Handschrift-Stil',
+    showSeparatorLine: false,
+    textAlign: 'center',
+    cityUppercase: false,
+    countryUppercase: false,
+    coordsStyle: 'hidden',
+    spacing: 'loose',
+  },
+];
+
+// Map icon definitions
+export const MAP_ICON_OPTIONS: { id: MapIconType; name: string; category: string }[] = [
+  // Location markers
+  { id: 'pin', name: 'Pin', category: 'Markierungen' },
+  { id: 'heart', name: 'Herz', category: 'Markierungen' },
+  { id: 'star', name: 'Stern', category: 'Markierungen' },
+  { id: 'home', name: 'Zuhause', category: 'Markierungen' },
+  { id: 'flag', name: 'Flagge', category: 'Markierungen' },
+  // Transport
+  { id: 'plane', name: 'Flugzeug', category: 'Transport' },
+  { id: 'train', name: 'Zug', category: 'Transport' },
+  { id: 'car', name: 'Auto', category: 'Transport' },
+  { id: 'bike', name: 'Fahrrad', category: 'Transport' },
+  { id: 'bus', name: 'Bus', category: 'Transport' },
+  { id: 'ship', name: 'Schiff', category: 'Transport' },
+  { id: 'helicopter', name: 'Hubschrauber', category: 'Transport' },
+  // Facilities
+  { id: 'parking', name: 'Parkplatz', category: 'Einrichtungen' },
+  { id: 'fuel', name: 'Tankstelle', category: 'Einrichtungen' },
+  { id: 'restaurant', name: 'Restaurant', category: 'Einrichtungen' },
+  { id: 'cafe', name: 'Café', category: 'Einrichtungen' },
+  { id: 'hotel', name: 'Hotel', category: 'Einrichtungen' },
+  { id: 'hospital', name: 'Krankenhaus', category: 'Einrichtungen' },
+  // Landmarks
+  { id: 'church', name: 'Kirche', category: 'Sehenswürdigkeiten' },
+  { id: 'monument', name: 'Denkmal', category: 'Sehenswürdigkeiten' },
+  { id: 'castle', name: 'Schloss', category: 'Sehenswürdigkeiten' },
+  { id: 'stadium', name: 'Stadion', category: 'Sehenswürdigkeiten' },
+  { id: 'university', name: 'Universität', category: 'Sehenswürdigkeiten' },
+  { id: 'school', name: 'Schule', category: 'Sehenswürdigkeiten' },
+  { id: 'library', name: 'Bibliothek', category: 'Sehenswürdigkeiten' },
+  { id: 'museum', name: 'Museum', category: 'Sehenswürdigkeiten' },
 ];
 
 export const ASPECT_RATIOS: AspectRatio[] = [
@@ -434,4 +582,8 @@ export const DEFAULT_CONFIG: PosterConfig = {
   showCity: true,
   showGradients: true,
   textPosition: 'bottom',
+  textLayoutStyle: 'classic',
+  mapIcons: [],
+  mapImages: [],
+  mapRoutes: [],
 };
