@@ -63,6 +63,7 @@ interface RenderRequest {
   showCoordinates?: boolean;
   textPosition?: 'bottom' | 'center' | 'top';
   textOverrides?: TextOverrides; // Custom text positions and sizes
+  addWatermark?: boolean; // Add MapPoster branding watermark for budget version
   layerVisibility?: {
     water: boolean;
     forests: boolean;
@@ -1126,6 +1127,21 @@ function generateSVG(request: RenderRequest, data: {
   
   // Attribution
   svg += `<text x="${width - 10}" y="${height - 10}" text-anchor="end" fill="${textColor}" font-size="${attrSize.toFixed(1)}px" font-family="${fontFamily}" opacity="0.5">© OpenStreetMap contributors</text>`;
+  
+  // Watermark for budget version
+  if (request.addWatermark) {
+    const watermarkSize = Math.max(14, height * 0.018); // Subtle but visible
+    const watermarkY = height - watermarkSize - 15;
+    const watermarkX = width / 2;
+    
+    // Semi-transparent background pill for better readability
+    const pillWidth = watermarkSize * 7;
+    const pillHeight = watermarkSize * 1.8;
+    svg += `<rect x="${(watermarkX - pillWidth / 2).toFixed(1)}" y="${(watermarkY - pillHeight * 0.6).toFixed(1)}" width="${pillWidth.toFixed(1)}" height="${pillHeight.toFixed(1)}" rx="${(pillHeight / 2).toFixed(1)}" fill="${textColor}" opacity="0.15"/>`;
+    
+    // Watermark text
+    svg += `<text x="${watermarkX.toFixed(1)}" y="${watermarkY.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="${watermarkSize.toFixed(1)}px" font-weight="600" letter-spacing="0.1em" font-family="${fontFamily}" opacity="0.6">MAPPOSTER</text>`;
+  }
   
   svg += '</svg>';
   
