@@ -56,7 +56,8 @@ interface CanvasPosterPreviewProps {
   config: PosterConfig;
   onExportReady?: (canvas: HTMLCanvasElement) => void;
   containerRef?: React.RefObject<HTMLDivElement>;
-  onMapCenterChange?: (lat: number, lng: number) => void; // New callback for coordinate sync
+  onMapCenterChange?: (lat: number, lng: number) => void;
+  onIconMove?: (iconId: string, lat: number, lng: number) => void;
 }
 
 /**
@@ -98,7 +99,7 @@ const handleContextMenu = (e: React.MouseEvent) => {
   return false;
 };
 
-export const CanvasPosterPreview = ({ config, onExportReady, containerRef: externalContainerRef, onMapCenterChange }: CanvasPosterPreviewProps) => {
+export const CanvasPosterPreview = ({ config, onExportReady, containerRef: externalContainerRef, onMapCenterChange, onIconMove }: CanvasPosterPreviewProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const internalContainerRef = useRef<HTMLDivElement>(null);
   const containerRef = externalContainerRef || internalContainerRef;
@@ -110,6 +111,7 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
+  const [draggingIcon, setDraggingIcon] = useState<string | null>(null);
   const lastMousePos = useRef({ x: 0, y: 0 });
 
   const {
@@ -832,19 +834,72 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     drawPoster();
   }, [drawPoster]);
 
-  // Mouse event handlers for pan
+  // Convert screen coords to lat/lng
+  const screenToLatLng = useCallback((clientX: number, clientY: number) => {
+    const container = containerRef.current;
+    if (!container) return null;
+    
+    const rect = container.getBoundingClientRect();
+    const x = (clientX - rect.left) / rect.width;
+    const y = (clientY - rect.top) / rect.height;
+    
+    const bounds = getCropLimits();
+    const lng = bounds.minLng + x * (bounds.maxLng - bounds.minLng);
+    const lat = bounds.maxLat - y * (bounds.maxLat - bounds.minLat);
+    
+    return { lat, lng };
+  }, [containerRef, getCropLimits]);
+
+  // Check if click is on an icon
+  const getIconAtPosition = useCallback((clientX: number, clientY: number): string | null => {
+    const container = containerRef.current;
+    if (!container || !mapIcons || mapIcons.length === 0) return null;
+    
+    const rect = container.getBoundingClientRect();
+    const clickX = (clientX - rect.left) / rect.width;
+    const clickY = (clientY - rect.top) / rect.height;
+    
+    const bounds = getCropLimits();
+    const hitRadius = 0.03; // 3% of canvas for click detection
+    
+    for (const icon of mapIcons) {
+      const iconX = (icon.lng - bounds.minLng) / (bounds.maxLng - bounds.minLng);
+      const iconY = 1 - (icon.lat - bounds.minLat) / (bounds.maxLat - bounds.minLat);
+      
+      const dist = Math.sqrt((clickX - iconX) ** 2 + (clickY - iconY) ** 2);
+      if (dist < hitRadius) {
+        return icon.id;
+      }
+    }
+    return null;
+  }, [containerRef, getCropLimits, mapIcons]);
+
+  // Mouse event handlers for pan and icon drag
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    setIsPanning(true);
+    const iconId = getIconAtPosition(e.clientX, e.clientY);
+    if (iconId && onIconMove) {
+      setDraggingIcon(iconId);
+      e.preventDefault();
+    } else {
+      setIsPanning(true);
+    }
     lastMousePos.current = { x: e.clientX, y: e.clientY };
-  }, []);
+  }, [getIconAtPosition, onIconMove]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (draggingIcon && onIconMove) {
+      const coords = screenToLatLng(e.clientX, e.clientY);
+      if (coords) {
+        onIconMove(draggingIcon, coords.lat, coords.lng);
+      }
+      return;
+    }
+    
     if (!isPanning) return;
     
     const dx = e.clientX - lastMousePos.current.x;
     const dy = e.clientY - lastMousePos.current.y;
     
-    // Scale movement by container size to canvas size ratio
     const container = containerRef.current;
     if (container) {
       const scaleX = canvasWidth / container.clientWidth;
@@ -856,21 +911,26 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     }
     
     lastMousePos.current = { x: e.clientX, y: e.clientY };
-  }, [isPanning, canvasWidth, canvasHeight, containerRef]);
+  }, [isPanning, draggingIcon, canvasWidth, canvasHeight, containerRef, onIconMove, screenToLatLng]);
 
   const handleMouseUp = useCallback(() => {
+    if (draggingIcon) {
+      setDraggingIcon(null);
+      return;
+    }
+    
     if (isPanning && onMapCenterChange) {
-      // Calculate the new center based on pan offset
       const bounds = getCropLimits();
       const centerLat = (bounds.minLat + bounds.maxLat) / 2;
       const centerLng = (bounds.minLng + bounds.maxLng) / 2;
       onMapCenterChange(centerLat, centerLng);
     }
     setIsPanning(false);
-  }, [isPanning, onMapCenterChange, getCropLimits]);
+  }, [isPanning, draggingIcon, onMapCenterChange, getCropLimits]);
 
   const handleMouseLeave = useCallback(() => {
     setIsPanning(false);
+    setDraggingIcon(null);
   }, []);
 
   // Wheel handler for zoom

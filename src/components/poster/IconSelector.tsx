@@ -3,7 +3,6 @@ import { MapIcon, MapIconType, MAP_ICON_OPTIONS } from '@/types/poster';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   MapPin, Heart, Star, Home, Flag,
   Plane, Train, Car, Bike, Bus,
@@ -11,7 +10,7 @@ import {
   UtensilsCrossed, Coffee, Hotel, Hospital,
   Church, Landmark, Castle, Trophy,
   GraduationCap, School, Library, BookOpen,
-  Plus, X, Trash2
+  Plus, Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -34,7 +33,7 @@ const ICON_COMPONENTS: Record<MapIconType, React.ElementType> = {
   bike: Bike,
   bus: Bus,
   ship: Ship,
-  helicopter: Plane, // Using Plane as fallback
+  helicopter: Plane,
   parking: ParkingCircle,
   fuel: Fuel,
   restaurant: UtensilsCrossed,
@@ -51,14 +50,12 @@ const ICON_COMPONENTS: Record<MapIconType, React.ElementType> = {
   museum: BookOpen,
 };
 
-// Group icons by category
-const groupedIcons = MAP_ICON_OPTIONS.reduce((acc, icon) => {
-  if (!acc[icon.category]) {
-    acc[icon.category] = [];
-  }
-  acc[icon.category].push(icon);
-  return acc;
-}, {} as Record<string, typeof MAP_ICON_OPTIONS>);
+// Flat list of popular icons for compact display
+const POPULAR_ICONS: MapIconType[] = [
+  'pin', 'heart', 'star', 'home', 'flag',
+  'plane', 'train', 'car', 'restaurant', 'cafe',
+  'hotel', 'church', 'monument', 'castle', 'stadium'
+];
 
 export const IconSelector = ({ icons, onIconsChange, mapCenter }: IconSelectorProps) => {
   const [selectedIconType, setSelectedIconType] = useState<MapIconType>('pin');
@@ -86,103 +83,80 @@ export const IconSelector = ({ icons, onIconsChange, mapCenter }: IconSelectorPr
   const SelectedIconComponent = ICON_COMPONENTS[selectedIconType];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <Label className="text-sm font-medium flex items-center gap-2">
         <MapPin className="w-4 h-4" />
         Karten-Icons
       </Label>
       
-      {/* Icon type selector */}
-      <ScrollArea className="h-[180px] rounded-md border p-2">
-        <div className="space-y-3">
-          {Object.entries(groupedIcons).map(([category, categoryIcons]) => (
-            <div key={category}>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5 px-1">
-                {category}
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {categoryIcons.map((iconOption) => {
-                  const IconComp = ICON_COMPONENTS[iconOption.id];
-                  return (
-                    <button
-                      key={iconOption.id}
-                      onClick={() => setSelectedIconType(iconOption.id)}
-                      title={iconOption.name}
-                      className={cn(
-                        'p-1.5 rounded-md transition-all',
-                        selectedIconType === iconOption.id
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-muted'
-                      )}
-                    >
-                      <IconComp className="w-4 h-4" />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
+      {/* Compact icon grid */}
+      <div className="flex flex-wrap gap-1">
+        {POPULAR_ICONS.map((iconType) => {
+          const IconComp = ICON_COMPONENTS[iconType];
+          return (
+            <button
+              key={iconType}
+              onClick={() => setSelectedIconType(iconType)}
+              title={MAP_ICON_OPTIONS.find(o => o.id === iconType)?.name}
+              className={cn(
+                'p-1.5 rounded transition-all',
+                selectedIconType === iconType
+                  ? 'bg-primary text-primary-foreground'
+                  : 'hover:bg-muted'
+              )}
+            >
+              <IconComp className="w-4 h-4" />
+            </button>
+          );
+        })}
+      </div>
 
-      {/* Icon customization */}
+      {/* Add icon controls */}
       <div className="flex items-center gap-2">
-        <div className="flex items-center gap-2 flex-1">
-          <input
-            type="color"
-            value={iconColor}
-            onChange={(e) => setIconColor(e.target.value)}
-            className="w-8 h-8 rounded border border-border cursor-pointer"
-          />
-          <Input
-            value={iconLabel}
-            onChange={(e) => setIconLabel(e.target.value)}
-            placeholder="Label (optional)"
-            className="h-8 text-xs flex-1"
-          />
-        </div>
-        <Button size="sm" onClick={addIcon} className="h-8 gap-1">
+        <input
+          type="color"
+          value={iconColor}
+          onChange={(e) => setIconColor(e.target.value)}
+          className="w-7 h-7 rounded border border-border cursor-pointer"
+        />
+        <Input
+          value={iconLabel}
+          onChange={(e) => setIconLabel(e.target.value)}
+          placeholder="Label"
+          className="h-7 text-xs flex-1"
+        />
+        <Button size="sm" onClick={addIcon} className="h-7 gap-1 px-2">
           <Plus className="w-3 h-3" />
-          <SelectedIconComponent className="w-4 h-4" />
+          <SelectedIconComponent className="w-3.5 h-3.5" />
         </Button>
       </div>
 
-      {/* Active icons list */}
+      {/* Active icons list - compact */}
       {icons.length > 0 && (
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Aktive Icons ({icons.length})</Label>
-          <div className="space-y-1 max-h-[120px] overflow-y-auto">
-            {icons.map((icon) => {
-              const IconComp = ICON_COMPONENTS[icon.type];
-              return (
-                <div
-                  key={icon.id}
-                  className="flex items-center justify-between py-1.5 px-2 rounded bg-muted/50"
+        <div className="flex flex-wrap gap-1">
+          {icons.map((icon) => {
+            const IconComp = ICON_COMPONENTS[icon.type];
+            return (
+              <div
+                key={icon.id}
+                className="flex items-center gap-1 py-1 px-2 rounded bg-muted/50 text-xs"
+              >
+                <IconComp className="w-3 h-3" style={{ color: icon.color }} />
+                {icon.label && <span className="text-muted-foreground">{icon.label}</span>}
+                <button
+                  onClick={() => removeIcon(icon.id)}
+                  className="ml-1 hover:text-destructive"
                 >
-                  <div className="flex items-center gap-2">
-                    <IconComp className="w-4 h-4" style={{ color: icon.color }} />
-                    <span className="text-xs">
-                      {MAP_ICON_OPTIONS.find(o => o.id === icon.type)?.name}
-                      {icon.label && <span className="text-muted-foreground ml-1">({icon.label})</span>}
-                    </span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeIcon(icon.id)}
-                    className="h-6 w-6 p-0"
-                  >
-                    <Trash2 className="w-3 h-3 text-muted-foreground" />
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
       <p className="text-[10px] text-muted-foreground">
-        Icons werden in der Kartenmitte platziert. Verschieben durch Drag & Drop.
+        Icons per Drag & Drop auf der Karte verschieben.
       </p>
     </div>
   );
