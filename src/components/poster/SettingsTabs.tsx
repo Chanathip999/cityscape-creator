@@ -5,7 +5,10 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Type, Palette, Move, Check, Waves, Trees, TreeDeciduous, Train, Plane, MapPin, Blend, Building } from 'lucide-react';
+import { 
+  Type, Palette, Move, Waves, Trees, TreeDeciduous, Train, Plane, MapPin, Blend, Building,
+  Route, Footprints, Bike, Mountain, MapPinned, Cable, Home, Landmark, Droplets, Trophy
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SettingsTabsProps {
@@ -21,16 +24,71 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'colors', label: 'Farben', icon: Palette },
 ];
 
-const LAYER_OPTIONS: { id: keyof LayerVisibility; label: string; icon: React.ElementType; colorKey: keyof LayerColors; premium?: boolean; premiumPrice?: string }[] = [
-  // Default ON layers first
-  { id: 'water', label: 'Wasser', icon: Waves, colorKey: 'water' },
-  { id: 'railways', label: 'Zugstrecken', icon: Train, colorKey: 'railways' },
-  { id: 'aeroways', label: 'Flughäfen', icon: Plane, colorKey: 'aeroways' },
-  // Default OFF layers at bottom
-  { id: 'parks', label: 'Parks', icon: TreeDeciduous, colorKey: 'parks' },
-  { id: 'forests', label: 'Wälder', icon: Trees, colorKey: 'forests' },
-  { id: 'coastlines', label: 'Küstenlinien', icon: MapPin, colorKey: 'coastlines' },
-  { id: 'buildings', label: 'Gebäude', icon: Building, colorKey: 'buildings', premium: true, premiumPrice: '+€1,99 (ab 4K)' },
+interface LayerOption {
+  id: keyof LayerVisibility;
+  label: string;
+  icon: React.ElementType;
+  colorKey: keyof LayerColors;
+  premium?: boolean;
+  premiumPrice?: string;
+}
+
+interface LayerGroup {
+  title: string;
+  layers: LayerOption[];
+}
+
+const LAYER_GROUPS: LayerGroup[] = [
+  {
+    title: 'Basis',
+    layers: [
+      { id: 'water', label: 'Wasser', icon: Waves, colorKey: 'water' },
+      { id: 'railways', label: 'Zugstrecken', icon: Train, colorKey: 'railways' },
+      { id: 'aeroways', label: 'Flughäfen', icon: Plane, colorKey: 'aeroways' },
+    ],
+  },
+  {
+    title: 'Landschaft',
+    layers: [
+      { id: 'parks', label: 'Parks', icon: TreeDeciduous, colorKey: 'parks' },
+      { id: 'forests', label: 'Wälder', icon: Trees, colorKey: 'forests' },
+      { id: 'coastlines', label: 'Küstenlinien', icon: MapPin, colorKey: 'coastlines' },
+      { id: 'lakes', label: 'Seen', icon: Droplets, colorKey: 'lakes' },
+      { id: 'rivers', label: 'Flüsse', icon: Waves, colorKey: 'rivers' },
+    ],
+  },
+  {
+    title: 'Straßen',
+    layers: [
+      { id: 'mainRoads', label: 'Hauptstraßen', icon: Route, colorKey: 'mainRoads' },
+      { id: 'sideStreets', label: 'Nebenstraßen', icon: Route, colorKey: 'sideStreets' },
+      { id: 'footpaths', label: 'Fußwege', icon: Footprints, colorKey: 'footpaths' },
+      { id: 'cycleways', label: 'Radwege', icon: Bike, colorKey: 'cycleways' },
+      { id: 'paths', label: 'Pfade', icon: Mountain, colorKey: 'paths' },
+    ],
+  },
+  {
+    title: 'Transport',
+    layers: [
+      { id: 'trainStations', label: 'Bahnhöfe', icon: MapPinned, colorKey: 'trainStations' },
+      { id: 'cableways', label: 'Seilbahnen', icon: Cable, colorKey: 'cableways' },
+    ],
+  },
+  {
+    title: 'Gebäude',
+    layers: [
+      { id: 'buildings', label: 'Alle Gebäude', icon: Building, colorKey: 'buildings', premium: true, premiumPrice: '+€1,99 (ab 4K)' },
+      { id: 'residentialBuildings', label: 'Wohngebäude', icon: Home, colorKey: 'residentialBuildings' },
+      { id: 'commercialBuildings', label: 'Gewerbe/Büros', icon: Building, colorKey: 'commercialBuildings' },
+    ],
+  },
+  {
+    title: 'Sehenswürdigkeiten',
+    layers: [
+      { id: 'monuments', label: 'Denkmäler', icon: Landmark, colorKey: 'monuments' },
+      { id: 'stadiums', label: 'Stadien', icon: Trophy, colorKey: 'stadiums' },
+    ],
+  },
 ];
 
 // Common aspect ratios for quick selection
@@ -310,57 +368,66 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
 
         {activeTab === 'layers' && (
           <>
-            {/* Layer Toggles with Color Pickers */}
-            <div className="space-y-3">
-              {LAYER_OPTIONS.map(({ id, label, icon: Icon, colorKey, premium, premiumPrice }) => {
-                const isEnabled = config.layerVisibility[id];
-                const customColor = config.layerColors?.[colorKey];
-                const defaultColor = getLayerDefaultColor(colorKey);
-                
-                return (
-                  <div key={id} className="space-y-2">
-                    <div className={`flex items-center justify-between py-2 px-2 rounded-lg ${premium ? 'bg-primary/5' : ''}`}>
-                      <div className="flex items-center gap-3">
-                        <Icon className={`w-4 h-4 ${premium ? 'text-primary' : 'text-muted-foreground'}`} />
-                        <Label className="font-normal">{label}</Label>
-                        {premium && premiumPrice && (
-                          <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                            {premiumPrice}
-                          </span>
-                        )}
-                      </div>
-                      <Switch
-                        checked={isEnabled}
-                        onCheckedChange={() => handleLayerToggle(id)}
-                      />
-                    </div>
-                    {isEnabled && (
-                      <div className="flex items-center gap-2 pl-7">
-                        <input
-                          type="color"
-                          value={customColor || defaultColor}
-                          onChange={(e) => handleLayerColorChange(colorKey, e.target.value)}
-                          className="w-8 h-8 rounded border border-border cursor-pointer"
-                        />
-                        <Input
-                          value={customColor || defaultColor}
-                          onChange={(e) => handleLayerColorChange(colorKey, e.target.value)}
-                          placeholder={defaultColor}
-                          className="h-8 flex-1 font-mono text-sm"
-                        />
-                        {customColor && (
-                          <button
-                            onClick={() => handleLayerColorChange(colorKey, '')}
-                            className="text-xs text-muted-foreground hover:text-foreground px-2"
-                          >
-                            Reset
-                          </button>
-                        )}
-                      </div>
-                    )}
+            {/* Grouped Layer Toggles with Color Pickers */}
+            <div className="space-y-5 max-h-[50vh] overflow-y-auto pr-2">
+              {LAYER_GROUPS.map((group) => (
+                <div key={group.title} className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                    {group.title}
+                  </Label>
+                  <div className="space-y-2">
+                    {group.layers.map(({ id, label, icon: Icon, colorKey, premium, premiumPrice }) => {
+                      const isEnabled = config.layerVisibility[id];
+                      const customColor = config.layerColors?.[colorKey];
+                      const defaultColor = getLayerDefaultColor(colorKey);
+                      
+                      return (
+                        <div key={id} className="space-y-1">
+                          <div className={`flex items-center justify-between py-1.5 px-2 rounded-lg ${premium ? 'bg-primary/5' : ''}`}>
+                            <div className="flex items-center gap-2">
+                              <Icon className={`w-3.5 h-3.5 ${premium ? 'text-primary' : 'text-muted-foreground'}`} />
+                              <Label className="font-normal text-sm">{label}</Label>
+                              {premium && premiumPrice && (
+                                <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+                                  {premiumPrice}
+                                </span>
+                              )}
+                            </div>
+                            <Switch
+                              checked={isEnabled}
+                              onCheckedChange={() => handleLayerToggle(id)}
+                            />
+                          </div>
+                          {isEnabled && (
+                            <div className="flex items-center gap-2 pl-6">
+                              <input
+                                type="color"
+                                value={customColor || defaultColor}
+                                onChange={(e) => handleLayerColorChange(colorKey, e.target.value)}
+                                className="w-6 h-6 rounded border border-border cursor-pointer"
+                              />
+                              <Input
+                                value={customColor || defaultColor}
+                                onChange={(e) => handleLayerColorChange(colorKey, e.target.value)}
+                                placeholder={defaultColor}
+                                className="h-7 flex-1 font-mono text-xs"
+                              />
+                              {customColor && (
+                                <button
+                                  onClick={() => handleLayerColorChange(colorKey, '')}
+                                  className="text-[10px] text-muted-foreground hover:text-foreground"
+                                >
+                                  Reset
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
 
             {/* Reset All Layer Colors */}
