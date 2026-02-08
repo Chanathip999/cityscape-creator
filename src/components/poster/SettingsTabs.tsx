@@ -49,8 +49,8 @@ const LAYER_GROUPS: LayerGroup[] = [
     title: 'Basis',
     layers: [
       { id: 'water', label: 'Wasser', icon: Waves, colorKey: 'water' },
+      { id: 'buildings', label: 'Alle Gebäude', icon: Building, colorKey: 'buildings', premium: true, premiumPrice: '+€1,99 (ab 4K)' },
       { id: 'railways', label: 'Zugstrecken', icon: Train, colorKey: 'railways' },
-      { id: 'aeroways', label: 'Flughäfen', icon: Plane, colorKey: 'aeroways' },
     ],
   },
   {
@@ -76,6 +76,7 @@ const LAYER_GROUPS: LayerGroup[] = [
   {
     title: 'Transport',
     layers: [
+      { id: 'aeroways', label: 'Flughäfen', icon: Plane, colorKey: 'aeroways' },
       { id: 'trainStations', label: 'Bahnhöfe', icon: MapPinned, colorKey: 'trainStations' },
       { id: 'cableways', label: 'Seilbahnen', icon: Cable, colorKey: 'cableways' },
     ],
@@ -83,7 +84,6 @@ const LAYER_GROUPS: LayerGroup[] = [
   {
     title: 'Gebäude',
     layers: [
-      { id: 'buildings', label: 'Alle Gebäude', icon: Building, colorKey: 'buildings', premium: true, premiumPrice: '+€1,99 (ab 4K)' },
       { id: 'residentialBuildings', label: 'Wohngebäude', icon: Home, colorKey: 'residentialBuildings' },
       { id: 'commercialBuildings', label: 'Gewerbe/Büros', icon: Building, colorKey: 'commercialBuildings' },
     ],
