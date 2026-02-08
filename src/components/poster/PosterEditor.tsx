@@ -58,6 +58,18 @@ export const PosterEditor = ({ initialConfig, onConfigChange }: PosterEditorProp
     });
   };
 
+  // Handle icon position change when user drags an icon
+  const handleIconMove = (iconId: string, lat: number, lng: number) => {
+    setConfig((prev) => {
+      const updatedIcons = (prev.mapIcons || []).map(icon =>
+        icon.id === iconId ? { ...icon, lat, lng } : icon
+      );
+      const newConfig = { ...prev, mapIcons: updatedIcons };
+      onConfigChange?.(newConfig);
+      return newConfig;
+    });
+  };
+
   // Update container size when poster ref changes
   const updateContainerSize = useCallback(() => {
     if (posterRef.current) {
@@ -170,6 +182,7 @@ export const PosterEditor = ({ initialConfig, onConfigChange }: PosterEditorProp
                 config={config} 
                 containerRef={posterRef} 
                 onMapCenterChange={handleMapCenterChange}
+                onIconMove={handleIconMove}
               />
               
               {/* Text Overlay for interactive editing */}
