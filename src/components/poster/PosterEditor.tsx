@@ -12,6 +12,8 @@ import { SettingsTabs } from './SettingsTabs';
 import { ClearCacheButton } from './ClearCacheButton';
 import { ExportDialog } from './ExportDialog';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { LanguageSelector } from '@/components/LanguageSelector';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { Map } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
@@ -24,6 +26,7 @@ export const PosterEditor = ({ initialConfig, onConfigChange }: PosterEditorProp
   const [config, setConfig] = useState<PosterConfig>(initialConfig || DEFAULT_CONFIG);
   const posterRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 400, height: 533 });
+  const { t } = useLanguage();
 
   const handleCitySelect = (city: string, country: string, lat: number, lon: number) => {
     setConfig((prev) => {
@@ -113,11 +116,12 @@ export const PosterEditor = ({ initialConfig, onConfigChange }: PosterEditorProp
               <Map className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-semibold text-lg text-foreground">City Map Poster</h1>
-              <p className="text-xs text-muted-foreground">Create beautiful city prints</p>
+              <h1 className="font-semibold text-lg text-foreground">{t('header.title')}</h1>
+              <p className="text-xs text-muted-foreground">{t('header.subtitle')}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <LanguageSelector />
             <ThemeToggle />
             <ExportDialog config={config} posterRef={posterRef} />
           </div>
@@ -156,7 +160,7 @@ export const PosterEditor = ({ initialConfig, onConfigChange }: PosterEditorProp
 
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
-                  💡 Vektor-Modus: Stilisierte Straßen als scharfe Vektorgrafik.
+                  {t('footer.vectorHint')}
                 </p>
                 <ClearCacheButton />
               </div>
@@ -172,7 +176,7 @@ export const PosterEditor = ({ initialConfig, onConfigChange }: PosterEditorProp
               className="max-w-lg mx-auto relative"
               ref={(el) => {
                 if (el) {
-                  // @ts-ignore - using ref callback to update size
+                  // @ts-ignore
                   posterRef.current = el;
                   setTimeout(updateContainerSize, 100);
                 }
