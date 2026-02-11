@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { PosterConfig, FontFamily, FontSize, LayerVisibility, LayerColors, FONT_FAMILIES, FONT_SIZES, TextPosition, TEXT_POSITIONS_OPTIONS, TextLayoutStyle } from '@/types/poster';
 import { Label } from '@/components/ui/label';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
+import { TranslationKey } from '@/lib/i18n/translations';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
@@ -23,11 +25,11 @@ interface SettingsTabsProps {
 
 type TabId = 'text' | 'colors' | 'layers' | 'overlays';
 
-const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: 'layers', label: 'Ebenen', icon: Move },
-  { id: 'text', label: 'Text', icon: Type },
-  { id: 'colors', label: 'Farben', icon: Palette },
-  { id: 'overlays', label: 'Overlays', icon: Layers },
+const TAB_DEFS: { id: TabId; labelKey: TranslationKey; icon: React.ElementType }[] = [
+  { id: 'layers', labelKey: 'tabs.layers', icon: Move },
+  { id: 'text', labelKey: 'tabs.text', icon: Type },
+  { id: 'colors', labelKey: 'tabs.colors', icon: Palette },
+  { id: 'overlays', labelKey: 'tabs.overlays', icon: Layers },
 ];
 
 interface LayerOption {
@@ -44,55 +46,60 @@ interface LayerGroup {
   layers: LayerOption[];
 }
 
-const LAYER_GROUPS: LayerGroup[] = [
+interface LayerGroupDef {
+  titleKey: TranslationKey;
+  layers: { id: keyof LayerVisibility; labelKey: TranslationKey; icon: React.ElementType; colorKey: keyof LayerColors; premium?: boolean; premiumPrice?: string }[];
+}
+
+const LAYER_GROUPS_DEF: LayerGroupDef[] = [
   {
-    title: 'Basis',
+    titleKey: 'layers.basis',
     layers: [
-      { id: 'water', label: 'Wasser', icon: Waves, colorKey: 'water' },
-      { id: 'buildings', label: 'Alle Gebäude', icon: Building, colorKey: 'buildings', premium: true, premiumPrice: '+€1,99 (ab 4K)' },
-      { id: 'railways', label: 'Zugstrecken', icon: Train, colorKey: 'railways' },
+      { id: 'water', labelKey: 'layers.water', icon: Waves, colorKey: 'water' },
+      { id: 'buildings', labelKey: 'layers.allBuildings', icon: Building, colorKey: 'buildings', premium: true, premiumPrice: '+€1,99 (4K+)' },
+      { id: 'railways', labelKey: 'layers.railways', icon: Train, colorKey: 'railways' },
     ],
   },
   {
-    title: 'Landschaft',
+    titleKey: 'layers.landscape',
     layers: [
-      { id: 'parks', label: 'Parks', icon: TreeDeciduous, colorKey: 'parks' },
-      { id: 'forests', label: 'Wälder', icon: Trees, colorKey: 'forests' },
-      { id: 'coastlines', label: 'Küstenlinien', icon: MapPin, colorKey: 'coastlines' },
-      { id: 'lakes', label: 'Seen', icon: Droplets, colorKey: 'lakes' },
-      { id: 'rivers', label: 'Flüsse', icon: Waves, colorKey: 'rivers' },
+      { id: 'parks', labelKey: 'layers.parks', icon: TreeDeciduous, colorKey: 'parks' },
+      { id: 'forests', labelKey: 'layers.forests', icon: Trees, colorKey: 'forests' },
+      { id: 'coastlines', labelKey: 'layers.coastlines', icon: MapPin, colorKey: 'coastlines' },
+      { id: 'lakes', labelKey: 'layers.lakes', icon: Droplets, colorKey: 'lakes' },
+      { id: 'rivers', labelKey: 'layers.rivers', icon: Waves, colorKey: 'rivers' },
     ],
   },
   {
-    title: 'Straßen',
+    titleKey: 'layers.streets',
     layers: [
-      { id: 'mainRoads', label: 'Hauptstraßen', icon: Route, colorKey: 'mainRoads' },
-      { id: 'sideStreets', label: 'Nebenstraßen', icon: Route, colorKey: 'sideStreets' },
-      { id: 'footpaths', label: 'Fußwege', icon: Footprints, colorKey: 'footpaths' },
-      { id: 'cycleways', label: 'Radwege', icon: Bike, colorKey: 'cycleways' },
-      { id: 'paths', label: 'Pfade', icon: Mountain, colorKey: 'paths' },
+      { id: 'mainRoads', labelKey: 'layers.mainRoads', icon: Route, colorKey: 'mainRoads' },
+      { id: 'sideStreets', labelKey: 'layers.sideStreets', icon: Route, colorKey: 'sideStreets' },
+      { id: 'footpaths', labelKey: 'layers.footpaths', icon: Footprints, colorKey: 'footpaths' },
+      { id: 'cycleways', labelKey: 'layers.cycleways', icon: Bike, colorKey: 'cycleways' },
+      { id: 'paths', labelKey: 'layers.paths', icon: Mountain, colorKey: 'paths' },
     ],
   },
   {
-    title: 'Transport',
+    titleKey: 'layers.transport',
     layers: [
-      { id: 'aeroways', label: 'Flughäfen', icon: Plane, colorKey: 'aeroways' },
-      { id: 'trainStations', label: 'Bahnhöfe', icon: MapPinned, colorKey: 'trainStations' },
-      { id: 'cableways', label: 'Seilbahnen', icon: Cable, colorKey: 'cableways' },
+      { id: 'aeroways', labelKey: 'layers.airports', icon: Plane, colorKey: 'aeroways' },
+      { id: 'trainStations', labelKey: 'layers.trainStations', icon: MapPinned, colorKey: 'trainStations' },
+      { id: 'cableways', labelKey: 'layers.cableways', icon: Cable, colorKey: 'cableways' },
     ],
   },
   {
-    title: 'Gebäude',
+    titleKey: 'layers.buildings',
     layers: [
-      { id: 'residentialBuildings', label: 'Wohngebäude', icon: Home, colorKey: 'residentialBuildings' },
-      { id: 'commercialBuildings', label: 'Gewerbe/Büros', icon: Building, colorKey: 'commercialBuildings' },
+      { id: 'residentialBuildings', labelKey: 'layers.residential', icon: Home, colorKey: 'residentialBuildings' },
+      { id: 'commercialBuildings', labelKey: 'layers.commercial', icon: Building, colorKey: 'commercialBuildings' },
     ],
   },
   {
-    title: 'Sehenswürdigkeiten',
+    titleKey: 'layers.landmarks',
     layers: [
-      { id: 'monuments', label: 'Denkmäler', icon: Landmark, colorKey: 'monuments' },
-      { id: 'stadiums', label: 'Stadien', icon: Trophy, colorKey: 'stadiums' },
+      { id: 'monuments', labelKey: 'layers.monuments', icon: Landmark, colorKey: 'monuments' },
+      { id: 'stadiums', labelKey: 'layers.stadiums', icon: Trophy, colorKey: 'stadiums' },
     ],
   },
 ];
@@ -101,6 +108,7 @@ const LAYER_GROUPS: LayerGroup[] = [
 
 export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
   const [activeTab, setActiveTab] = useState<TabId>('layers');
+  const { t } = useLanguage();
 
   const handleLayerToggle = (layerId: keyof LayerVisibility) => {
     onConfigUpdate({
@@ -142,7 +150,7 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
     <div className="space-y-4">
       {/* Tab Headers */}
       <div className="flex rounded-lg bg-muted p-1">
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {TAB_DEFS.map(({ id, labelKey, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
@@ -154,7 +162,7 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
             )}
           >
             <Icon className="w-4 h-4" />
-            {label}
+            {t(labelKey)}
           </button>
         ))}
       </div>
@@ -171,7 +179,7 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
 
             {/* Font Selector */}
             <div className="space-y-2">
-              <Label>Schriftart</Label>
+              <Label>{t('text.font')}</Label>
               <Select
                 value={config.fontFamily}
                 onValueChange={(value) => onConfigUpdate({ fontFamily: value as FontFamily })}
@@ -191,7 +199,7 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
 
             {/* Font Size Preset */}
             <div className="space-y-2">
-              <Label>Schriftgröße Preset</Label>
+              <Label>{t('text.sizePreset')}</Label>
               <div className="flex gap-2">
                 {FONT_SIZES.map((size) => (
                   <button
@@ -213,7 +221,7 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
             {/* Font Size Fine-Tuning Slider */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label>Feineinstellung</Label>
+                <Label>{t('text.fineTuning')}</Label>
                 <span className="text-sm text-muted-foreground">{Math.round((config.fontSizeScale || 1) * 100)}%</span>
               </div>
               <Slider
@@ -224,12 +232,12 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
                 onValueChange={([value]) => onConfigUpdate({ fontSizeScale: value / 100 })}
                 className="w-full"
               />
-              <p className="text-xs text-muted-foreground">50% bis 200% des Preset-Werts</p>
+              <p className="text-xs text-muted-foreground">{t('text.fineTuningDesc')}</p>
             </div>
 
             {/* Text Position */}
             <div className="space-y-2">
-              <Label>Textposition</Label>
+              <Label>{t('text.position')}</Label>
               <div className="flex gap-2">
                 {TEXT_POSITIONS_OPTIONS.map((pos) => (
                   <button
@@ -251,21 +259,21 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
             {/* Toggle Switches */}
             <div className="space-y-3">
               <div className="flex items-center justify-between py-2">
-                <Label className="font-normal">Stadtname anzeigen</Label>
+                <Label className="font-normal">{t('text.showCity')}</Label>
                 <Switch
                   checked={config.showCity}
                   onCheckedChange={(checked) => onConfigUpdate({ showCity: checked })}
                 />
               </div>
               <div className="flex items-center justify-between py-2">
-                <Label className="font-normal">Land anzeigen</Label>
+                <Label className="font-normal">{t('text.showCountry')}</Label>
                 <Switch
                   checked={config.showCountry}
                   onCheckedChange={(checked) => onConfigUpdate({ showCountry: checked })}
                 />
               </div>
               <div className="flex items-center justify-between py-2">
-                <Label className="font-normal">Koordinaten anzeigen</Label>
+                <Label className="font-normal">{t('text.showCoords')}</Label>
                 <Switch
                   checked={config.showCoordinates}
                   onCheckedChange={(checked) => onConfigUpdate({ showCoordinates: checked })}
@@ -274,7 +282,7 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3">
                   <Blend className="w-4 h-4 text-muted-foreground" />
-                  <Label className="font-normal">Farbverläufe oben/unten</Label>
+                  <Label className="font-normal">{t('text.gradients')}</Label>
                 </div>
                 <Switch
                   checked={config.showGradients}
@@ -289,7 +297,7 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
           <>
             {/* Text Color */}
             <div className="space-y-2">
-              <Label>Textfarbe</Label>
+              <Label>{t('colors.textColor')}</Label>
               <div className="flex items-center gap-3">
                 <input
                   type="color"
@@ -308,7 +316,7 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
 
             {/* Motorway Color */}
             <div className="space-y-2">
-              <Label>Autobahnen / Hauptstraßen</Label>
+              <Label>{t('colors.motorways')}</Label>
               <div className="flex items-center gap-3">
                 <input
                   type="color"
@@ -327,7 +335,7 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
 
             {/* Other Roads Color */}
             <div className="space-y-2">
-              <Label>Nebenstraßen</Label>
+              <Label>{t('colors.sideStreets')}</Label>
               <div className="flex items-center gap-3">
                 <input
                   type="color"
@@ -346,7 +354,7 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
 
             {/* Background Color */}
             <div className="space-y-2">
-              <Label>Hintergrund</Label>
+              <Label>{t('colors.background')}</Label>
               <div className="flex items-center gap-3">
                 <input
                   type="color"
@@ -372,7 +380,7 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
               })}
               className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              Farben zurücksetzen
+              {t('colors.reset')}
             </button>
           </>
         )}
@@ -381,13 +389,13 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
           <>
             {/* Grouped Layer Toggles with Color Pickers */}
             <div className="space-y-5 max-h-[50vh] overflow-y-auto pr-2">
-              {LAYER_GROUPS.map((group) => (
-                <div key={group.title} className="space-y-2">
+              {LAYER_GROUPS_DEF.map((group) => (
+                <div key={group.titleKey} className="space-y-2">
                   <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
-                    {group.title}
+                    {t(group.titleKey)}
                   </Label>
                   <div className="space-y-2">
-                    {group.layers.map(({ id, label, icon: Icon, colorKey, premium, premiumPrice }) => {
+                    {group.layers.map(({ id, labelKey, icon: Icon, colorKey, premium, premiumPrice }) => {
                       const isEnabled = config.layerVisibility[id];
                       const customColor = config.layerColors?.[colorKey];
                       const defaultColor = getLayerDefaultColor(colorKey);
@@ -397,7 +405,7 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
                           <div className={`flex items-center justify-between py-1.5 px-2 rounded-lg ${premium ? 'bg-primary/5' : ''}`}>
                             <div className="flex items-center gap-2">
                               <Icon className={`w-3.5 h-3.5 ${premium ? 'text-primary' : 'text-muted-foreground'}`} />
-                              <Label className="font-normal text-sm">{label}</Label>
+                              <Label className="font-normal text-sm">{t(labelKey)}</Label>
                               {premium && premiumPrice && (
                                 <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                                   {premiumPrice}
@@ -446,7 +454,7 @@ export const SettingsTabs = ({ config, onConfigUpdate }: SettingsTabsProps) => {
               onClick={resetLayerColors}
               className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              Alle Ebenenfarben zurücksetzen
+              {t('colors.reset')}
             </button>
 
           </>

@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Search, MapPin, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 interface CitySearchProps {
   onCitySelect: (city: string, country: string, lat: number, lon: number) => void;
@@ -25,6 +26,7 @@ export const CitySearch = ({ onCitySelect }: CitySearchProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const { t } = useLanguage();
 
   // Auto-search while typing with debounce
   useEffect(() => {
@@ -78,14 +80,14 @@ export const CitySearch = ({ onCitySelect }: CitySearchProps) => {
 
   return (
     <div className="space-y-3">
-      <label className="text-sm font-medium text-foreground">Stadtsuche</label>
+      <label className="text-sm font-medium text-foreground">{t('citySearch.label')}</label>
       <div className="relative">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Stadt suchen..."
+            placeholder={t('citySearch.placeholder')}
             className="pl-9 pr-10"
           />
           {isLoading && (

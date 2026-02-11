@@ -5,6 +5,7 @@ import { usePaymentDownload } from '@/hooks/usePaymentDownload';
 import { DEFAULT_CONFIG, DEFAULT_LAYER_VISIBILITY, ExportFormat, ExportResolution, PosterConfig } from '@/types/poster';
 import { toast } from '@/hooks/use-toast';
 import { startCityPrefetch } from '@/lib/cityPrefetch';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 // Clear old localStorage config on load to ensure new defaults are used
 // This runs once on initial load
@@ -56,6 +57,7 @@ const Index = () => {
   const { verifyAndDownload } = usePaymentDownload();
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [initialConfig] = useState<PosterConfig>(getInitialConfig);
+  const { t } = useLanguage();
 
   // Start background prefetch of popular cities (once per session)
   useEffect(() => {
@@ -84,8 +86,8 @@ const Index = () => {
     } else if (payment === 'cancelled') {
       setSearchParams({});
       toast({
-        title: 'Zahlung abgebrochen',
-        description: 'Du kannst es jederzeit erneut versuchen.',
+        title: t('payment.cancelled'),
+        description: t('payment.cancelledDesc'),
       });
     }
   }, [searchParams, setSearchParams, verifyAndDownload, isProcessingPayment, initialConfig]);
