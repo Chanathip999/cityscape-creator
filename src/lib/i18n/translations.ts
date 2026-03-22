@@ -168,9 +168,21 @@ type TranslationKeys = {
   'payment.generating': string;
   'payment.budgetGenerating': string;
   'payment.pleaseWait': string;
+  // Photo mode
+  'photo.upload': string;
+  'photo.uploadHint': string;
+  'photo.metadata': string;
+  'photo.noMetadata': string;
+  'photo.replace': string;
+  'photo.uploaded': string;
+  'photo.onlyImages': string;
+  'photo.tooLarge': string;
+  'photo.uploadError': string;
 };
 
 const en: TranslationKeys = {
+  'mode.map': 'Map Poster',
+  'mode.photo': 'Photo Poster',
   'header.title': 'City Map Poster',
   'header.subtitle': 'Create beautiful city prints',
   'citySearch.label': 'City Search',
