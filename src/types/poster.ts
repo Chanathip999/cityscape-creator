@@ -188,7 +188,31 @@ export interface TextOverrides {
   coordinates?: TextElementConfig;
 }
 
+// Photo mode types
+export type PosterMode = 'map' | 'photo';
+
+export interface PhotoExifData {
+  location?: string;
+  latitude?: number;
+  longitude?: number;
+  camera?: string;
+  lens?: string;
+  focalLength?: string;
+  aperture?: string;
+  shutterSpeed?: string;
+  iso?: string;
+  dateTime?: string;
+  width?: number;
+  height?: number;
+}
+
 export interface PosterConfig {
+  // Mode
+  posterMode: PosterMode;
+  // Photo mode
+  photoDataUrl?: string;
+  photoExif?: PhotoExifData;
+  // Map mode
   city: string;
   country: string;
   countryLabel?: string;
