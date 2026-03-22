@@ -435,9 +435,20 @@ const de: TranslationKeys = {
   'payment.generating': 'Poster wird generiert...',
   'payment.budgetGenerating': 'Budget-Version mit Logo wird erstellt...',
   'payment.pleaseWait': 'Bitte warte einen Moment.',
+  'photo.upload': 'Foto hochladen',
+  'photo.uploadHint': 'JPG, PNG, HEIC — EXIF-Daten werden automatisch ausgelesen',
+  'photo.metadata': 'Erkannte Metadaten',
+  'photo.noMetadata': 'Keine Metadaten in diesem Bild gefunden',
+  'photo.replace': 'Foto ersetzen',
+  'photo.uploaded': 'Foto erfolgreich hochgeladen',
+  'photo.onlyImages': 'Bitte nur Bilddateien hochladen',
+  'photo.tooLarge': 'Bild zu groß (max. 20MB)',
+  'photo.uploadError': 'Upload fehlgeschlagen',
 };
 
 const fr: TranslationKeys = {
+  'mode.map': 'Poster Carte',
+  'mode.photo': 'Poster Photo',
   'header.title': 'City Map Poster',
   'header.subtitle': 'Créez de magnifiques affiches de villes',
   'citySearch.label': 'Recherche de ville',
