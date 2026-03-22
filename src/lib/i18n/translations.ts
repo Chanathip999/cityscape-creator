@@ -568,6 +568,15 @@ const fr: TranslationKeys = {
   'payment.generating': 'Poster en cours de génération...',
   'payment.budgetGenerating': 'Version budget avec logo en cours de création...',
   'payment.pleaseWait': 'Veuillez patienter un instant.',
+  'photo.upload': 'Télécharger une photo',
+  'photo.uploadHint': 'JPG, PNG, HEIC — Les données EXIF seront extraites automatiquement',
+  'photo.metadata': 'Métadonnées extraites',
+  'photo.noMetadata': 'Aucune métadonnée trouvée',
+  'photo.replace': 'Remplacer la photo',
+  'photo.uploaded': 'Photo téléchargée avec succès',
+  'photo.onlyImages': 'Veuillez télécharger uniquement des fichiers image',
+  'photo.tooLarge': 'Image trop volumineuse (max. 20 Mo)',
+  'photo.uploadError': 'Échec du téléchargement',
 };
 
 // Helper to create partial translations that fall back to English
