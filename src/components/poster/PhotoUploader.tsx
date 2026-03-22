@@ -23,7 +23,6 @@ export const PhotoUploader = ({ photoDataUrl, exifData, onPhotoChange }: PhotoUp
       const raw = await exifr.parse(file, {
         gps: true,
         exif: true,
-        ifd0: true,
         pick: [
           'Make', 'Model', 'LensModel', 'FocalLength', 'FNumber',
           'ExposureTime', 'ISO', 'DateTimeOriginal', 'ImageWidth', 'ImageHeight',
@@ -35,11 +34,9 @@ export const PhotoUploader = ({ photoDataUrl, exifData, onPhotoChange }: PhotoUp
 
       const data: PhotoExifData = {};
 
-      // GPS
       if (raw.latitude && raw.longitude) {
         data.latitude = raw.latitude;
         data.longitude = raw.longitude;
-        // Reverse geocode location name
         try {
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${raw.latitude}&lon=${raw.longitude}&format=json&zoom=10`
@@ -50,14 +47,12 @@ export const PhotoUploader = ({ photoDataUrl, exifData, onPhotoChange }: PhotoUp
             const country = geo.address.country || '';
             data.location = [city, country].filter(Boolean).join(', ');
           }
-        } catch { /* ignore geocoding errors */ }
+        } catch { /* ignore */ }
       }
 
-      // Camera
       const make = raw.Make || '';
       const model = raw.Model || '';
       if (make || model) {
-        // Avoid "Canon Canon EOS R5" duplicates
         data.camera = model.startsWith(make) ? model : [make, model].filter(Boolean).join(' ');
       }
 
@@ -90,30 +85,28 @@ export const PhotoUploader = ({ photoDataUrl, exifData, onPhotoChange }: PhotoUp
     const file = files[0];
 
     if (!file.type.startsWith('image/')) {
-      toast.error(t('photo.onlyImages'));
+      toast.error(t('photo.onlyImages' as any) || 'Please upload image files only');
       return;
     }
     if (file.size > 20 * 1024 * 1024) {
-      toast.error(t('photo.tooLarge'));
+      toast.error(t('photo.tooLarge' as any) || 'Image too large (max. 20MB)');
       return;
     }
 
     setIsProcessing(true);
 
     try {
-      // Extract EXIF first (before converting to dataURL for better parsing)
       const exif = await extractExif(file);
 
-      // Read as data URL
       const reader = new FileReader();
       reader.onload = (event) => {
         const dataUrl = event.target?.result as string;
         onPhotoChange(dataUrl, exif);
-        toast.success(t('photo.uploaded'));
+        toast.success(t('photo.uploaded' as any) || 'Photo uploaded');
       };
       reader.readAsDataURL(file);
     } catch {
-      toast.error(t('photo.uploadError'));
+      toast.error(t('photo.uploadError' as any) || 'Upload failed');
     } finally {
       setIsProcessing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -132,12 +125,11 @@ export const PhotoUploader = ({ photoDataUrl, exifData, onPhotoChange }: PhotoUp
           className="border-2 border-dashed border-border rounded-lg p-8 cursor-pointer hover:border-primary/50 transition-colors flex flex-col items-center gap-3"
         >
           <Camera className="w-10 h-10 text-muted-foreground" />
-          <span className="text-sm font-medium text-foreground">{t('photo.upload')}</span>
-          <span className="text-xs text-muted-foreground">{t('photo.uploadHint')}</span>
+          <span className="text-sm font-medium text-foreground">{t('photo.upload' as any) || 'Upload Photo'}</span>
+          <span className="text-xs text-muted-foreground">{t('photo.uploadHint' as any) || 'JPG, PNG, HEIC — EXIF data will be extracted automatically'}</span>
         </div>
       ) : (
         <div className="space-y-3">
-          {/* Photo thumbnail */}
           <div className="relative rounded-lg overflow-hidden">
             <img src={photoDataUrl} alt="Uploaded" className="w-full h-32 object-cover" />
             <Button
@@ -150,11 +142,10 @@ export const PhotoUploader = ({ photoDataUrl, exifData, onPhotoChange }: PhotoUp
             </Button>
           </div>
 
-          {/* Extracted metadata */}
           {exifData && (
             <div className="space-y-2 text-xs">
               <Label className="text-xs text-muted-foreground uppercase tracking-wider">
-                {t('photo.metadata')}
+                {t('photo.metadata' as any) || 'Extracted Metadata'}
               </Label>
               <div className="grid grid-cols-1 gap-1.5 bg-muted/50 rounded-lg p-3">
                 {exifData.location && (
@@ -182,7 +173,7 @@ export const PhotoUploader = ({ photoDataUrl, exifData, onPhotoChange }: PhotoUp
                   </div>
                 )}
                 {!exifData.location && !exifData.camera && !exifData.dateTime && (
-                  <span className="text-muted-foreground italic">{t('photo.noMetadata')}</span>
+                  <span className="text-muted-foreground italic">{t('photo.noMetadata' as any) || 'No metadata found'}</span>
                 )}
               </div>
             </div>
@@ -195,7 +186,7 @@ export const PhotoUploader = ({ photoDataUrl, exifData, onPhotoChange }: PhotoUp
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload className="w-4 h-4 mr-2" />
-            {t('photo.replace')}
+            {t('photo.replace' as any) || 'Replace Photo'}
           </Button>
         </div>
       )}

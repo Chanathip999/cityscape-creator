@@ -20,7 +20,6 @@ export const PhotoPosterPreview = ({ config, containerRef: externalRef }: PhotoP
     fontFamily,
     fontSize,
     fontSizeScale = 1,
-    aspectRatio,
     customTextColor,
     customBackgroundColor,
     showGradients,
@@ -32,9 +31,6 @@ export const PhotoPosterPreview = ({ config, containerRef: externalRef }: PhotoP
     () => TEXT_LAYOUT_STYLES.find(s => s.id === textLayoutStyle) || TEXT_LAYOUT_STYLES[0],
     [textLayoutStyle]
   );
-
-  const aspectRatioConfig = ASPECT_RATIOS.find(r => r.id === aspectRatio) || ASPECT_RATIOS[3];
-  const aspectValue = aspectRatioConfig.width / aspectRatioConfig.height;
 
   // Load the uploaded image
   useEffect(() => {
@@ -78,17 +74,14 @@ export const PhotoPosterPreview = ({ config, containerRef: externalRef }: PhotoP
       let sx = 0, sy = 0, sw = img.width, sh = img.height;
 
       if (imgAspect > canvasAspect) {
-        // Image is wider - crop sides
         sw = img.height * canvasAspect;
         sx = (img.width - sw) / 2;
       } else {
-        // Image is taller - crop top/bottom
         sh = img.width / canvasAspect;
         sy = (img.height - sh) / 2;
       }
 
-      // Leave space for text at bottom/top
-      const textAreaRatio = 0.15; // 15% for text area
+      const textAreaRatio = 0.15;
       let drawY = 0, drawH = height;
 
       if (textPosition === 'bottom') {
@@ -100,7 +93,6 @@ export const PhotoPosterPreview = ({ config, containerRef: externalRef }: PhotoP
 
       ctx.drawImage(img, sx, sy, sw, sh, 0, drawY, width, drawH);
 
-      // Gradient overlay for text readability
       if (showGradients) {
         const gradH = height * 0.3;
         if (textPosition === 'bottom' || textPosition === 'center') {
@@ -132,28 +124,29 @@ export const PhotoPosterPreview = ({ config, containerRef: externalRef }: PhotoP
     if (exif?.dateTime) lines.push(exif.dateTime);
 
     if (lines.length === 0 && !img) {
-      // Show placeholder
       ctx.fillStyle = textColor;
-      ctx.font = `${Math.round(width * 0.03)}px ${FONT_STACKS[fontFamily]}`;
+      ctx.font = `400 ${Math.round(width * 0.03)}px ${FONT_STACKS[fontFamily]}`;
       ctx.textAlign = 'center';
       ctx.fillText('Upload a photo to get started', width / 2, height / 2);
       return;
     }
 
     // Draw text
-    const fontSizes = getScaledFontSizes(fontSize, fontSizeScale, height);
+    const fontSizes = getScaledFontSizes(height, fontSize);
+    const scaledTitle = fontSizes.title * fontSizeScale;
+    const scaledSubtitle = fontSizes.subtitle * fontSizeScale;
+    const scaledCoords = fontSizes.coords * fontSizeScale;
     const fontStack = FONT_STACKS[fontFamily];
     ctx.fillStyle = textColor;
 
-    // Determine text position
-    let startY: number;
-    const lineHeight = fontSizes.country * 1.6;
+    const lineHeight = scaledSubtitle * 1.6;
     const totalTextH = lines.length * lineHeight;
 
+    let startY: number;
     if (textPosition === 'top') {
-      startY = height * 0.05 + fontSizes.city;
+      startY = height * 0.05 + scaledTitle;
     } else if (textPosition === 'center') {
-      startY = (height - totalTextH) / 2 + fontSizes.city;
+      startY = (height - totalTextH) / 2 + scaledTitle;
     } else {
       startY = height - totalTextH - height * 0.04;
     }
@@ -165,18 +158,19 @@ export const PhotoPosterPreview = ({ config, containerRef: externalRef }: PhotoP
 
     ctx.textAlign = textAlign as CanvasTextAlign;
 
-    // First line (location) - larger, like city name
+    // First line (location) - larger
     if (lines.length > 0) {
       const mainLine = lines[0];
       const displayText = textStyle.cityUppercase ? mainLine.toUpperCase() : mainLine;
-      ctx.font = `${FONT_WEIGHTS.city} ${Math.round(fontSizes.city * 0.8)}px ${fontStack}`;
-      const tracking = TRACKING[fontFamily] || 4;
-      drawTextWithTracking(ctx, displayText, textX, startY, tracking * (height / 1000));
+      const titleFontSize = Math.round(scaledTitle * 0.8);
+      ctx.font = `${FONT_WEIGHTS.title} ${titleFontSize}px ${fontStack}`;
+      const tracking = TRACKING.title * (height / 1000);
+      drawTextWithTracking(ctx, displayText, textX, startY, tracking, titleFontSize);
     }
 
-    // Separator line (classic style)
+    // Separator line
     if (textStyle.showSeparatorLine && lines.length > 1) {
-      const lineY = startY + fontSizes.city * 0.4;
+      const lineY = startY + scaledTitle * 0.4;
       const lineW = width * 0.15;
       ctx.strokeStyle = textColor;
       ctx.lineWidth = Math.max(1, height * 0.001);
@@ -192,25 +186,22 @@ export const PhotoPosterPreview = ({ config, containerRef: externalRef }: PhotoP
         ctx.lineTo(textX, lineY);
       }
       ctx.stroke();
-      startY += fontSizes.city * 0.6;
+      startY += scaledTitle * 0.6;
     }
 
-    // Remaining lines - smaller
+    // Remaining lines
     for (let i = 1; i < lines.length; i++) {
       const y = startY + i * lineHeight;
       const text = textStyle.countryUppercase ? lines[i].toUpperCase() : lines[i];
-      ctx.font = `${FONT_WEIGHTS.country} ${Math.round(fontSizes.coords * 0.9)}px ${fontStack}`;
-      const tracking = (TRACKING[fontFamily] || 2) * (height / 1000);
-      drawTextWithTracking(ctx, text, textX, y, tracking);
+      const coordsFontSize = Math.round(scaledCoords * 0.9);
+      ctx.font = `${FONT_WEIGHTS.coords} ${coordsFontSize}px ${fontStack}`;
+      const tracking = TRACKING.coords * (height / 1000);
+      drawTextWithTracking(ctx, text, textX, y, tracking, coordsFontSize);
     }
   }, [config, photoExif, theme, fontFamily, fontSize, fontSizeScale, textPosition, textLayoutStyle, customTextColor, customBackgroundColor, showGradients]);
 
-  // Redraw on config changes
-  useEffect(() => {
-    drawPoster();
-  }, [drawPoster]);
+  useEffect(() => { drawPoster(); }, [drawPoster]);
 
-  // Resize observer
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;

@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, AspectRatioId } from '@/types/poster';
+import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, AspectRatioId, PosterMode, PhotoExifData } from '@/types/poster';
 import { CanvasPosterPreview } from './CanvasPosterPreview';
+import { PhotoPosterPreview } from './PhotoPosterPreview';
 import { TextOverlay } from './TextOverlay';
 import { ThemeSelector } from './ThemeSelector';
 import { AspectRatioSelector } from './AspectRatioSelector';
@@ -11,10 +12,11 @@ import { AIPromptInput } from './AIPromptInput';
 import { SettingsTabs } from './SettingsTabs';
 import { ClearCacheButton } from './ClearCacheButton';
 import { ExportDialog } from './ExportDialog';
+import { PhotoUploader } from './PhotoUploader';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
-import { Map } from 'lucide-react';
+import { Map, Camera } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 interface PosterEditorProps {
