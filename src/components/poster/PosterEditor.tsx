@@ -240,26 +240,35 @@ export const PosterEditor = ({ initialConfig, onConfigChange }: PosterEditorProp
                 }
               }}
             >
-              <CanvasPosterPreview 
-                config={config} 
-                containerRef={posterRef} 
-                onMapCenterChange={handleMapCenterChange}
-                onIconMove={handleIconMove}
-              />
-              
-              {/* Text Overlay for interactive editing */}
-              <TextOverlay
-                config={config}
-                containerWidth={containerSize.width}
-                containerHeight={containerSize.height}
-                onConfigUpdate={handleConfigUpdate}
-              />
-              
-              {/* Zoom Controls overlay */}
-              <ZoomControls
-                distance={config.distance}
-                onDistanceChange={handleDistanceChange}
-              />
+              {config.posterMode === 'photo' ? (
+                <PhotoPosterPreview 
+                  config={config} 
+                  containerRef={posterRef} 
+                />
+              ) : (
+                <>
+                  <CanvasPosterPreview 
+                    config={config} 
+                    containerRef={posterRef} 
+                    onMapCenterChange={handleMapCenterChange}
+                    onIconMove={handleIconMove}
+                  />
+                  
+                  {/* Text Overlay for interactive editing */}
+                  <TextOverlay
+                    config={config}
+                    containerWidth={containerSize.width}
+                    containerHeight={containerSize.height}
+                    onConfigUpdate={handleConfigUpdate}
+                  />
+                  
+                  {/* Zoom Controls overlay */}
+                  <ZoomControls
+                    distance={config.distance}
+                    onDistanceChange={handleDistanceChange}
+                  />
+                </>
+              )}
             </motion.div>
             
             {/* AI Prompt Input - Below the poster */}
