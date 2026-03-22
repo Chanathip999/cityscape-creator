@@ -30,6 +30,9 @@ export const LANGUAGES: LanguageOption[] = [
 ];
 
 type TranslationKeys = {
+  // Mode
+  'mode.map': string;
+  'mode.photo': string;
   // Header
   'header.title': string;
   'header.subtitle': string;
