@@ -584,12 +584,13 @@ export const RENDER_MODES: { id: RenderMode; name: string; description: string }
 ];
 
 export const DEFAULT_CONFIG: PosterConfig = {
+  posterMode: 'map',
   city: 'Berlin',
   country: 'Germany',
   latitude: 52.52,
   longitude: 13.405,
-  distance: 10000, // Reduced for better performance
-  theme: POSTER_THEMES[0], // Ocean (bright/light) theme
+  distance: 10000,
+  theme: POSTER_THEMES[0],
   width: 12,
   height: 16,
   fontFamily: 'mono',
