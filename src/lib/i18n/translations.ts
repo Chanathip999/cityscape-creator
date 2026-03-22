@@ -302,9 +302,20 @@ const en: TranslationKeys = {
   'payment.generating': 'Poster is being generated...',
   'payment.budgetGenerating': 'Budget version with logo is being created...',
   'payment.pleaseWait': 'Please wait a moment.',
+  'photo.upload': 'Upload Photo',
+  'photo.uploadHint': 'JPG, PNG, HEIC — EXIF data will be extracted automatically',
+  'photo.metadata': 'Extracted Metadata',
+  'photo.noMetadata': 'No metadata found in this image',
+  'photo.replace': 'Replace Photo',
+  'photo.uploaded': 'Photo uploaded successfully',
+  'photo.onlyImages': 'Please upload image files only',
+  'photo.tooLarge': 'Image too large (max. 20MB)',
+  'photo.uploadError': 'Upload failed',
 };
 
 const de: TranslationKeys = {
+  'mode.map': 'Karten-Poster',
+  'mode.photo': 'Foto-Poster',
   'header.title': 'City Map Poster',
   'header.subtitle': 'Erstelle wunderschöne Stadtposter',
   'citySearch.label': 'Stadtsuche',
