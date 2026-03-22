@@ -30,6 +30,9 @@ export const LANGUAGES: LanguageOption[] = [
 ];
 
 type TranslationKeys = {
+  // Mode
+  'mode.map': string;
+  'mode.photo': string;
   // Header
   'header.title': string;
   'header.subtitle': string;
@@ -165,9 +168,21 @@ type TranslationKeys = {
   'payment.generating': string;
   'payment.budgetGenerating': string;
   'payment.pleaseWait': string;
+  // Photo mode
+  'photo.upload': string;
+  'photo.uploadHint': string;
+  'photo.metadata': string;
+  'photo.noMetadata': string;
+  'photo.replace': string;
+  'photo.uploaded': string;
+  'photo.onlyImages': string;
+  'photo.tooLarge': string;
+  'photo.uploadError': string;
 };
 
 const en: TranslationKeys = {
+  'mode.map': 'Map Poster',
+  'mode.photo': 'Photo Poster',
   'header.title': 'City Map Poster',
   'header.subtitle': 'Create beautiful city prints',
   'citySearch.label': 'City Search',
@@ -287,9 +302,20 @@ const en: TranslationKeys = {
   'payment.generating': 'Poster is being generated...',
   'payment.budgetGenerating': 'Budget version with logo is being created...',
   'payment.pleaseWait': 'Please wait a moment.',
+  'photo.upload': 'Upload Photo',
+  'photo.uploadHint': 'JPG, PNG, HEIC — EXIF data will be extracted automatically',
+  'photo.metadata': 'Extracted Metadata',
+  'photo.noMetadata': 'No metadata found in this image',
+  'photo.replace': 'Replace Photo',
+  'photo.uploaded': 'Photo uploaded successfully',
+  'photo.onlyImages': 'Please upload image files only',
+  'photo.tooLarge': 'Image too large (max. 20MB)',
+  'photo.uploadError': 'Upload failed',
 };
 
 const de: TranslationKeys = {
+  'mode.map': 'Karten-Poster',
+  'mode.photo': 'Foto-Poster',
   'header.title': 'City Map Poster',
   'header.subtitle': 'Erstelle wunderschöne Stadtposter',
   'citySearch.label': 'Stadtsuche',
@@ -409,9 +435,20 @@ const de: TranslationKeys = {
   'payment.generating': 'Poster wird generiert...',
   'payment.budgetGenerating': 'Budget-Version mit Logo wird erstellt...',
   'payment.pleaseWait': 'Bitte warte einen Moment.',
+  'photo.upload': 'Foto hochladen',
+  'photo.uploadHint': 'JPG, PNG, HEIC — EXIF-Daten werden automatisch ausgelesen',
+  'photo.metadata': 'Erkannte Metadaten',
+  'photo.noMetadata': 'Keine Metadaten in diesem Bild gefunden',
+  'photo.replace': 'Foto ersetzen',
+  'photo.uploaded': 'Foto erfolgreich hochgeladen',
+  'photo.onlyImages': 'Bitte nur Bilddateien hochladen',
+  'photo.tooLarge': 'Bild zu groß (max. 20MB)',
+  'photo.uploadError': 'Upload fehlgeschlagen',
 };
 
 const fr: TranslationKeys = {
+  'mode.map': 'Poster Carte',
+  'mode.photo': 'Poster Photo',
   'header.title': 'City Map Poster',
   'header.subtitle': 'Créez de magnifiques affiches de villes',
   'citySearch.label': 'Recherche de ville',
@@ -531,6 +568,15 @@ const fr: TranslationKeys = {
   'payment.generating': 'Poster en cours de génération...',
   'payment.budgetGenerating': 'Version budget avec logo en cours de création...',
   'payment.pleaseWait': 'Veuillez patienter un instant.',
+  'photo.upload': 'Télécharger une photo',
+  'photo.uploadHint': 'JPG, PNG, HEIC — Les données EXIF seront extraites automatiquement',
+  'photo.metadata': 'Métadonnées extraites',
+  'photo.noMetadata': 'Aucune métadonnée trouvée',
+  'photo.replace': 'Remplacer la photo',
+  'photo.uploaded': 'Photo téléchargée avec succès',
+  'photo.onlyImages': 'Veuillez télécharger uniquement des fichiers image',
+  'photo.tooLarge': 'Image trop volumineuse (max. 20 Mo)',
+  'photo.uploadError': 'Échec du téléchargement',
 };
 
 // Helper to create partial translations that fall back to English

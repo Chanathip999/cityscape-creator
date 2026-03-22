@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, AspectRatioId } from '@/types/poster';
+import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, AspectRatioId, PosterMode, PhotoExifData } from '@/types/poster';
 import { CanvasPosterPreview } from './CanvasPosterPreview';
+import { PhotoPosterPreview } from './PhotoPosterPreview';
 import { TextOverlay } from './TextOverlay';
 import { ThemeSelector } from './ThemeSelector';
 import { AspectRatioSelector } from './AspectRatioSelector';
@@ -11,10 +12,11 @@ import { AIPromptInput } from './AIPromptInput';
 import { SettingsTabs } from './SettingsTabs';
 import { ClearCacheButton } from './ClearCacheButton';
 import { ExportDialog } from './ExportDialog';
+import { PhotoUploader } from './PhotoUploader';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
-import { Map } from 'lucide-react';
+import { Map, Camera } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 interface PosterEditorProps {
@@ -138,25 +140,81 @@ export const PosterEditor = ({ initialConfig, onConfigChange }: PosterEditorProp
               animate={{ opacity: 1, y: 0 }}
               className="space-y-6"
             >
-              {/* City Search */}
-              <CitySearch onCitySelect={handleCitySelect} />
+              {/* Mode Toggle */}
+              <div className="flex rounded-lg bg-muted p-1">
+                <button
+                  onClick={() => handleConfigUpdate({ posterMode: 'map' })}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-md text-sm font-medium transition-all ${
+                    config.posterMode !== 'photo'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Map className="w-4 h-4" />
+                  {t('mode.map' as any) || 'Map Poster'}
+                </button>
+                <button
+                  onClick={() => handleConfigUpdate({ posterMode: 'photo' })}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-md text-sm font-medium transition-all ${
+                    config.posterMode === 'photo'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Camera className="w-4 h-4" />
+                  {t('mode.photo' as any) || 'Photo Poster'}
+                </button>
+              </div>
 
-              <Separator />
+              {config.posterMode === 'photo' ? (
+                <>
+                  {/* Photo Upload */}
+                  <PhotoUploader
+                    photoDataUrl={config.photoDataUrl}
+                    exifData={config.photoExif}
+                    onPhotoChange={(dataUrl, exif) => handleConfigUpdate({ photoDataUrl: dataUrl, photoExif: exif })}
+                  />
 
-              {/* Theme Selector */}
-              <ThemeSelector
-                selectedTheme={config.theme}
-                onThemeChange={handleThemeChange}
-              />
+                  <Separator />
 
-              {/* Format / Aspect Ratio Selector - directly under Theme */}
-              <AspectRatioSelector
-                aspectRatio={config.aspectRatio}
-                onAspectRatioChange={(ratio: AspectRatioId) => handleConfigUpdate({ aspectRatio: ratio })}
-              />
+                  {/* Theme Selector */}
+                  <ThemeSelector
+                    selectedTheme={config.theme}
+                    onThemeChange={handleThemeChange}
+                  />
 
-              <Separator />
-              <SettingsTabs config={config} onConfigUpdate={handleConfigUpdate} />
+                  {/* Format */}
+                  <AspectRatioSelector
+                    aspectRatio={config.aspectRatio}
+                    onAspectRatioChange={(ratio: AspectRatioId) => handleConfigUpdate({ aspectRatio: ratio })}
+                  />
+
+                  <Separator />
+                  <SettingsTabs config={config} onConfigUpdate={handleConfigUpdate} />
+                </>
+              ) : (
+                <>
+                  {/* City Search */}
+                  <CitySearch onCitySelect={handleCitySelect} />
+
+                  <Separator />
+
+                  {/* Theme Selector */}
+                  <ThemeSelector
+                    selectedTheme={config.theme}
+                    onThemeChange={handleThemeChange}
+                  />
+
+                  {/* Format / Aspect Ratio Selector */}
+                  <AspectRatioSelector
+                    aspectRatio={config.aspectRatio}
+                    onAspectRatioChange={(ratio: AspectRatioId) => handleConfigUpdate({ aspectRatio: ratio })}
+                  />
+
+                  <Separator />
+                  <SettingsTabs config={config} onConfigUpdate={handleConfigUpdate} />
+                </>
+              )}
 
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
@@ -182,26 +240,35 @@ export const PosterEditor = ({ initialConfig, onConfigChange }: PosterEditorProp
                 }
               }}
             >
-              <CanvasPosterPreview 
-                config={config} 
-                containerRef={posterRef} 
-                onMapCenterChange={handleMapCenterChange}
-                onIconMove={handleIconMove}
-              />
-              
-              {/* Text Overlay for interactive editing */}
-              <TextOverlay
-                config={config}
-                containerWidth={containerSize.width}
-                containerHeight={containerSize.height}
-                onConfigUpdate={handleConfigUpdate}
-              />
-              
-              {/* Zoom Controls overlay */}
-              <ZoomControls
-                distance={config.distance}
-                onDistanceChange={handleDistanceChange}
-              />
+              {config.posterMode === 'photo' ? (
+                <PhotoPosterPreview 
+                  config={config} 
+                  containerRef={posterRef} 
+                />
+              ) : (
+                <>
+                  <CanvasPosterPreview 
+                    config={config} 
+                    containerRef={posterRef} 
+                    onMapCenterChange={handleMapCenterChange}
+                    onIconMove={handleIconMove}
+                  />
+                  
+                  {/* Text Overlay for interactive editing */}
+                  <TextOverlay
+                    config={config}
+                    containerWidth={containerSize.width}
+                    containerHeight={containerSize.height}
+                    onConfigUpdate={handleConfigUpdate}
+                  />
+                  
+                  {/* Zoom Controls overlay */}
+                  <ZoomControls
+                    distance={config.distance}
+                    onDistanceChange={handleDistanceChange}
+                  />
+                </>
+              )}
             </motion.div>
             
             {/* AI Prompt Input - Below the poster */}
