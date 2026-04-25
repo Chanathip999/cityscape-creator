@@ -4,7 +4,7 @@ import { PosterEditor } from '@/components/poster/PosterEditor';
 import { usePaymentDownload } from '@/hooks/usePaymentDownload';
 import { DEFAULT_CONFIG, DEFAULT_LAYER_VISIBILITY, ExportFormat, ExportResolution, PosterConfig } from '@/types/poster';
 import { toast } from '@/hooks/use-toast';
-import { startCityPrefetch } from '@/lib/cityPrefetch';
+import { prefetchPMTilesHeader, warmPrecache } from '@/lib/pmtilesSource';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 // Clear old localStorage config on load to ensure new defaults are used
@@ -59,13 +59,18 @@ const Index = () => {
   const [initialConfig] = useState<PosterConfig>(getInitialConfig);
   const { t } = useLanguage();
 
-  // Start background prefetch of popular cities (once per session)
+  // Warm-start: pre-fetch PMTiles header + the saved city's tiles so the map
+  // is already in cache when the canvas mounts.
   useEffect(() => {
     if (!prefetchInitialized) {
       prefetchInitialized = true;
-      startCityPrefetch();
+      // Header alone is small (~16KB) — warming saves a roundtrip on first tile.
+      prefetchPMTilesHeader().catch(() => {});
+      // Also kick off a precache for the city the user will see.
+      const c = initialConfig;
+      warmPrecache(c.latitude, c.longitude, c.distance, !!c.layerVisibility?.buildings);
     }
-  }, []);
+  }, [initialConfig]);
 
   useEffect(() => {
     const payment = searchParams.get('payment');
