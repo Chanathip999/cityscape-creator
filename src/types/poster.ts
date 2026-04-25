@@ -191,6 +191,24 @@ export interface TextOverrides {
 // Photo mode types
 export type PosterMode = 'map' | 'photo';
 
+export interface LiveDataOverlay {
+  type: 'flights' | 'ships';
+  enabled: boolean;
+  snapshotData?: LiveDataPoint[];
+  snapshotTime?: string;
+}
+
+export interface LiveDataPoint {
+  id: string;
+  lat: number;
+  lng: number;
+  heading: number;
+  type: 'plane' | 'ship';
+  label?: string;
+  speed?: number;
+  altitude?: number;
+}
+
 export interface PhotoExifData {
   location?: string;
   latitude?: number;
@@ -246,6 +264,8 @@ export interface PosterConfig {
   mapIcons: MapIcon[];
   mapImages: MapImage[];
   mapRoutes: MapRoute[];
+  // Live data snapshots (planes / ships)
+  liveData?: LiveDataOverlay[];
 }
 
 export const TEXT_POSITIONS_OPTIONS: { id: TextPosition; name: string }[] = [

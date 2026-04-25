@@ -657,6 +657,42 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       }
     }
 
+    // z=8: Live data overlays (flights, ships)
+    const liveData = config.liveData;
+    if (liveData && liveData.length > 0) {
+      for (const overlay of liveData) {
+        if (!overlay.enabled || !overlay.snapshotData) continue;
+        for (const point of overlay.snapshotData) {
+          const pos = toCanvasCoords(point.lat, point.lng, width, height, bounds);
+          if (pos.x < -20 || pos.x > width + 20 || pos.y < -20 || pos.y > height + 20) continue;
+          const size = Math.max(6, 10 * (width / 864));
+          ctx.save();
+          ctx.translate(pos.x, pos.y);
+          ctx.rotate((point.heading * Math.PI) / 180);
+          if (point.type === 'plane') {
+            ctx.fillStyle = 'rgba(56, 189, 248, 0.85)';
+            ctx.beginPath();
+            ctx.moveTo(0, -size);
+            ctx.lineTo(size * 0.6, size * 0.5);
+            ctx.lineTo(0, size * 0.2);
+            ctx.lineTo(-size * 0.6, size * 0.5);
+            ctx.closePath();
+            ctx.fill();
+          } else {
+            ctx.fillStyle = 'rgba(59, 130, 246, 0.85)';
+            ctx.beginPath();
+            ctx.moveTo(0, -size);
+            ctx.lineTo(size * 0.5, 0);
+            ctx.lineTo(0, size * 0.7);
+            ctx.lineTo(-size * 0.5, 0);
+            ctx.closePath();
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+      }
+    }
+
     // z=10: Gradient fades (top & bottom) - conditional
     if (showGradients) {
       const fadeHeight = height * 0.25;

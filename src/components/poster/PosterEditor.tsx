@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, AspectRatioId, PosterMode, PhotoExifData } from '@/types/poster';
+import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, AspectRatioId, PosterMode, PhotoExifData, LiveDataOverlay, LiveDataPoint } from '@/types/poster';
+import { Maximize2, X, Plane, Ship, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { CanvasPosterPreview } from './CanvasPosterPreview';
 import { PhotoPosterPreview } from './PhotoPosterPreview';
 import { TextOverlay } from './TextOverlay';
@@ -19,6 +21,139 @@ import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { Map, Camera } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
+// Inline live-data toggle button (planes/ships)
+const LiveDataToggle = ({ type, liveData, onLiveDataChange, mapCenter, distance }: {
+  type: 'flights' | 'ships';
+  liveData: LiveDataOverlay[];
+  onLiveDataChange: (data: LiveDataOverlay[]) => void;
+  mapCenter: { lat: number; lng: number };
+  distance: number;
+}) => {
+  const [loading, setLoading] = useState(false);
+  const overlay = liveData.find(d => d.type === type);
+  const Icon = type === 'flights' ? Plane : Ship;
+  const label = type === 'flights' ? 'Flugzeuge' : 'Schiffe';
+
+  const handleClick = async () => {
+    if (overlay?.enabled) {
+      onLiveDataChange(liveData.map(d => d.type === type ? { ...d, enabled: false } : d));
+      return;
+    }
+    if (overlay?.snapshotData) {
+      onLiveDataChange(liveData.map(d => d.type === type ? { ...d, enabled: true } : d));
+      return;
+    }
+    setLoading(true);
+    try {
+      const kmRadius = distance / 1000;
+      const latDelta = kmRadius / 111;
+      const lngDelta = kmRadius / (111 * Math.cos(mapCenter.lat * Math.PI / 180));
+      let points: LiveDataPoint[] = [];
+
+      if (type === 'flights') {
+        try {
+          const resp = await fetch(
+            `https://api.adsb.lol/v2/lat/${mapCenter.lat.toFixed(4)}/lon/${mapCenter.lng.toFixed(4)}/dist/${Math.min(Math.round(kmRadius), 250)}`,
+            { signal: AbortSignal.timeout(10000) }
+          );
+          if (resp.ok) {
+            const data = await resp.json();
+            points = (data.ac || []).slice(0, 120).map((a: any) => ({
+              id: `flight-${a.hex || Math.random()}`,
+              lat: a.lat || 0, lng: a.lon || 0,
+              heading: a.track || a.true_heading || 0,
+              type: 'plane' as const,
+              label: (a.flight || '').trim() || a.r || undefined,
+              speed: a.gs ? Math.round(a.gs * 1.852) : undefined,
+              altitude: a.alt_baro ?? a.alt_geom ?? undefined,
+            })).filter((p: LiveDataPoint) => p.lat !== 0 && p.lng !== 0);
+          }
+        } catch { /* fallback below */ }
+
+        if (points.length === 0) {
+          try {
+            const mil = await fetch('https://api.facha.dev/v1/aircraft/live/military', { signal: AbortSignal.timeout(8000) });
+            if (mil.ok) {
+              const data: any[] = await mil.json();
+              points = data
+                .filter(a => a.lat >= mapCenter.lat - latDelta && a.lat <= mapCenter.lat + latDelta &&
+                              a.lon >= mapCenter.lng - lngDelta && a.lon <= mapCenter.lng + lngDelta)
+                .map(a => ({
+                  id: `mil-${a.icao || Math.random()}`,
+                  lat: a.lat, lng: a.lon,
+                  heading: a.heading || 0, type: 'plane' as const,
+                  label: (a.callsign || '').trim() || a.reg || undefined,
+                  altitude: a.baroAltitude ?? undefined,
+                }));
+            }
+          } catch { /* none */ }
+        }
+      } else {
+        try {
+          const resp = await fetch(
+            'https://meri.digitraffic.fi/api/ais/v1/locations',
+            { signal: AbortSignal.timeout(12000) }
+          );
+          if (resp.ok) {
+            const data = await resp.json();
+            points = (data.features || [])
+              .filter((f: any) => {
+                const [lon, shipLat] = f.geometry?.coordinates || [0, 0];
+                return shipLat >= mapCenter.lat - latDelta && shipLat <= mapCenter.lat + latDelta &&
+                       lon >= mapCenter.lng - lngDelta && lon <= mapCenter.lng + lngDelta;
+              })
+              .sort((a: any, b: any) => (b.properties?.timestampExternal || 0) - (a.properties?.timestampExternal || 0))
+              .slice(0, 100)
+              .map((f: any) => {
+                const p = f.properties || {};
+                const [lon, shipLat] = f.geometry?.coordinates || [0, 0];
+                return {
+                  id: `ship-${p.mmsi || Math.random()}`,
+                  lat: shipLat, lng: lon,
+                  heading: p.heading < 360 ? p.heading : p.cog || 0,
+                  type: 'ship' as const,
+                  label: p.name || undefined,
+                  speed: p.sog ? Math.round(p.sog * 1.852) : undefined,
+                };
+              })
+              .filter((p: any) => p.lat !== 0 && p.lng !== 0);
+          }
+        } catch { /* none */ }
+      }
+
+      const newOverlay: LiveDataOverlay = {
+        type, enabled: true,
+        snapshotData: points,
+        snapshotTime: new Date().toISOString(),
+      };
+      const updated = liveData.filter(d => d.type !== type);
+      updated.push(newOverlay);
+      onLiveDataChange(updated);
+      toast.success(`${points.length} ${label} erfasst`);
+    } catch {
+      toast.error(`Fehler beim Laden der ${label}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={loading}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+        overlay?.enabled
+          ? 'bg-primary/10 border-primary/30 text-primary'
+          : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'
+      }`}
+    >
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Icon className="w-3 h-3" />}
+      {label}
+      {overlay?.snapshotData && <span className="opacity-60">({overlay.snapshotData.length})</span>}
+    </button>
+  );
+};
+
 interface PosterEditorProps {
   initialConfig?: PosterConfig;
   onConfigChange?: (config: PosterConfig) => void;
@@ -28,6 +163,20 @@ export const PosterEditor = ({ initialConfig, onConfigChange }: PosterEditorProp
   const [config, setConfig] = useState<PosterConfig>(initialConfig || DEFAULT_CONFIG);
   const posterRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 400, height: 533 });
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+
+  const openFullscreen = useCallback(() => {
+    const canvas = posterRef.current?.querySelector('canvas') as HTMLCanvasElement | null;
+    if (!canvas) return;
+    setFullscreenImage(canvas.toDataURL('image/png'));
+    setIsFullscreen(true);
+  }, []);
+
+  const closeFullscreen = useCallback(() => {
+    setIsFullscreen(false);
+    setFullscreenImage(null);
+  }, []);
   const { t } = useLanguage();
 
   const handleCitySelect = (city: string, country: string, lat: number, lon: number) => {
@@ -267,9 +416,101 @@ export const PosterEditor = ({ initialConfig, onConfigChange }: PosterEditorProp
                     distance={config.distance}
                     onDistanceChange={handleDistanceChange}
                   />
+
+                  {/* Fullscreen button */}
+                  <button
+                    onClick={openFullscreen}
+                    className="absolute top-2 right-2 z-20 p-2 rounded-lg bg-background/80 hover:bg-background border border-border shadow-md backdrop-blur-sm"
+                    title="Vollbild"
+                  >
+                    <Maximize2 className="w-4 h-4" />
+                  </button>
                 </>
               )}
             </motion.div>
+
+            {/* Live data toggles below preview */}
+            {config.posterMode !== 'photo' && (
+              <div className="max-w-lg mx-auto flex items-center gap-2 justify-center flex-wrap">
+                <LiveDataToggle
+                  type="flights"
+                  liveData={config.liveData || []}
+                  onLiveDataChange={(data) => handleConfigUpdate({ liveData: data })}
+                  mapCenter={{ lat: config.latitude, lng: config.longitude }}
+                  distance={config.distance}
+                />
+                <LiveDataToggle
+                  type="ships"
+                  liveData={config.liveData || []}
+                  onLiveDataChange={(data) => handleConfigUpdate({ liveData: data })}
+                  mapCenter={{ lat: config.latitude, lng: config.longitude }}
+                  distance={config.distance}
+                />
+              </div>
+            )}
+
+            {/* Fullscreen preview overlay with watermark + download protection */}
+            {isFullscreen && (
+              <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
+                onClick={closeFullscreen}
+                onContextMenu={(e) => e.preventDefault()}
+                onDragStart={(e) => e.preventDefault()}
+                style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' } as React.CSSProperties}>
+                <button onClick={closeFullscreen}
+                  className="absolute top-4 right-4 z-[101] p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
+                  <X className="w-6 h-6" />
+                </button>
+                <div className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center"
+                  onClick={(e) => e.stopPropagation()}
+                  onContextMenu={(e) => e.preventDefault()}>
+                  {fullscreenImage ? (
+                    <>
+                      {/* Image as background-image so 'Save Image As' is unavailable */}
+                      <div role="img" aria-label="Poster Preview"
+                        style={{
+                          backgroundImage: `url(${fullscreenImage})`,
+                          backgroundRepeat: 'no-repeat',
+                          backgroundSize: 'contain',
+                          backgroundPosition: 'center',
+                          width: '90vw',
+                          height: '90vh',
+                          userSelect: 'none',
+                          WebkitUserSelect: 'none',
+                          WebkitTouchCallout: 'none',
+                          pointerEvents: 'none',
+                        } as React.CSSProperties} />
+                      {/* Transparent click-blocker on top */}
+                      <div className="absolute inset-0"
+                        onContextMenu={(e) => e.preventDefault()}
+                        onDragStart={(e) => e.preventDefault()}
+                        style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' } as React.CSSProperties} />
+                    </>
+                  ) : (
+                    <div className="text-white/50 text-sm">Lade Vorschau...</div>
+                  )}
+                  {/* Diagonal watermark — visible on screenshots */}
+                  <div className="absolute inset-0 pointer-events-none select-none overflow-hidden mix-blend-difference"
+                    style={{ userSelect: 'none', WebkitUserSelect: 'none' } as React.CSSProperties}>
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <div key={i} className="absolute whitespace-nowrap font-bold tracking-[0.5em]"
+                        style={{
+                          fontSize: '14px',
+                          color: 'rgba(255,255,255,0.22)',
+                          transform: 'rotate(-30deg)',
+                          top: `${-5 + i * 10}%`,
+                          left: '-30%',
+                          width: '200%',
+                        }}>
+                        {'CITYMAP\u00b7POSTER\u2003PREVIEW\u2003'.repeat(20)}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white/80 text-xs px-4 py-2 rounded-full pointer-events-none">
+                    Vorschau — Export für volle Auflösung
+                  </div>
+                </div>
+              </div>
+            )}
             
             {/* AI Prompt Input - Below the poster */}
             <div className="max-w-lg mx-auto">
