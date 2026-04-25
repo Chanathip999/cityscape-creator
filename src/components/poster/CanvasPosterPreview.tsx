@@ -1011,11 +1011,8 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
       )}
 
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm pointer-events-none">
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-muted-foreground">Lade Kartendaten...</span>
-          </div>
+        <div className="absolute top-2 right-2 z-30 flex items-center gap-1.5 bg-background/70 backdrop-blur-sm px-2 py-1 rounded-full pointer-events-none">
+          <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       )}
 

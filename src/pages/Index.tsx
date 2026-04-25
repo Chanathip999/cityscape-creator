@@ -9,7 +9,7 @@ import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 // Clear old localStorage config on load to ensure new defaults are used
 // This runs once on initial load
-const CURRENT_CONFIG_VERSION = 5; // Increment to force reset - parks/forests/coastlines disabled
+const CURRENT_CONFIG_VERSION = 6; // Increment to force reset - buildings ON by default
 
 // Start prefetching popular cities in background (only once)
 let prefetchInitialized = false;
@@ -38,10 +38,12 @@ const getInitialConfig = (): PosterConfig => {
         },
       };
 
-      // Hard-enforce new default: Parks OFF (prevents stale configs from re-enabling it)
+      // Hard-enforce new defaults: Parks OFF, Buildings ON
+      // (prevents stale configs from overriding the new defaults)
       merged.layerVisibility = {
         ...merged.layerVisibility,
         parks: false,
+        buildings: true,
       };
 
       return merged;

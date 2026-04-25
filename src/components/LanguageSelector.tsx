@@ -15,7 +15,6 @@ export const LanguageSelector = () => {
   return (
     <Select value={language} onValueChange={(v) => setLanguage(v as any)}>
       <SelectTrigger className="w-auto gap-1.5 h-9 px-2.5 border-border">
-        <span className="text-base leading-none">{current?.flag}</span>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
