@@ -223,11 +223,13 @@ export const CanvasPosterPreview = ({ config, onExportReady, containerRef: exter
     layerVisibility,
   });
 
-  // Reset pan/zoom when location or aspect ratio changes
+  // Reset pan/zoom only when aspect ratio changes.
+  // Reset on lat/lng would clobber the user's zoom whenever they pan
+  // (mouseUp updates config lat/lng, which would otherwise cancel the zoom).
   useEffect(() => {
     setPanOffset({ x: 0, y: 0 });
     setZoom(1);
-  }, [latitude, longitude, aspectRatio]);
+  }, [aspectRatio]);
 
   const getStreetColor = useCallback(
     (type: string): string => {

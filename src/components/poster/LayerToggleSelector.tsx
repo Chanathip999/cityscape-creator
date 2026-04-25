@@ -54,7 +54,7 @@ const TRANSPORT_LAYERS: LayerOption[] = [
 
 // Building layers
 const BUILDING_LAYERS: LayerOption[] = [
-  { id: 'buildings', label: 'Gebäude', icon: Building2, premium: true, premiumPrice: '+€1,99' },
+  { id: 'buildings', label: 'Gebäude', icon: Building2 },
   { id: 'residentialBuildings', label: 'Wohngebäude', icon: Home },
   { id: 'commercialBuildings', label: 'Gewerbe/Büros', icon: Building2 },
 ];

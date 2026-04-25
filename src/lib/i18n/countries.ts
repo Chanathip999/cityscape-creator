@@ -1,0 +1,40 @@
+import type { Language } from './translations';
+
+// Map English country name (as returned by GeoNames) to localized variants.
+// Falls back to the English name for any combination not listed.
+type CountryMap = Partial<Record<Language, string>>;
+
+const COUNTRY_TRANSLATIONS: Record<string, CountryMap> = {
+  Germany: { de: 'Deutschland', fr: 'Allemagne', it: 'Germania', es: 'Alemania', pt: 'Alemanha', pl: 'Niemcy', nl: 'Duitsland', da: 'Tyskland', sv: 'Tyskland', no: 'Tyskland', fi: 'Saksa', cs: 'Německo', hu: 'Németország', ro: 'Germania', hr: 'Njemačka', el: 'Γερμανία', tr: 'Almanya' },
+  France: { de: 'Frankreich', fr: 'France', it: 'Francia', es: 'Francia', pt: 'França', pl: 'Francja', nl: 'Frankrijk', da: 'Frankrig', sv: 'Frankrike', no: 'Frankrike', fi: 'Ranska', cs: 'Francie', hu: 'Franciaország', ro: 'Franța', hr: 'Francuska', el: 'Γαλλία', tr: 'Fransa' },
+  Italy: { de: 'Italien', fr: 'Italie', it: 'Italia', es: 'Italia', pt: 'Itália', pl: 'Włochy', nl: 'Italië', da: 'Italien', sv: 'Italien', no: 'Italia', fi: 'Italia', cs: 'Itálie', hu: 'Olaszország', ro: 'Italia', hr: 'Italija', el: 'Ιταλία', tr: 'İtalya' },
+  Spain: { de: 'Spanien', fr: 'Espagne', it: 'Spagna', es: 'España', pt: 'Espanha', pl: 'Hiszpania', nl: 'Spanje', da: 'Spanien', sv: 'Spanien', no: 'Spania', fi: 'Espanja', cs: 'Španělsko', hu: 'Spanyolország', ro: 'Spania', hr: 'Španjolska', el: 'Ισπανία', tr: 'İspanya' },
+  Portugal: { de: 'Portugal', fr: 'Portugal', it: 'Portogallo', es: 'Portugal', pt: 'Portugal', pl: 'Portugalia', nl: 'Portugal', da: 'Portugal', sv: 'Portugal', no: 'Portugal', fi: 'Portugali', cs: 'Portugalsko', hu: 'Portugália', ro: 'Portugalia', hr: 'Portugal', el: 'Πορτογαλία', tr: 'Portekiz' },
+  'United Kingdom': { de: 'Vereinigtes Königreich', fr: 'Royaume-Uni', it: 'Regno Unito', es: 'Reino Unido', pt: 'Reino Unido', pl: 'Wielka Brytania', nl: 'Verenigd Koninkrijk', da: 'Storbritannien', sv: 'Storbritannien', no: 'Storbritannia', fi: 'Yhdistynyt kuningaskunta', cs: 'Spojené království', hu: 'Egyesült Királyság', ro: 'Regatul Unit', hr: 'Ujedinjeno Kraljevstvo', el: 'Ηνωμένο Βασίλειο', tr: 'Birleşik Krallık' },
+  'United States': { de: 'Vereinigte Staaten', fr: 'États-Unis', it: 'Stati Uniti', es: 'Estados Unidos', pt: 'Estados Unidos', pl: 'Stany Zjednoczone', nl: 'Verenigde Staten', da: 'USA', sv: 'USA', no: 'USA', fi: 'Yhdysvallat', cs: 'Spojené státy', hu: 'Egyesült Államok', ro: 'Statele Unite', hr: 'Sjedinjene Države', el: 'Ηνωμένες Πολιτείες', tr: 'Amerika Birleşik Devletleri' },
+  Netherlands: { de: 'Niederlande', fr: 'Pays-Bas', it: 'Paesi Bassi', es: 'Países Bajos', pt: 'Países Baixos', pl: 'Holandia', nl: 'Nederland', da: 'Nederlandene', sv: 'Nederländerna', no: 'Nederland', fi: 'Alankomaat', cs: 'Nizozemsko', hu: 'Hollandia', ro: 'Țările de Jos', hr: 'Nizozemska', el: 'Ολλανδία', tr: 'Hollanda' },
+  Belgium: { de: 'Belgien', fr: 'Belgique', it: 'Belgio', es: 'Bélgica', pt: 'Bélgica', pl: 'Belgia', nl: 'België', da: 'Belgien', sv: 'Belgien', no: 'Belgia', fi: 'Belgia', cs: 'Belgie', hu: 'Belgium', ro: 'Belgia', hr: 'Belgija', el: 'Βέλγιο', tr: 'Belçika' },
+  Austria: { de: 'Österreich', fr: 'Autriche', it: 'Austria', es: 'Austria', pt: 'Áustria', pl: 'Austria', nl: 'Oostenrijk', da: 'Østrig', sv: 'Österrike', no: 'Østerrike', fi: 'Itävalta', cs: 'Rakousko', hu: 'Ausztria', ro: 'Austria', hr: 'Austrija', el: 'Αυστρία', tr: 'Avusturya' },
+  Switzerland: { de: 'Schweiz', fr: 'Suisse', it: 'Svizzera', es: 'Suiza', pt: 'Suíça', pl: 'Szwajcaria', nl: 'Zwitserland', da: 'Schweiz', sv: 'Schweiz', no: 'Sveits', fi: 'Sveitsi', cs: 'Švýcarsko', hu: 'Svájc', ro: 'Elveția', hr: 'Švicarska', el: 'Ελβετία', tr: 'İsviçre' },
+  Poland: { de: 'Polen', fr: 'Pologne', it: 'Polonia', es: 'Polonia', pt: 'Polónia', pl: 'Polska', nl: 'Polen', da: 'Polen', sv: 'Polen', no: 'Polen', fi: 'Puola', cs: 'Polsko', hu: 'Lengyelország', ro: 'Polonia', hr: 'Poljska', el: 'Πολωνία', tr: 'Polonya' },
+  Sweden: { de: 'Schweden', fr: 'Suède', it: 'Svezia', es: 'Suecia', pt: 'Suécia', pl: 'Szwecja', nl: 'Zweden', da: 'Sverige', sv: 'Sverige', no: 'Sverige', fi: 'Ruotsi', cs: 'Švédsko', hu: 'Svédország', ro: 'Suedia', hr: 'Švedska', el: 'Σουηδία', tr: 'İsveç' },
+  Norway: { de: 'Norwegen', fr: 'Norvège', it: 'Norvegia', es: 'Noruega', pt: 'Noruega', pl: 'Norwegia', nl: 'Noorwegen', da: 'Norge', sv: 'Norge', no: 'Norge', fi: 'Norja', cs: 'Norsko', hu: 'Norvégia', ro: 'Norvegia', hr: 'Norveška', el: 'Νορβηγία', tr: 'Norveç' },
+  Denmark: { de: 'Dänemark', fr: 'Danemark', it: 'Danimarca', es: 'Dinamarca', pt: 'Dinamarca', pl: 'Dania', nl: 'Denemarken', da: 'Danmark', sv: 'Danmark', no: 'Danmark', fi: 'Tanska', cs: 'Dánsko', hu: 'Dánia', ro: 'Danemarca', hr: 'Danska', el: 'Δανία', tr: 'Danimarka' },
+  Finland: { de: 'Finnland', fr: 'Finlande', it: 'Finlandia', es: 'Finlandia', pt: 'Finlândia', pl: 'Finlandia', nl: 'Finland', da: 'Finland', sv: 'Finland', no: 'Finland', fi: 'Suomi', cs: 'Finsko', hu: 'Finnország', ro: 'Finlanda', hr: 'Finska', el: 'Φινλανδία', tr: 'Finlandiya' },
+  'Czech Republic': { de: 'Tschechien', fr: 'République tchèque', it: 'Repubblica Ceca', es: 'República Checa', pt: 'República Checa', pl: 'Czechy', nl: 'Tsjechië', da: 'Tjekkiet', sv: 'Tjeckien', no: 'Tsjekkia', fi: 'Tšekki', cs: 'Česko', hu: 'Csehország', ro: 'Cehia', hr: 'Češka', el: 'Τσεχία', tr: 'Çekya' },
+  Hungary: { de: 'Ungarn', fr: 'Hongrie', it: 'Ungheria', es: 'Hungría', pt: 'Hungria', pl: 'Węgry', nl: 'Hongarije', da: 'Ungarn', sv: 'Ungern', no: 'Ungarn', fi: 'Unkari', cs: 'Maďarsko', hu: 'Magyarország', ro: 'Ungaria', hr: 'Mađarska', el: 'Ουγγαρία', tr: 'Macaristan' },
+  Romania: { de: 'Rumänien', fr: 'Roumanie', it: 'Romania', es: 'Rumanía', pt: 'Roménia', pl: 'Rumunia', nl: 'Roemenië', da: 'Rumænien', sv: 'Rumänien', no: 'Romania', fi: 'Romania', cs: 'Rumunsko', hu: 'Románia', ro: 'România', hr: 'Rumunjska', el: 'Ρουμανία', tr: 'Romanya' },
+  Croatia: { de: 'Kroatien', fr: 'Croatie', it: 'Croazia', es: 'Croacia', pt: 'Croácia', pl: 'Chorwacja', nl: 'Kroatië', da: 'Kroatien', sv: 'Kroatien', no: 'Kroatia', fi: 'Kroatia', cs: 'Chorvatsko', hu: 'Horvátország', ro: 'Croația', hr: 'Hrvatska', el: 'Κροατία', tr: 'Hırvatistan' },
+  Greece: { de: 'Griechenland', fr: 'Grèce', it: 'Grecia', es: 'Grecia', pt: 'Grécia', pl: 'Grecja', nl: 'Griekenland', da: 'Grækenland', sv: 'Grekland', no: 'Hellas', fi: 'Kreikka', cs: 'Řecko', hu: 'Görögország', ro: 'Grecia', hr: 'Grčka', el: 'Ελλάδα', tr: 'Yunanistan' },
+  Turkey: { de: 'Türkei', fr: 'Turquie', it: 'Turchia', es: 'Turquía', pt: 'Turquia', pl: 'Turcja', nl: 'Turkije', da: 'Tyrkiet', sv: 'Turkiet', no: 'Tyrkia', fi: 'Turkki', cs: 'Turecko', hu: 'Törökország', ro: 'Turcia', hr: 'Turska', el: 'Τουρκία', tr: 'Türkiye' },
+  Ireland: { de: 'Irland', fr: 'Irlande', it: 'Irlanda', es: 'Irlanda', pt: 'Irlanda', pl: 'Irlandia', nl: 'Ierland', da: 'Irland', sv: 'Irland', no: 'Irland', fi: 'Irlanti', cs: 'Irsko', hu: 'Írország', ro: 'Irlanda', hr: 'Irska', el: 'Ιρλανδία', tr: 'İrlanda' },
+  Canada: { de: 'Kanada', fr: 'Canada', it: 'Canada', es: 'Canadá', pt: 'Canadá', pl: 'Kanada', nl: 'Canada', da: 'Canada', sv: 'Kanada', no: 'Canada', fi: 'Kanada', cs: 'Kanada', hu: 'Kanada', ro: 'Canada', hr: 'Kanada', el: 'Καναδάς', tr: 'Kanada' },
+  Australia: { de: 'Australien', fr: 'Australie', it: 'Australia', es: 'Australia', pt: 'Austrália', pl: 'Australia', nl: 'Australië', da: 'Australien', sv: 'Australien', no: 'Australia', fi: 'Australia', cs: 'Austrálie', hu: 'Ausztrália', ro: 'Australia', hr: 'Australija', el: 'Αυστραλία', tr: 'Avustralya' },
+  Japan: { de: 'Japan', fr: 'Japon', it: 'Giappone', es: 'Japón', pt: 'Japão', pl: 'Japonia', nl: 'Japan', da: 'Japan', sv: 'Japan', no: 'Japan', fi: 'Japani', cs: 'Japonsko', hu: 'Japán', ro: 'Japonia', hr: 'Japan', el: 'Ιαπωνία', tr: 'Japonya' },
+};
+
+export const localizeCountry = (country: string | undefined, lang: Language): string => {
+  if (!country) return '';
+  const map = COUNTRY_TRANSLATIONS[country];
+  return map?.[lang] ?? country;
+};

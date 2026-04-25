@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { PosterConfig, TextOverrides, TextElementConfig, TextPositionOffset, TextOrientation, TEXT_LAYOUT_STYLES } from '@/types/poster';
 import { getTextPositions, getScaledFontSizes, FONT_STACKS, formatCoordinates, formatDisplayText } from '@/lib/posterTypography';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
+import { localizeCountry } from '@/lib/i18n/countries';
 import { RotateCw } from 'lucide-react';
 
 interface TextOverlayProps {
@@ -25,6 +27,7 @@ interface TextElement {
 const SNAP_THRESHOLD = 0.03; // 3% of container dimension
 
 export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigUpdate }: TextOverlayProps) => {
+  const { language } = useLanguage();
   const [dragTarget, setDragTarget] = useState<DragTarget>(null);
   const [resizeTarget, setResizeTarget] = useState<DragTarget>(null);
   const [resizeHandle, setResizeHandle] = useState<ResizeHandle>(null);
@@ -142,7 +145,7 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
 
   const textElements: TextElement[] = [
     { id: 'city', text: formatCityText(config.city), defaultY: TEXT_POSITIONS.title, visible: config.showCity, editable: true },
-    { id: 'country', text: formatCountryText(config.countryLabel || config.country), defaultY: TEXT_POSITIONS.subtitle, visible: config.showCountry, editable: true },
+    { id: 'country', text: formatCountryText(config.countryLabel || localizeCountry(config.country, language)), defaultY: TEXT_POSITIONS.subtitle, visible: config.showCountry, editable: true },
     { id: 'coordinates', text: formatCoordsText(), defaultY: TEXT_POSITIONS.coords, visible: config.showCoordinates && textStyle.coordsStyle !== 'hidden', editable: false },
   ];
 
@@ -416,7 +419,7 @@ export const TextOverlay = ({ config, containerWidth, containerHeight, onConfigU
             {isEditing && element.editable ? (
               (() => {
                 // Calculate proper width including letter-spacing
-                const currentValue = element.id === 'city' ? config.city : (config.countryLabel || config.country);
+                const currentValue = element.id === 'city' ? config.city : (config.countryLabel || localizeCountry(config.country, language));
                 const charCount = Math.max(currentValue.length, 3);
                 // Each character takes ~0.65em + letter-spacing
                 const letterSpacingEm = element.id === 'city' ? 0.3 : 0.15;

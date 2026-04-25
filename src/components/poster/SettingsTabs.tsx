@@ -56,7 +56,7 @@ const LAYER_GROUPS_DEF: LayerGroupDef[] = [
     titleKey: 'layers.basis',
     layers: [
       { id: 'water', labelKey: 'layers.water', icon: Waves, colorKey: 'water' },
-      { id: 'buildings', labelKey: 'layers.allBuildings', icon: Building, colorKey: 'buildings', premium: true, premiumPrice: '+€1,99 (4K+)' },
+      { id: 'buildings', labelKey: 'layers.allBuildings', icon: Building, colorKey: 'buildings' },
       { id: 'railways', labelKey: 'layers.railways', icon: Train, colorKey: 'railways' },
     ],
   },

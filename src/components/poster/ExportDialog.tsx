@@ -42,11 +42,11 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
 
   const currentPricing = PRICING_OPTIONS.find((r) => r.id === pricingTier) || PRICING_OPTIONS[1];
   const isBudgetTier = pricingTier === 'budget';
-  const buildingsAvailable = pricingTier === '4k' || pricingTier === '8k';
-  const hasBuildings = buildingsAvailable && (config.layerVisibility?.buildings || false);
-  const buildingSurcharge = hasBuildings ? BUILDING_PREMIUM : 0;
-  const basePrice = !isBudgetTier && quantity === 3 
-    ? BUNDLE_PRICING[pricingTier as Exclude<PricingTier, 'budget'>] 
+  const buildingsAvailable = true; // Buildings now free on all tiers
+  const hasBuildings = !!config.layerVisibility?.buildings;
+  const buildingSurcharge = 0;
+  const basePrice = !isBudgetTier && quantity === 3
+    ? BUNDLE_PRICING[pricingTier as Exclude<PricingTier, 'budget'>]
     : currentPricing.price;
   const totalPrice = basePrice + buildingSurcharge;
 
@@ -209,10 +209,7 @@ export const ExportDialog = ({ config, posterRef }: ExportDialogProps) => {
             <p>📍 <strong>{config.city}</strong> • {t('format.label')} {config.aspectRatio}</p>
             <p>📐 {t('export.resolution')}: {exportWidth} × {exportHeight} px</p>
             {isBudgetTier && <p className="text-orange-600 dark:text-orange-400 font-medium">🏷️ {t('export.withLogoWatermark')}</p>}
-            {hasBuildings && <p className="text-primary font-medium">🏢 {t('export.buildingData')}: +€{BUILDING_PREMIUM.toFixed(2)}</p>}
-            {config.layerVisibility?.buildings && !buildingsAvailable && (
-              <p className="text-destructive font-medium">⚠️ {t('export.buildingsOnly4k')}</p>
-            )}
+            {hasBuildings && <p className="text-primary font-medium">🏢 {t('export.buildingData')}</p>}
             <p>💾 {t('export.vectorMode')}</p>
           </div>
 

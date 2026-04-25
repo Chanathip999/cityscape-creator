@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { PosterConfig } from '@/types/poster';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
+import { localizeCountry } from '@/lib/i18n/countries';
 
 interface UseRenderPosterResult {
   renderPoster: (config: PosterConfig, width?: number, height?: number, addWatermark?: boolean) => Promise<string>;
@@ -15,6 +17,7 @@ interface UseRenderPosterResult {
 export const useRenderPoster = (): UseRenderPosterResult => {
   const [isRendering, setIsRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { language } = useLanguage();
 
   const renderPoster = useCallback(async (
     config: PosterConfig,
@@ -29,7 +32,7 @@ export const useRenderPoster = (): UseRenderPosterResult => {
       const { data, error: fnError } = await supabase.functions.invoke('render-poster', {
         body: {
           city: config.city,
-          country: config.countryLabel || config.country,
+          country: config.countryLabel || localizeCountry(config.country, language),
           latitude: config.latitude,
           longitude: config.longitude,
           distance: config.distance,

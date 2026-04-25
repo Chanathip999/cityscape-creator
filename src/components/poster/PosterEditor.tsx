@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, AspectRatioId, PosterMode, PhotoExifData, LiveDataOverlay, LiveDataPoint } from '@/types/poster';
+import { PosterConfig, DEFAULT_CONFIG, POSTER_THEMES, PosterTheme, AspectRatioId, PosterMode, PhotoExifData, LiveDataOverlay, LiveDataPoint, ASPECT_RATIOS } from '@/types/poster';
 import { Maximize2, X, Plane, Ship, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CanvasPosterPreview } from './CanvasPosterPreview';
@@ -460,55 +460,71 @@ export const PosterEditor = ({ initialConfig, onConfigChange }: PosterEditorProp
                   className="absolute top-4 right-4 z-[101] p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
                   <X className="w-6 h-6" />
                 </button>
-                <div className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center"
-                  onClick={(e) => e.stopPropagation()}
-                  onContextMenu={(e) => e.preventDefault()}>
-                  {fullscreenImage ? (
-                    <>
-                      {/* Image as background-image so 'Save Image As' is unavailable */}
-                      <div role="img" aria-label="Poster Preview"
-                        style={{
-                          backgroundImage: `url(${fullscreenImage})`,
-                          backgroundRepeat: 'no-repeat',
-                          backgroundSize: 'contain',
-                          backgroundPosition: 'center',
-                          width: '90vw',
-                          height: '90vh',
-                          userSelect: 'none',
-                          WebkitUserSelect: 'none',
-                          WebkitTouchCallout: 'none',
-                          pointerEvents: 'none',
-                        } as React.CSSProperties} />
-                      {/* Transparent click-blocker on top */}
-                      <div className="absolute inset-0"
-                        onContextMenu={(e) => e.preventDefault()}
-                        onDragStart={(e) => e.preventDefault()}
-                        style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' } as React.CSSProperties} />
-                    </>
-                  ) : (
-                    <div className="text-white/50 text-sm">Lade Vorschau...</div>
-                  )}
-                  {/* Diagonal watermark — visible on screenshots */}
-                  <div className="absolute inset-0 pointer-events-none select-none overflow-hidden mix-blend-difference"
-                    style={{ userSelect: 'none', WebkitUserSelect: 'none' } as React.CSSProperties}>
-                    {Array.from({ length: 12 }).map((_, i) => (
-                      <div key={i} className="absolute whitespace-nowrap font-bold tracking-[0.5em]"
-                        style={{
-                          fontSize: '14px',
-                          color: 'rgba(255,255,255,0.22)',
-                          transform: 'rotate(-30deg)',
-                          top: `${-5 + i * 10}%`,
-                          left: '-30%',
-                          width: '200%',
-                        }}>
-                        {'CITYMAP\u00b7POSTER\u2003PREVIEW\u2003'.repeat(20)}
+                {(() => {
+                  const ar = ASPECT_RATIOS.find((r) => r.id === config.aspectRatio);
+                  const w = ar?.width ?? 3;
+                  const h = ar?.height ?? 4;
+                  // Size box to fit within 90vw/90vh while preserving image aspect ratio.
+                  // This way the watermark stays inside the actual image bounds.
+                  const boxStyle: React.CSSProperties = {
+                    aspectRatio: `${w} / ${h}`,
+                    maxWidth: '90vw',
+                    maxHeight: '90vh',
+                    width: `min(90vw, calc(90vh * ${w} / ${h}))`,
+                    height: `min(90vh, calc(90vw * ${h} / ${w}))`,
+                  };
+                  return (
+                    <div className="relative flex items-center justify-center"
+                      style={boxStyle}
+                      onClick={(e) => e.stopPropagation()}
+                      onContextMenu={(e) => e.preventDefault()}>
+                      {fullscreenImage ? (
+                        <>
+                          {/* Image as background-image so 'Save Image As' is unavailable */}
+                          <div role="img" aria-label="Poster Preview"
+                            className="absolute inset-0"
+                            style={{
+                              backgroundImage: `url(${fullscreenImage})`,
+                              backgroundRepeat: 'no-repeat',
+                              backgroundSize: 'contain',
+                              backgroundPosition: 'center',
+                              userSelect: 'none',
+                              WebkitUserSelect: 'none',
+                              WebkitTouchCallout: 'none',
+                              pointerEvents: 'none',
+                            } as React.CSSProperties} />
+                          {/* Transparent click-blocker on top */}
+                          <div className="absolute inset-0"
+                            onContextMenu={(e) => e.preventDefault()}
+                            onDragStart={(e) => e.preventDefault()}
+                            style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' } as React.CSSProperties} />
+                        </>
+                      ) : (
+                        <div className="text-white/50 text-sm">Lade Vorschau...</div>
+                      )}
+                      {/* Diagonal watermark — fully clipped to the image bounds */}
+                      <div className="absolute inset-0 pointer-events-none select-none overflow-hidden mix-blend-difference"
+                        style={{ userSelect: 'none', WebkitUserSelect: 'none' } as React.CSSProperties}>
+                        {Array.from({ length: 12 }).map((_, i) => (
+                          <div key={i} className="absolute whitespace-nowrap font-bold tracking-[0.5em]"
+                            style={{
+                              fontSize: '14px',
+                              color: 'rgba(255,255,255,0.22)',
+                              transform: 'rotate(-30deg)',
+                              top: `${-5 + i * 10}%`,
+                              left: '-30%',
+                              width: '200%',
+                            }}>
+                            {'CITYMAP\u00b7POSTER\u2003PREVIEW\u2003'.repeat(20)}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white/80 text-xs px-4 py-2 rounded-full pointer-events-none">
-                    Vorschau — Export für volle Auflösung
-                  </div>
-                </div>
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white/80 text-xs px-4 py-2 rounded-full pointer-events-none">
+                        Vorschau — Export für volle Auflösung
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
             

@@ -119,7 +119,7 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
   railways: true,
   aeroways: true,
   coastlines: false, // Disabled by default for faster loading
-  buildings: false,
+  buildings: true,
   // New layers - all disabled by default
   sideStreets: false,
   footpaths: false,
